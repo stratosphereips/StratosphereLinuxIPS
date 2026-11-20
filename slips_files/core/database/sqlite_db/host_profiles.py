@@ -7,308 +7,414 @@ import os
 import re
 import sqlite3
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Collection, Iterable, Iterator, Sequence
 
-from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts.isqlite import ISQLite
 from slips_files.common.network_context import network_state_at
+from slips_files.common.printer import Printer
+from slips_files.common.slips_utils import utils
+from slips_files.core.output import Output
 
 MAX_FACTS_PER_KIND = 200
 MAX_VALUE_LENGTH = 2048
+# how long to wait before writing the same sighting or MAC again
+REPEATED_WRITE_INTERVAL_SECONDS = 60
+NETWORK_STATE_CACHE_SECONDS = 5
+MAX_RECENT_MACS = 4096
+MAX_RECENT_SIGHTINGS = 10000
+# sqlite limits how many "?" one query can hold
+MAX_IPS_PER_QUERY = 200
+MAX_IPS_PER_TRIAGE_QUERY = 300
+MAX_MDNS_BINDINGS_PER_FLOW = 64
+PUBLIC_NETWORK_ID = "public"
+# where the store lives inside the permanent directory
+HOST_PROFILES_DB_SUBPATH = Path("host_profiles") / "hosts.sqlite"
+
+TABLE_SCHEMAS = {
+    "hosts": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+        "network_label TEXT NOT NULL, first_seen REAL NOT NULL, "
+        "last_seen REAL NOT NULL, "
+        "PRIMARY KEY (network_id, ip)"
+    ),
+    "host_observations": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+        "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
+        "PRIMARY KEY(network_id, ip)"
+    ),
+    "host_endpoint_observations": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+        "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
+        "PRIMARY KEY(network_id, ip)"
+    ),
+    "facts": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+        "kind TEXT NOT NULL, value TEXT NOT NULL, "
+        "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
+        "observations INTEGER NOT NULL DEFAULT 1, "
+        "PRIMARY KEY (network_id, ip, kind, value)"
+    ),
+    "network_names": "network_id TEXT PRIMARY KEY, name TEXT NOT NULL",
+    "host_annotations": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+        "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
+        "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip)"
+    ),
+    "device_annotations": (
+        "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+        "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL"
+    ),
+    "host_annotation_devices": (
+        "network_id TEXT NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL, "
+        "PRIMARY KEY(network_id, ip)"
+    ),
+    "mdns_annotations": (
+        "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+        "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL"
+    ),
+    "mdns_identity_annotations": (
+        "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
+        "ip TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL, "
+        "updated_at REAL NOT NULL"
+    ),
+    "host_triage": (
+        "subject TEXT PRIMARY KEY, status TEXT NOT NULL, "
+        "labels TEXT NOT NULL, updated_at REAL NOT NULL"
+    ),
+}
+INDEX_QUERIES = (
+    "CREATE INDEX IF NOT EXISTS host_endpoint_ip_idx "
+    "ON host_endpoint_observations(ip, first_seen, last_seen)",
+    "CREATE INDEX IF NOT EXISTS facts_host_idx "
+    "ON facts(network_id, ip, kind, last_seen DESC)",
+    "CREATE INDEX IF NOT EXISTS facts_mac_lookup_idx "
+    "ON facts(kind,value,network_id,ip)",
+    "CREATE INDEX IF NOT EXISTS facts_ip_kind_idx "
+    "ON facts(ip,kind,last_seen DESC)",
+    "CREATE INDEX IF NOT EXISTS hosts_ip_seen_idx "
+    "ON hosts(ip,last_seen DESC)",
+)
+
+# newest MAC of the host row aliased as "h"
+LATEST_MAC_OF_HOST_SQL = (
+    "(SELECT lower(f.value) FROM facts f WHERE f.network_id=h.network_id "
+    "AND f.ip=h.ip AND f.kind='mac' "
+    "ORDER BY f.last_seen DESC LIMIT 1)"
+)
+# MAC that owned the address when the annotation aliased as "a" was saved
+MAC_WHEN_ANNOTATED_SQL = (
+    "(SELECT lower(f.value) FROM facts f JOIN host_annotations saved "
+    "ON saved.network_id=f.network_id AND saved.ip=f.ip "
+    "WHERE f.network_id=a.network_id AND f.ip=a.ip AND f.kind='mac' "
+    "AND f.first_seen<=saved.updated_at "
+    "ORDER BY MIN(f.last_seen, saved.updated_at) DESC, "
+    "f.first_seen DESC LIMIT 1)"
+)
+MAC_OF_ANNOTATION_SQL = (
+    "COALESCE((SELECT d.mac FROM host_annotation_devices d WHERE "
+    "d.network_id=a.network_id AND d.ip=a.ip), " + MAC_WHEN_ANNOTATED_SQL + ")"
+)
+IDENTITY_FACTS_SQL = (
+    "SELECT network_id,ip,kind,value,first_seen,last_seen FROM facts "
+    "WHERE {condition} "
+    "AND kind IN ('mac','hostname','mdns_hostname','reverse_dns') "
+    "ORDER BY last_seen DESC,first_seen DESC"
+)
+# the higher the number, the more we trust a name of this kind
+NAME_KIND_PRIORITY = {"hostname": 3, "mdns_hostname": 2, "reverse_dns": 1}
+NAME_KIND_LABELS = {
+    "hostname": "Hostname",
+    "mdns_hostname": "mDNS",
+    "reverse_dns": "rDNS",
+}
+NO_NAME_CANDIDATE = (0, 0, "", "")
+
+ProfileKey = tuple[str, str]
+NameCandidate = tuple[int, float, str, str]
 
 
-class HostProfileStore:
+class HostProfileStore(ISQLite):
     """Persist host sightings and distinct identity clues across Slips runs."""
+
+    name = "host_profiles"
 
     def __init__(
         self,
-        path: Path,
+        logger: Output,
+        db_path: Path,
+        main_pid: int,
         run_name: str,
-        network_lookup: Callable[[str], dict[str, Any] | None],
+        network_state_lookup: Callable[[str], dict[str, Any] | None],
         interfaces: list[str],
     ) -> None:
         """Create the shared store and remember how to identify live networks.
 
         Parameters:
-            path: SQLite path in the configured permanent directory.
+            logger: Output queue used to report failed queries.
+            db_path: SQLite path in the configured permanent directory.
+            main_pid: PID of slips.py, used to name the cross-process lock.
             run_name: Output directory used to isolate unknown local networks.
-            network_lookup: Lookup for a monitored interface's current state.
+            network_state_lookup: Lookup for a monitored interface's current
+                state.
             interfaces: Monitored interface names.
         """
-        self.path = path
+        self.printer = Printer(logger, self.name)
+        self.db_path = db_path
         self.run_name = run_name
-        self.network_lookup = network_lookup
+        self.network_state_lookup = network_state_lookup
         self.interfaces = interfaces
-        self._network_cache: dict[str, tuple[float, dict[str, Any]]] = {}
-        self._recent_sightings: dict[tuple[str, str], float] = {}
-        self._recent_macs: dict[tuple[str, str], tuple[str, float]] = {}
-        self._active_connection: sqlite3.Connection | None = None
-        path.parent.mkdir(parents=True, exist_ok=True)
-        if os.geteuid() == 0:
-            owner = Path.cwd().stat()
-            os.chown(path.parent, owner.st_uid, owner.st_gid)
-        path.parent.chmod(0o700)
-        with self._connect() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS hosts ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "network_label TEXT NOT NULL, first_seen REAL NOT NULL, "
-                "last_seen REAL NOT NULL, "
-                "PRIMARY KEY (network_id, ip))"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_observations ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
-                "PRIMARY KEY(network_id, ip))"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_endpoint_observations ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
-                "PRIMARY KEY(network_id, ip))"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS host_endpoint_ip_idx "
-                "ON host_endpoint_observations(ip, first_seen, last_seen)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS facts ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "kind TEXT NOT NULL, value TEXT NOT NULL, "
-                "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
-                "observations INTEGER NOT NULL DEFAULT 1, "
-                "PRIMARY KEY (network_id, ip, kind, value))"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS facts_host_idx "
-                "ON facts(network_id, ip, kind, last_seen DESC)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS facts_mac_lookup_idx ON facts(kind,value,network_id,ip)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS facts_ip_kind_idx ON facts(ip,kind,last_seen DESC)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS hosts_ip_seen_idx ON hosts(ip,last_seen DESC)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS network_names ("
-                "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_annotations ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
-                "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip))"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS device_annotations ("
-                "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
-                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_annotation_devices ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL, "
-                "PRIMARY KEY(network_id, ip))"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS mdns_annotations ("
-                "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
-                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS mdns_identity_annotations ("
-                "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
-                "ip TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL, "
-                "updated_at REAL NOT NULL)"
-            )
-        if os.geteuid() == 0:
-            os.chown(path, owner.st_uid, owner.st_gid)
-        path.chmod(0o600)
+        self._network_state_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._recent_sightings: dict[ProfileKey, float] = {}
+        self._recent_macs: dict[ProfileKey, tuple[str, float]] = {}
+        self._create_private_db_dir()
+        super().__init__(self.name, main_pid, str(db_path))
+        with self.conn_lock:
+            # lets readers use column names instead of positions
+            self.conn.row_factory = sqlite3.Row
+        self._init_tables()
+        self._restrict_access_to_slips_user(self.db_path, 0o600)
 
-    def _connect(self) -> sqlite3.Connection:
-        """Open one transaction-safe connection to the shared SQLite file.
+    def _create_private_db_dir(self) -> None:
+        """Create the store's directory, readable by the Slips user only.
 
-        Returns:
-            Configured SQLite connection.
+        Host names and notes are private, so other users of this machine
+        shouldn't be able to list or read them.
         """
-        connection = sqlite3.connect(self.path, timeout=20)
-        connection.row_factory = sqlite3.Row
-        return connection
+        db_dir = self.db_path.parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        self._restrict_access_to_slips_user(db_dir, 0o700)
 
     @staticmethod
-    def network_id_for_state(state: dict[str, Any], run_name: str) -> str:
+    def _restrict_access_to_slips_user(path: Path, mode: int) -> None:
+        """Give a path to the owner of the Slips directory and lock it down.
+
+        Slips often starts as root and drops privileges later, so anything
+        root creates here must be handed to the user that owns the Slips
+        directory, or the unprivileged modules lose access to it.
+
+        Parameters:
+            path: File or directory of the store.
+            mode: Permission bits to set, e.g. 0o600.
+        """
+        try:
+            if os.geteuid() == 0:
+                slips_dir_owner = Path.cwd().stat()
+                os.chown(path, slips_dir_owner.st_uid, slips_dir_owner.st_gid)
+            path.chmod(mode)
+        except PermissionError:
+            # another user created it, and already locked it down
+            pass
+
+    def _init_tables(self) -> None:
+        """Create any missing table or index.
+
+        Runs on every start, so a store created by an older Slips gains
+        the tables added since.
+        """
+        for table_name, schema in TABLE_SCHEMAS.items():
+            self.create_table(table_name, schema)
+        for index_query in INDEX_QUERIES:
+            self.execute(index_query)
+
+    @contextmanager
+    def _open_write_transaction(self) -> Iterator[sqlite3.Cursor]:
+        """Group several statements into one commit.
+
+        execute() commits after each statement, and every commit syncs the
+        disk. A batch of flows needs hundreds of statements, and a host
+        review must be saved fully or not at all, so both run in one
+        transaction here. It takes the same locks as execute(), in the
+        same order. Never call execute() or select() inside it, they wait
+        for the lock this already holds.
+
+        BEGIN IMMEDIATE takes the write lock up front, so the reads done
+        before the first write can't go stale.
+
+        Returns:
+            Cursor of the open transaction. It commits when the block
+            ends, and rolls back when the block raises.
+        """
+        with self.conn_lock:
+            with self._acquire_flock():
+                cursor = self.conn.cursor()
+                try:
+                    cursor.execute("BEGIN IMMEDIATE")
+                    yield cursor
+                    self.conn.commit()
+                except BaseException:
+                    self.conn.rollback()
+                    # the rolled back rows were never saved, so a retry
+                    # must not be skipped as a repeated write
+                    self._recent_sightings.clear()
+                    self._recent_macs.clear()
+                    raise
+
+    def _fetch_rows(
+        self, query: str, params: Sequence[Any] = ()
+    ) -> list[sqlite3.Row]:
+        """Run one read query and return all its rows.
+
+        Parameters:
+            query: SELECT statement.
+            params: Values for the query's placeholders.
+
+        Returns:
+            Matching rows, or an empty list when the query failed.
+            execute() already logged the failure.
+        """
+        cursor = self.execute(query, params)
+        if cursor is None:
+            return []
+        return self.fetchall(cursor)
+
+    @staticmethod
+    def _make_placeholders(values: Collection[Any]) -> str:
+        """Build the "?,?,?" part of an SQL IN clause.
+
+        Parameters:
+            values: Values the query will bind.
+
+        Returns:
+            One question mark per value, comma separated.
+        """
+        return ",".join("?" for _ in values)
+
+    @staticmethod
+    def build_network_id(network_state: dict[str, Any], run_name: str) -> str:
         """Identify a network by router MAC or isolate it to one run.
 
         Parameters:
-            state: Current interface settings.
+            network_state: Current interface settings.
             run_name: Run identifier for networks without a known router.
 
         Returns:
             Network identity suitable for storing a user-provided name.
         """
-        gateway_mac = str(state.get("gateway_mac") or "").strip().lower()
+        gateway_mac = (
+            str(network_state.get("gateway_mac") or "").strip().lower()
+        )
         if gateway_mac:
             return f"gateway:{gateway_mac}"
         return f"run:{run_name}" if run_name else ""
 
-    @staticmethod
-    def _network_names_from_connection(
-        connection: sqlite3.Connection, network_ids: Iterable[str]
-    ) -> dict[str, str]:
-        """Read selected names using an already open SQLite connection.
-
-        Parameters:
-            connection: Open host profile database connection.
-            network_ids: Network identities to look up.
-
-        Returns:
-            Saved names indexed by network identity.
-        """
-        keys = list(dict.fromkeys(key for key in network_ids if key))
-        if not keys:
-            return {}
-        placeholders = ",".join("?" for _ in keys)
-        try:
-            return {
-                network_id: name
-                for network_id, name in connection.execute(
-                    "SELECT network_id, name FROM network_names "
-                    f"WHERE network_id IN ({placeholders})",
-                    keys,
-                )
-            }
-        except sqlite3.OperationalError:
-            return {}
-
-    @staticmethod
-    def network_names(
-        path: Path, network_ids: Iterable[str]
-    ) -> dict[str, str]:
+    def get_network_names(self, network_ids: Iterable[str]) -> dict[str, str]:
         """Read user-provided names for a bounded set of networks.
 
         Parameters:
-            path: Permanent host profile database.
             network_ids: Network identities to look up.
 
         Returns:
             Saved names indexed by network identity.
         """
-        if not path.exists():
-            return {}
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=1
-        ) as connection:
-            return HostProfileStore._network_names_from_connection(
-                connection, network_ids
+        unique_network_ids = list(
+            dict.fromkeys(
+                network_id for network_id in network_ids if network_id
             )
+        )
+        if not unique_network_ids:
+            return {}
+        name_rows = self.select(
+            "network_names",
+            columns="network_id, name",
+            condition=(
+                f"network_id IN "
+                f"({self._make_placeholders(unique_network_ids)})"
+            ),
+            params=unique_network_ids,
+        )
+        return {
+            name_row["network_id"]: name_row["name"]
+            for name_row in name_rows or []
+        }
 
-    @staticmethod
-    def network_for_observation(
-        path: Path, ip: str, observed_at: float
+    def get_network_of_observation(
+        self, ip: str, observed_at: float
     ) -> dict[str, str]:
         """Resolve the saved network for an address at an event timestamp.
 
         Parameters:
-            path: Permanent host profile database path.
             ip: Host address associated with the detection.
             observed_at: Detection time as a Unix timestamp.
 
         Returns:
             Network identity and display name, or an explicit unknown label.
         """
-        unknown = {
+        unknown_network = {
             "network_id": "",
             "network_name": "",
             "network_label": "Unknown network (not recorded)",
         }
         try:
-            normalized_ip = str(ipaddress.ip_address(ip))
-            timestamp = float(observed_at)
+            address = ipaddress.ip_address(ip)
+            observation_time = float(observed_at)
         except (TypeError, ValueError):
-            return unknown
-        if not path.exists():
-            return unknown
-        if ipaddress.ip_address(normalized_ip).is_global:
+            return unknown_network
+        if address.is_global:
             return {
-                "network_id": "public",
+                "network_id": PUBLIC_NETWORK_ID,
                 "network_name": "",
                 "network_label": "Public internet",
             }
-        try:
-            with sqlite3.connect(
-                f"file:{path}?mode=ro", uri=True, timeout=5
-            ) as connection:
-                rows = connection.execute(
-                    "SELECT o.network_id, COALESCE(h.network_label,''), "
-                    "o.first_seen, o.last_seen, n.name "
-                    "FROM host_endpoint_observations o "
-                    "LEFT JOIN hosts h ON h.network_id=o.network_id AND h.ip=o.ip "
-                    "LEFT JOIN network_names n ON n.network_id=o.network_id "
-                    "WHERE o.ip=?",
-                    (normalized_ip,),
-                ).fetchall()
-        except sqlite3.Error:
-            return unknown
-        matching = [row for row in rows if row[2] <= timestamp <= row[3]]
-        network_ids = {str(row[0]) for row in matching}
-        if len(network_ids) != 1:
-            if len(network_ids) > 1:
-                return {
-                    "network_id": ",".join(sorted(network_ids)),
-                    "network_name": "",
-                    "network_label": "Multiple networks",
-                }
-            return unknown
-        row = matching[0]
-        network_name = str(row[4] or "")
+        observation_rows = self._fetch_rows(
+            "SELECT o.network_id, COALESCE(h.network_label,'') "
+            "AS network_label, o.first_seen, o.last_seen, n.name "
+            "FROM host_endpoint_observations o "
+            "LEFT JOIN hosts h ON h.network_id=o.network_id AND h.ip=o.ip "
+            "LEFT JOIN network_names n ON n.network_id=o.network_id "
+            "WHERE o.ip=?",
+            (str(address),),
+        )
+        rows_at_observation_time = [
+            observation_row
+            for observation_row in observation_rows
+            if observation_row["first_seen"]
+            <= observation_time
+            <= observation_row["last_seen"]
+        ]
+        matching_network_ids = {
+            str(observation_row["network_id"])
+            for observation_row in rows_at_observation_time
+        }
+        if len(matching_network_ids) > 1:
+            return {
+                "network_id": ",".join(sorted(matching_network_ids)),
+                "network_name": "",
+                "network_label": "Multiple networks",
+            }
+        if not matching_network_ids:
+            return unknown_network
+        matching_row = rows_at_observation_time[0]
+        network_name = str(matching_row["name"] or "")
         return {
-            "network_id": str(row[0]),
+            "network_id": str(matching_row["network_id"]),
             "network_name": network_name,
             "network_label": network_name
-            or str(row[1])
-            or f"Captured network · {row[0]}",
+            or str(matching_row["network_label"])
+            or f"Captured network · {matching_row['network_id']}",
         }
 
-    @staticmethod
-    def set_network_name(path: Path, network_id: str, name: str) -> None:
+    def set_network_name(self, network_id: str, name: str) -> None:
         """Save or clear one network name in the permanent database.
 
         Parameters:
-            path: Permanent host profile database.
             network_id: Router or run-scoped network identity.
             name: User-provided display name, or empty to clear it.
         """
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.parent.chmod(0o700)
-        with sqlite3.connect(path, timeout=5) as connection:
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS network_names ("
-                "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
+        if name:
+            self.execute(
+                "INSERT INTO network_names VALUES (?, ?) "
+                "ON CONFLICT(network_id) DO UPDATE SET name=excluded.name",
+                (network_id, name),
             )
-            if name:
-                connection.execute(
-                    "INSERT INTO network_names VALUES (?, ?) "
-                    "ON CONFLICT(network_id) DO UPDATE SET name=excluded.name",
-                    (network_id, name),
-                )
-            else:
-                connection.execute(
-                    "DELETE FROM network_names WHERE network_id=?",
-                    (network_id,),
-                )
-        path.chmod(0o600)
+        else:
+            self.delete("network_names", "network_id=?", (network_id,))
 
-    @staticmethod
-    def has_network_profile(path: Path, ip: str, network_id: str) -> bool:
+    def has_network_profile(self, ip: str, network_id: str) -> bool:
         """Check whether a host was recorded under one network identity.
 
         Parameters:
-            path: Permanent host profile database.
             ip: Host address shown in the web interface.
             network_id: Network identity selected for naming.
 
@@ -316,25 +422,64 @@ class HostProfileStore:
             Whether the exact host-network pair exists.
         """
         try:
-            normalized = str(ipaddress.ip_address(ip))
+            normalized_ip = str(ipaddress.ip_address(ip))
         except ValueError:
             return False
-        if not path.exists():
-            return False
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=1
-        ) as connection:
-            return (
-                connection.execute(
-                    "SELECT 1 FROM hosts WHERE network_id=? AND ip=? LIMIT 1",
-                    (network_id, normalized),
-                ).fetchone()
-                is not None
-            )
+        host_row = self.select(
+            "hosts",
+            columns="1",
+            condition="network_id=? AND ip=?",
+            params=(network_id, normalized_ip),
+            limit=1,
+        )
+        return host_row is not None
 
-    @staticmethod
+    def _get_latest_mac_of_host(
+        self, transaction_cursor: sqlite3.Cursor, network_id: str, ip: str
+    ) -> str:
+        """Read the newest usable MAC seen for one host profile.
+
+        Parameters:
+            transaction_cursor: Cursor of the open write transaction.
+            network_id: Network the host belongs to.
+            ip: Normalized host address.
+
+        Returns:
+            Normalized MAC, or an empty string when none is usable.
+        """
+        mac_row = transaction_cursor.execute(
+            "SELECT value FROM facts WHERE network_id=? AND ip=? "
+            "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
+            (network_id, ip),
+        ).fetchone()
+        return self._normalize_unicast_mac(mac_row["value"] if mac_row else "")
+
+    def _get_latest_stable_mdns_name_of_host(
+        self, transaction_cursor: sqlite3.Cursor, network_id: str, ip: str
+    ) -> str:
+        """Read the newest mDNS name that identifies one host profile.
+
+        Parameters:
+            transaction_cursor: Cursor of the open write transaction.
+            network_id: Network the host belongs to.
+            ip: Normalized host address.
+
+        Returns:
+            Stable mDNS hostname, or an empty string when there is none.
+        """
+        mdns_rows = transaction_cursor.execute(
+            "SELECT value FROM facts WHERE network_id=? AND ip=? "
+            "AND kind='mdns_hostname' ORDER BY last_seen DESC",
+            (network_id, ip),
+        ).fetchall()
+        for mdns_row in mdns_rows:
+            stable_mdns_name = self._get_stable_mdns_name(mdns_row["value"])
+            if stable_mdns_name:
+                return stable_mdns_name
+        return ""
+
     def set_host_annotation(
-        path: Path,
+        self,
         ip: str,
         network_id: str,
         name: str,
@@ -344,8 +489,10 @@ class HostProfileStore:
     ) -> None:
         """Persist a user name and note for a host and its known device MAC.
 
+        Everything is saved in one transaction, so a failed write never
+        leaves half a review behind.
+
         Parameters:
-            path: Permanent host profile database.
             ip: Host IP address.
             network_id: Network identity already associated with this host.
             name: User name, or empty to clear it.
@@ -353,450 +500,497 @@ class HostProfileStore:
             status: Optional review mark saved in the same transaction.
             labels: Optional custom labels saved with the mark.
         """
-        normalized = str(ipaddress.ip_address(ip))
-        with sqlite3.connect(path, timeout=5) as connection:
-            mac_row = connection.execute(
-                "SELECT value FROM facts WHERE network_id=? AND ip=? "
-                "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
-                (network_id, normalized),
-            ).fetchone()
-            mdns_rows = connection.execute(
-                "SELECT value FROM facts WHERE network_id=? AND ip=? "
-                "AND kind='mdns_hostname' ORDER BY last_seen DESC",
-                (network_id, normalized),
-            ).fetchall()
-            mdns_name = next(
-                (
-                    stable
-                    for (value,) in mdns_rows
-                    if (stable := HostProfileStore._stable_mdns_name(value))
-                ),
-                "",
+        normalized_ip = str(ipaddress.ip_address(ip))
+        updated_at = time.time()
+        with self._open_write_transaction() as transaction_cursor:
+            device_mac = self._get_latest_mac_of_host(
+                transaction_cursor, network_id, normalized_ip
             )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_annotations ("
-                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
-                "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
-                "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip))"
+            stable_mdns_name = self._get_latest_stable_mdns_name_of_host(
+                transaction_cursor, network_id, normalized_ip
             )
             if name or note:
-                connection.execute(
+                transaction_cursor.execute(
                     "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?) "
                     "ON CONFLICT(network_id, ip) DO UPDATE SET "
                     "name=excluded.name, note=excluded.note, "
                     "updated_at=excluded.updated_at",
-                    (network_id, normalized, name, note, time.time()),
+                    (network_id, normalized_ip, name, note, updated_at),
                 )
             else:
-                connection.execute(
+                transaction_cursor.execute(
                     "DELETE FROM host_annotations WHERE network_id=? AND ip=?",
-                    (network_id, normalized),
+                    (network_id, normalized_ip),
                 )
-            mac = HostProfileStore._usable_mac(mac_row[0] if mac_row else "")
-            if mac and network_id != "public":
-                connection.execute(
-                    "CREATE TABLE IF NOT EXISTS host_annotation_devices ("
-                    "network_id TEXT NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL, "
-                    "PRIMARY KEY(network_id, ip))"
-                )
-                connection.execute(
+            if device_mac and network_id != PUBLIC_NETWORK_ID:
+                transaction_cursor.execute(
                     "INSERT INTO host_annotation_devices VALUES (?, ?, ?) "
-                    "ON CONFLICT(network_id, ip) DO UPDATE SET mac=excluded.mac",
-                    (network_id, normalized, mac),
+                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
+                    "mac=excluded.mac",
+                    (network_id, normalized_ip, device_mac),
                 )
-                connection.execute(
-                    "CREATE TABLE IF NOT EXISTS device_annotations ("
-                    "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
-                    "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
-                )
-                connection.execute(
+                transaction_cursor.execute(
                     "INSERT INTO device_annotations VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(mac) DO UPDATE SET name=excluded.name, "
                     "note=excluded.note, updated_at=excluded.updated_at",
-                    (mac, name, note, time.time()),
+                    (device_mac, name, note, updated_at),
                 )
-            if mdns_name and not mac:
-                connection.execute(
-                    "CREATE TABLE IF NOT EXISTS mdns_identity_annotations ("
-                    "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
-                    "ip TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL, "
-                    "updated_at REAL NOT NULL)"
-                )
-                connection.execute(
-                    "INSERT INTO mdns_identity_annotations VALUES (?, ?, ?, ?, ?, ?) "
+            if stable_mdns_name and not device_mac:
+                transaction_cursor.execute(
+                    "INSERT INTO mdns_identity_annotations "
+                    "VALUES (?, ?, ?, ?, ?, ?) "
                     "ON CONFLICT(mdns_name) DO UPDATE SET name=excluded.name, "
                     "note=excluded.note, network_id=excluded.network_id, "
                     "ip=excluded.ip, updated_at=excluded.updated_at",
                     (
-                        mdns_name,
+                        stable_mdns_name,
                         network_id,
-                        normalized,
+                        normalized_ip,
                         name,
                         note,
-                        time.time(),
+                        updated_at,
                     ),
                 )
-
             if status is not None:
-                HostProfileStore.set_host_triage(
-                    path,
-                    normalized,
+                self._save_host_triage(
+                    transaction_cursor,
+                    normalized_ip,
                     network_id,
                     status,
                     labels or [],
-                    connection,
                 )
 
-    @staticmethod
     def set_host_triage(
-        path: Path,
-        ip: str,
-        network_id: str,
-        status: str,
-        labels: list[str],
-        connection: sqlite3.Connection | None = None,
+        self, ip: str, network_id: str, status: str, labels: list[str]
     ) -> None:
         """Persist review marks for a verified device or an exact host profile.
 
         Parameters:
-            path: Permanent host database.
             ip: Selected host address.
             network_id: Network to which the host belongs.
             status: Review workflow mark, or empty to clear it.
             labels: User-defined labels for the host.
-            connection: Optional caller transaction shared with name and note.
         """
-        context = (
-            nullcontext(connection)
-            if connection is not None
-            else sqlite3.connect(path, timeout=5)
-        )
-        with context as connection:
-            mac_row = connection.execute(
-                "SELECT value FROM facts WHERE network_id=? AND ip=? "
-                "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
-                (network_id, ip),
-            ).fetchone()
-            mac = HostProfileStore._usable_mac(mac_row[0] if mac_row else "")
-            subject = (
-                f"mac:{mac}"
-                if mac and network_id.startswith("gateway:")
-                else f"host:{network_id}:{ip}"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS host_triage (subject TEXT PRIMARY KEY, "
-                "status TEXT NOT NULL, labels TEXT NOT NULL, updated_at REAL NOT NULL)"
-            )
-            connection.execute(
-                "INSERT INTO host_triage VALUES (?, ?, ?, ?) "
-                "ON CONFLICT(subject) DO UPDATE SET status=excluded.status, "
-                "labels=excluded.labels, updated_at=excluded.updated_at",
-                (subject, status, json.dumps(labels), time.time()),
+        with self._open_write_transaction() as transaction_cursor:
+            self._save_host_triage(
+                transaction_cursor, ip, network_id, status, labels
             )
 
-    @staticmethod
-    def triage_for_profiles(
-        path: Path, ips: Iterable[str]
-    ) -> dict[tuple[str, str], dict[str, Any]]:
-        """Read review marks without creating or migrating the permanent store.
+    def _save_host_triage(
+        self,
+        transaction_cursor: sqlite3.Cursor,
+        ip: str,
+        network_id: str,
+        status: str,
+        labels: list[str],
+    ) -> None:
+        """Write review marks using the caller's transaction.
+
+        Lets set_host_annotation() save the name, note and marks together.
 
         Parameters:
-            path: Permanent host database.
+            transaction_cursor: Cursor of the open write transaction.
+            ip: Selected host address.
+            network_id: Network to which the host belongs.
+            status: Review workflow mark, or empty to clear it.
+            labels: User-defined labels for the host.
+        """
+        device_mac = self._get_latest_mac_of_host(
+            transaction_cursor, network_id, ip
+        )
+        triage_subject = (
+            f"mac:{device_mac}"
+            if device_mac and network_id.startswith("gateway:")
+            else f"host:{network_id}:{ip}"
+        )
+        transaction_cursor.execute(
+            "INSERT INTO host_triage VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(subject) DO UPDATE SET status=excluded.status, "
+            "labels=excluded.labels, updated_at=excluded.updated_at",
+            (triage_subject, status, json.dumps(labels), time.time()),
+        )
+
+    def get_triage_of_profiles(
+        self, ips: Iterable[str]
+    ) -> dict[ProfileKey, dict[str, Any]]:
+        """Read the review marks of every network profile of the given IPs.
+
+        Parameters:
             ips: Addresses to resolve, including device member addresses.
 
         Returns:
             Effective status and labels indexed by network and address.
         """
-        keys = list(dict.fromkeys(ips))
-        if not keys or not path.exists():
+        unique_ips = list(dict.fromkeys(ips))
+        if not unique_ips:
             return {}
-        result: dict[tuple[str, str], dict[str, Any]] = {}
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=5
-        ) as connection:
-            try:
-                marks = {
-                    row[0]: {"status": row[1], "labels": json.loads(row[2])}
-                    for row in connection.execute(
-                        "SELECT subject, status, labels FROM host_triage"
-                    )
-                }
-            except sqlite3.OperationalError:
-                return {}
-            for offset in range(0, len(keys), 300):
-                batch = keys[offset : offset + 300]
-                placeholders = ",".join("?" for _ in batch)
-                rows = connection.execute(
-                    "SELECT h.network_id, h.ip, (SELECT value FROM facts f "
-                    "WHERE f.network_id=h.network_id AND f.ip=h.ip AND f.kind='mac' "
-                    "ORDER BY f.last_seen DESC LIMIT 1) AS mac FROM hosts h "
-                    f"WHERE h.ip IN ({placeholders}) ORDER BY h.last_seen DESC",
-                    batch,
+        triage_of_subject = {
+            triage_row["subject"]: {
+                "status": triage_row["status"],
+                "labels": json.loads(triage_row["labels"]),
+            }
+            for triage_row in self._fetch_rows(
+                "SELECT subject, status, labels FROM host_triage"
+            )
+        }
+        triage_of_profile: dict[ProfileKey, dict[str, Any]] = {}
+        for batch_start in range(0, len(unique_ips), MAX_IPS_PER_TRIAGE_QUERY):
+            ip_batch = unique_ips[
+                batch_start : batch_start + MAX_IPS_PER_TRIAGE_QUERY
+            ]
+            host_rows = self._fetch_rows(
+                "SELECT h.network_id, h.ip, (SELECT value FROM facts f "
+                "WHERE f.network_id=h.network_id AND f.ip=h.ip "
+                "AND f.kind='mac' ORDER BY f.last_seen DESC LIMIT 1) AS mac "
+                "FROM hosts h "
+                f"WHERE h.ip IN ({self._make_placeholders(ip_batch)}) "
+                "ORDER BY h.last_seen DESC",
+                ip_batch,
+            )
+            for host_row in host_rows:
+                network_id, ip = host_row["network_id"], host_row["ip"]
+                device_mac = self._normalize_unicast_mac(host_row["mac"])
+                device_subject = (
+                    f"mac:{device_mac}"
+                    if device_mac and network_id.startswith("gateway:")
+                    else ""
                 )
-                for network_id, ip, value in rows:
-                    mac = HostProfileStore._usable_mac(value)
-                    subject = (
-                        f"mac:{mac}"
-                        if mac and network_id.startswith("gateway:")
-                        else ""
-                    )
-                    mark = marks.get(
-                        subject, marks.get(f"host:{network_id}:{ip}")
-                    )
-                    result[(network_id, ip)] = mark or {
-                        "status": "",
-                        "labels": [],
-                    }
-        return result
+                triage = triage_of_subject.get(
+                    device_subject,
+                    triage_of_subject.get(f"host:{network_id}:{ip}"),
+                )
+                triage_of_profile[(network_id, ip)] = triage or {
+                    "status": "",
+                    "labels": [],
+                }
+        return triage_of_profile
 
-    @staticmethod
-    def observation_times(
-        path: Path, network_ids: Iterable[str]
+    def get_last_observation_times(
+        self, network_ids: Iterable[str]
     ) -> dict[str, float]:
-        """Read real sightings on selected networks without refreshing timestamps.
+        """Read real sightings on selected networks without refreshing them.
 
         Parameters:
-            path: Permanent host database.
             network_ids: Verified networks and the current run fallback.
 
         Returns:
             Latest actual observation timestamp for each address.
         """
-        keys = list(dict.fromkeys(key for key in network_ids if key))
-        if not path.exists() or not keys:
+        unique_network_ids = list(
+            dict.fromkeys(
+                network_id for network_id in network_ids if network_id
+            )
+        )
+        if not unique_network_ids:
             return {}
-        try:
-            with sqlite3.connect(
-                f"file:{path}?mode=ro", uri=True, timeout=5
-            ) as connection:
-                marks = ",".join("?" for _ in keys)
-                return {
-                    str(ip): float(seen)
-                    for ip, seen in connection.execute(
-                        f"SELECT ip, MAX(last_seen) FROM host_endpoint_observations WHERE network_id IN ({marks}) GROUP BY ip",
-                        keys,
-                    )
-                }
-        except sqlite3.OperationalError:
-            return {}
+        observation_rows = self._fetch_rows(
+            "SELECT ip, MAX(last_seen) AS last_seen "
+            "FROM host_endpoint_observations WHERE network_id IN "
+            f"({self._make_placeholders(unique_network_ids)}) GROUP BY ip",
+            unique_network_ids,
+        )
+        return {
+            str(observation_row["ip"]): float(observation_row["last_seen"])
+            for observation_row in observation_rows
+        }
 
-    @staticmethod
-    def triage_for_ips(
-        path: Path, ips: Iterable[str]
+    def get_triage_of_ips(
+        self, ips: Iterable[str]
     ) -> dict[str, dict[str, Any]]:
         """Read the most recent review mark for each displayed host.
 
         Parameters:
-            path: Permanent host database.
             ips: Addresses in the inventory.
 
         Returns:
             Review status and labels indexed by address.
         """
-        result: dict[str, dict[str, Any]] = {}
-        for (_, ip), mark in HostProfileStore.triage_for_profiles(
-            path, ips
-        ).items():
-            result.setdefault(ip, mark)
-        return result
+        triage_of_ip: dict[str, dict[str, Any]] = {}
+        for (_, ip), triage in self.get_triage_of_profiles(ips).items():
+            triage_of_ip.setdefault(ip, triage)
+        return triage_of_ip
 
     @staticmethod
-    def _stable_mdns_name(value: str | None) -> str:
+    def _get_stable_mdns_name(observed_name: str | None) -> str:
         """Select a device mDNS hostname, excluding services and random IDs.
 
         Parameters:
-            value: Observed mDNS name.
+            observed_name: Observed mDNS name.
 
         Returns:
             Canonical hostname, or an empty string when it is unsuitable.
         """
-        name = str(value or "").strip().lower().rstrip(".")
-        match = re.fullmatch(r"([a-z0-9][a-z0-9-]{0,62})\.local", name)
-        if not match:
+        mdns_name = str(observed_name or "").strip().lower().rstrip(".")
+        hostname_match = re.fullmatch(
+            r"([a-z0-9][a-z0-9-]{0,62})\.local", mdns_name
+        )
+        if not hostname_match:
             return ""
-        label = match.group(1)
-        if re.fullmatch(
+        host_label = hostname_match.group(1)
+        is_random_uuid = re.fullmatch(
             r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
             r"[0-9a-f]{4}-[0-9a-f]{12}",
-            label,
-        ):
+            host_label,
+        )
+        if is_random_uuid:
             return ""
-        return name
+        return mdns_name
 
     @staticmethod
-    def _usable_mac(value: str | None) -> str:
+    def _normalize_unicast_mac(observed_mac: str | None) -> str:
         """Accept a specific unicast MAC for matching one device.
 
         Parameters:
-            value: MAC address stored with a host profile.
+            observed_mac: MAC address stored with a host profile.
 
         Returns:
             Normalized MAC, or an empty string for an unusable address.
         """
-        mac = str(value or "").strip().lower()
+        mac = str(observed_mac or "").strip().lower()
         if not re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", mac):
             return ""
-        if mac == "00:00:00:00:00:00" or int(mac[:2], 16) & 1:
+        is_group_address = int(mac[:2], 16) & 1
+        if mac == "00:00:00:00:00:00" or is_group_address:
             return ""
         return mac
 
-    @staticmethod
-    def _resolved_annotations(
-        connection: sqlite3.Connection, ips: Iterable[str]
-    ) -> dict[tuple[str, str], dict[str, str]]:
+    def _get_stable_mdns_name_of_profiles(
+        self, ips: list[str]
+    ) -> dict[ProfileKey, str]:
+        """Find the newest stable mDNS name of each profile of the given IPs.
+
+        Parameters:
+            ips: Addresses whose profiles are being named.
+
+        Returns:
+            Stable mDNS hostname indexed by network identity and IP.
+        """
+        mdns_name_of_profile: dict[ProfileKey, str] = {}
+        for mdns_row in self._fetch_rows(
+            "SELECT network_id, ip, value FROM facts "
+            "WHERE kind='mdns_hostname' "
+            f"AND ip IN ({self._make_placeholders(ips)}) "
+            "ORDER BY last_seen DESC",
+            ips,
+        ):
+            stable_mdns_name = self._get_stable_mdns_name(mdns_row["value"])
+            if stable_mdns_name:
+                mdns_name_of_profile.setdefault(
+                    (mdns_row["network_id"], mdns_row["ip"]), stable_mdns_name
+                )
+        return mdns_name_of_profile
+
+    def _get_annotations_saved_by_mdns_name(
+        self, mdns_names: set[str]
+    ) -> dict[str, dict[str, str]]:
+        """Read annotations that were saved for a device without a MAC.
+
+        Parameters:
+            mdns_names: Stable mDNS hostnames of the displayed profiles.
+
+        Returns:
+            Name and note indexed by mDNS hostname.
+        """
+        annotation_of_mdns_name: dict[str, dict[str, str]] = {}
+        for annotation_row in self._fetch_rows(
+            "SELECT m.mdns_name, m.name, m.note, (SELECT value FROM facts f "
+            "WHERE f.network_id=m.network_id AND f.ip=m.ip "
+            "AND f.kind='mac' ORDER BY f.last_seen DESC LIMIT 1) "
+            "AS source_mac FROM mdns_identity_annotations m "
+            f"WHERE mdns_name IN ({self._make_placeholders(mdns_names)})",
+            tuple(mdns_names),
+        ):
+            if self._normalize_unicast_mac(annotation_row["source_mac"]):
+                # the device has a MAC now, so its MAC annotation wins
+                continue
+            annotation_of_mdns_name[annotation_row["mdns_name"]] = {
+                "name": annotation_row["name"] or "",
+                "note": annotation_row["note"] or "",
+            }
+        return annotation_of_mdns_name
+
+    def _get_host_annotations_matching_mdns_names(
+        self, mdns_names: set[str]
+    ) -> dict[str, dict[str, str]]:
+        """Read host annotations of MAC-less hosts that share an mDNS name.
+
+        Covers annotations saved before mDNS names were stored on their own.
+
+        Parameters:
+            mdns_names: Stable mDNS hostnames of the displayed profiles.
+
+        Returns:
+            Newest name and note indexed by mDNS hostname.
+        """
+        annotation_of_mdns_name: dict[str, dict[str, str]] = {}
+        for annotation_row in self._fetch_rows(
+            f"SELECT a.name, a.note, f.value, {MAC_OF_ANNOTATION_SQL} "
+            "AS source_mac FROM host_annotations a "
+            "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
+            "AND f.kind='mdns_hostname' WHERE (a.name!='' OR a.note!='') "
+            f"AND f.value IN ({self._make_placeholders(mdns_names)}) "
+            "ORDER BY a.updated_at DESC, f.last_seen DESC",
+            tuple(mdns_names),
+        ):
+            stable_mdns_name = self._get_stable_mdns_name(
+                annotation_row["value"]
+            )
+            if stable_mdns_name and not self._normalize_unicast_mac(
+                annotation_row["source_mac"]
+            ):
+                annotation_of_mdns_name.setdefault(
+                    stable_mdns_name,
+                    {
+                        "name": annotation_row["name"] or "",
+                        "note": annotation_row["note"] or "",
+                    },
+                )
+        return annotation_of_mdns_name
+
+    def _get_device_annotations(
+        self, macs: set[str]
+    ) -> dict[str, dict[str, str]]:
+        """Read the annotations saved for the given device MACs.
+
+        Parameters:
+            macs: Usable MACs of the displayed profiles.
+
+        Returns:
+            Name and note indexed by MAC.
+        """
+        return {
+            device_row["mac"]: {
+                "name": device_row["name"] or "",
+                "note": device_row["note"] or "",
+            }
+            for device_row in self._fetch_rows(
+                "SELECT mac, name, note FROM device_annotations"
+            )
+            if device_row["mac"] in macs
+        }
+
+    def _get_host_annotations_matching_macs(
+        self, macs: set[str]
+    ) -> dict[str, dict[str, str]]:
+        """Read host annotations whose address was owned by one of the MACs.
+
+        Covers annotations saved before device MACs were stored on their own.
+
+        Parameters:
+            macs: Usable MACs of the displayed profiles.
+
+        Returns:
+            Newest name and note indexed by MAC.
+        """
+        annotation_of_mac: dict[str, dict[str, str]] = {}
+        for annotation_row in self._fetch_rows(
+            f"SELECT a.name, a.note, {MAC_OF_ANNOTATION_SQL} AS mac "
+            "FROM host_annotations a WHERE a.network_id!='public' "
+            "ORDER BY a.updated_at DESC"
+        ):
+            annotation_mac = self._normalize_unicast_mac(annotation_row["mac"])
+            if annotation_mac in macs and (
+                annotation_row["name"] or annotation_row["note"]
+            ):
+                annotation_of_mac.setdefault(
+                    annotation_mac,
+                    {
+                        "name": annotation_row["name"] or "",
+                        "note": annotation_row["note"] or "",
+                    },
+                )
+        return annotation_of_mac
+
+    def _resolve_annotations(
+        self, ips: Iterable[str]
+    ) -> dict[ProfileKey, dict[str, str]]:
         """Resolve profile names by device MAC, then exact host profile.
 
         Parameters:
-            connection: Open permanent host database connection.
             ips: IP addresses whose network profiles are being displayed.
 
         Returns:
             Effective annotations indexed by network identity and IP.
         """
-        keys = list(dict.fromkeys(ips))
-        if not keys:
+        unique_ips = list(dict.fromkeys(ips))
+        if not unique_ips:
             return {}
-        placeholders = ",".join("?" for _ in keys)
-        mac_query = (
-            "(SELECT lower(f.value) FROM facts f WHERE f.network_id=h.network_id "
-            "AND f.ip=h.ip AND f.kind='mac' "
-            "ORDER BY f.last_seen DESC LIMIT 1)"
+        host_rows = self._fetch_rows(
+            "SELECT h.network_id, h.ip, a.name, a.note, "
+            f"{LATEST_MAC_OF_HOST_SQL} AS mac, "
+            f"{MAC_OF_ANNOTATION_SQL} AS annotation_mac FROM hosts h "
+            "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
+            "AND a.ip=h.ip "
+            f"WHERE h.ip IN ({self._make_placeholders(unique_ips)}) "
+            "ORDER BY h.last_seen DESC",
+            unique_ips,
         )
-        historical_mac = (
-            "(SELECT lower(f.value) FROM facts f JOIN host_annotations saved "
-            "ON saved.network_id=f.network_id AND saved.ip=f.ip "
-            "WHERE f.network_id=a.network_id AND f.ip=a.ip AND f.kind='mac' "
-            "AND f.first_seen<=saved.updated_at "
-            "ORDER BY MIN(f.last_seen, saved.updated_at) DESC, f.first_seen DESC LIMIT 1)"
-        )
-        has_bindings = connection.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='host_annotation_devices'"
-        ).fetchone()
-        saved_mac = (
-            "COALESCE((SELECT d.mac FROM host_annotation_devices d WHERE "
-            "d.network_id=a.network_id AND d.ip=a.ip), " + historical_mac + ")"
-            if has_bindings
-            else historical_mac
-        )
-        try:
-            rows = connection.execute(
-                "SELECT h.network_id, h.ip, a.name, a.note, "
-                f"{mac_query} AS mac, {saved_mac} AS annotation_mac FROM hosts h "
-                "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
-                "AND a.ip=h.ip WHERE h.ip IN (" + placeholders + ") "
-                "ORDER BY h.last_seen DESC",
-                keys,
-            ).fetchall()
-        except sqlite3.OperationalError:
-            return {}
-        macs = {
-            HostProfileStore._usable_mac(row[4])
-            for row in rows
-            if row[0] != "public"
+        local_macs = {
+            self._normalize_unicast_mac(host_row["mac"])
+            for host_row in host_rows
+            if host_row["network_id"] != PUBLIC_NETWORK_ID
         } - {""}
-        mdns_by_host: dict[tuple[str, str], str] = {}
-        for network_id, ip, value in connection.execute(
-            "SELECT network_id, ip, value FROM facts WHERE kind='mdns_hostname' "
-            "AND ip IN (" + placeholders + ") ORDER BY last_seen DESC",
-            keys,
-        ):
-            stable = HostProfileStore._stable_mdns_name(value)
-            if stable:
-                mdns_by_host.setdefault((network_id, ip), stable)
-        mdns_names = set(mdns_by_host.values())
-        saved_mdns: dict[str, dict[str, str]] = {}
+        mdns_name_of_profile = self._get_stable_mdns_name_of_profiles(
+            unique_ips
+        )
+        mdns_names = set(mdns_name_of_profile.values())
+        annotations_saved_by_mdns_name: dict[str, dict[str, str]] = {}
+        host_annotations_by_mdns_name: dict[str, dict[str, str]] = {}
         if mdns_names:
-            mdns_placeholders = ",".join("?" for _ in mdns_names)
-            try:
-                for mdns_name, name, note, source_mac in connection.execute(
-                    "SELECT m.mdns_name, m.name, m.note, (SELECT value FROM facts f "
-                    "WHERE f.network_id=m.network_id AND f.ip=m.ip AND f.kind='mac' "
-                    "ORDER BY f.last_seen DESC LIMIT 1) FROM mdns_identity_annotations m "
-                    "WHERE mdns_name IN (" + mdns_placeholders + ")",
-                    tuple(mdns_names),
-                ):
-                    if HostProfileStore._usable_mac(source_mac):
-                        continue
-                    saved_mdns[mdns_name] = {
-                        "name": name or "",
-                        "note": note or "",
-                    }
-            except sqlite3.OperationalError:
-                pass
-        legacy_mdns: dict[str, dict[str, str]] = {}
-        if mdns_names:
-            for name, note, value, source_mac in connection.execute(
-                f"SELECT a.name, a.note, f.value, {saved_mac} FROM host_annotations a "
-                "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
-                "AND f.kind='mdns_hostname' WHERE (a.name!='' OR a.note!='') "
-                f"AND f.value IN ({mdns_placeholders}) "
-                "ORDER BY a.updated_at DESC, f.last_seen DESC",
-                tuple(mdns_names),
-            ):
-                stable = HostProfileStore._stable_mdns_name(value)
-                if stable and not HostProfileStore._usable_mac(source_mac):
-                    legacy_mdns.setdefault(
-                        stable, {"name": name or "", "note": note or ""}
-                    )
-        device_annotations: dict[str, dict[str, str]] = {}
-        try:
-            for mac, name, note in connection.execute(
-                "SELECT mac, name, note FROM device_annotations"
-            ):
-                if mac in macs:
-                    device_annotations[mac] = {
-                        "name": name or "",
-                        "note": note or "",
-                    }
-        except sqlite3.OperationalError:
-            pass
-        legacy_annotations: dict[str, dict[str, str]] = {}
-        for name, note, mac in connection.execute(
-            f"SELECT a.name, a.note, {saved_mac} AS mac "
-            "FROM host_annotations a WHERE a.network_id!='public' "
-            "ORDER BY a.updated_at DESC"
-        ):
-            mac = HostProfileStore._usable_mac(mac)
-            if mac in macs and (name or note):
-                legacy_annotations.setdefault(
-                    mac, {"name": name or "", "note": note or ""}
-                )
-        resolved: dict[tuple[str, str], dict[str, str]] = {}
-        for network_id, ip, name, note, mac, annotation_mac in rows:
-            mac = (
-                HostProfileStore._usable_mac(mac)
-                if network_id != "public"
+            annotations_saved_by_mdns_name = (
+                self._get_annotations_saved_by_mdns_name(mdns_names)
+            )
+            host_annotations_by_mdns_name = (
+                self._get_host_annotations_matching_mdns_names(mdns_names)
+            )
+        device_annotations = self._get_device_annotations(local_macs)
+        host_annotations_by_mac = self._get_host_annotations_matching_macs(
+            local_macs
+        )
+
+        annotation_of_profile: dict[ProfileKey, dict[str, str]] = {}
+        for host_row in host_rows:
+            network_id, ip = host_row["network_id"], host_row["ip"]
+            name, note = host_row["name"], host_row["note"]
+            is_local = network_id != PUBLIC_NETWORK_ID
+            current_mac = (
+                self._normalize_unicast_mac(host_row["mac"])
+                if is_local
                 else ""
             )
             annotation_mac = (
-                HostProfileStore._usable_mac(annotation_mac)
-                if network_id != "public"
+                self._normalize_unicast_mac(host_row["annotation_mac"])
+                if is_local
                 else ""
             )
-            if annotation_mac and annotation_mac != mac:
+            if annotation_mac and annotation_mac != current_mac:
+                # the address belongs to another device now
                 name = note = ""
-            direct = {"name": name or "", "note": note or ""}
-            mdns_name = mdns_by_host.get((network_id, ip), "")
-            if mac in device_annotations:
-                resolved[(network_id, ip)] = device_annotations[mac]
+            host_annotation = {"name": name or "", "note": note or ""}
+            mdns_name = mdns_name_of_profile.get((network_id, ip), "")
+            if current_mac in device_annotations:
+                annotation = device_annotations[current_mac]
             elif name or note:
-                resolved[(network_id, ip)] = direct
-            elif not mac and mdns_name in saved_mdns:
-                resolved[(network_id, ip)] = saved_mdns[mdns_name]
-            elif not mac and mdns_name in legacy_mdns:
-                resolved[(network_id, ip)] = legacy_mdns[mdns_name]
+                annotation = host_annotation
+            elif (
+                not current_mac and mdns_name in annotations_saved_by_mdns_name
+            ):
+                annotation = annotations_saved_by_mdns_name[mdns_name]
+            elif (
+                not current_mac and mdns_name in host_annotations_by_mdns_name
+            ):
+                annotation = host_annotations_by_mdns_name[mdns_name]
             else:
-                resolved[(network_id, ip)] = legacy_annotations.get(
-                    mac, direct
+                annotation = host_annotations_by_mac.get(
+                    current_mac, host_annotation
                 )
-        return resolved
+            annotation_of_profile[(network_id, ip)] = annotation
+        return annotation_of_profile
 
-    @staticmethod
-    def hostname_for_profile(
+    def get_hostname_of_profile(
+        self,
         profileid: str,
-        path: Path,
         network_states: Iterable[dict[str, Any]],
-        run_name: str,
         current_mac: str | None = None,
         cached_name: str | None = None,
     ) -> str | None:
@@ -804,55 +998,338 @@ class HostProfileStore:
 
         Parameters:
             profileid: Slips profile containing the endpoint address.
-            path: Shared permanent identity database.
             network_states: Current settings of the monitored interfaces.
-            run_name: Fallback identity for this capture.
             current_mac: Optional cached hardware address to check ownership.
-            cached_name: Fresh cache value used when durable ownership permits it.
+            cached_name: Fresh cache value used when durable ownership
+                permits it.
 
         Returns:
             Learned name for this network/device, or None if unverified.
         """
         try:
-            ip = str(ipaddress.ip_address(profileid.removeprefix("profile_")))
+            address = ipaddress.ip_address(profileid.removeprefix("profile_"))
         except (AttributeError, ValueError):
             return None
-        address = ipaddress.ip_address(ip)
-        networks = []
-        for state in network_states:
-            if not isinstance(state, dict) or state.get("connected") is False:
+        ip = str(address)
+        current_network_ids = []
+        for network_state in network_states:
+            if (
+                not isinstance(network_state, dict)
+                or network_state.get("connected") is False
+            ):
                 continue
             try:
-                local = ipaddress.ip_network(
-                    state.get("local_network", ""), strict=False
+                local_network = ipaddress.ip_network(
+                    network_state.get("local_network", ""), strict=False
                 )
             except ValueError:
-                local = None
-            if address.is_link_local or (local and address in local):
-                networks.append(
-                    HostProfileStore.network_id_for_state(state, run_name)
-                )
-        networks.append(f"run:{run_name}")
-        try:
-            identities = HostProfileStore.identities_for_ips(
-                path, [ip], networks, {ip: current_mac or ""}
-            )
-            identity = identities.get(ip, {})
-            if identity:
-                if identity.get("name"):
-                    return identity["name"]
-                return None
-            if path.exists() and HostProfileStore.identities_for_ips(
-                path, [ip]
+                local_network = None
+            if address.is_link_local or (
+                local_network and address in local_network
             ):
-                return None
-        except (OSError, sqlite3.Error):
-            pass
+                current_network_ids.append(
+                    self.build_network_id(network_state, self.run_name)
+                )
+        current_network_ids.append(f"run:{self.run_name}")
+        identity = self.get_identities_of_ips(
+            [ip], current_network_ids, {ip: current_mac or ""}
+        ).get(ip, {})
+        if identity:
+            return identity.get("name") or None
+        is_known_on_another_network = bool(self.get_identities_of_ips([ip]))
+        if is_known_on_another_network:
+            # the cached name may belong to that other network's device
+            return None
         return cached_name or None
 
-    @staticmethod
-    def identities_for_ips(
-        path: Path,
+    def _select_preferred_profile_of_ips(
+        self, ip_batch: list[str], rank_of_network: dict[str, int]
+    ) -> dict[str, ProfileKey]:
+        """Pick the one network profile that best describes each address.
+
+        Parameters:
+            ip_batch: Addresses being resolved.
+            rank_of_network: Preferred networks, the lowest rank wins. Empty
+                selects the most recently seen profile.
+
+        Returns:
+            Chosen network identity and IP, indexed by address. Addresses
+            with no profile on a preferred or public network are left out.
+        """
+        host_rows = self._fetch_rows(
+            "SELECT h.network_id,h.ip,h.last_seen,"
+            "o.last_seen AS endpoint_seen "
+            "FROM hosts h LEFT JOIN host_endpoint_observations o "
+            "ON o.network_id=h.network_id AND o.ip=h.ip "
+            f"WHERE h.ip IN ({self._make_placeholders(ip_batch)}) "
+            "ORDER BY h.last_seen DESC",
+            ip_batch,
+        )
+        host_rows = sorted(
+            host_rows,
+            key=lambda host_row: (
+                rank_of_network.get(
+                    host_row["network_id"], len(rank_of_network)
+                ),
+                host_row["endpoint_seen"] is None,
+                -float(host_row["endpoint_seen"] or host_row["last_seen"]),
+            ),
+        )
+        profile_of_ip: dict[str, ProfileKey] = {}
+        for host_row in host_rows:
+            network_id = host_row["network_id"]
+            if (
+                rank_of_network
+                and network_id not in rank_of_network
+                and network_id != PUBLIC_NETWORK_ID
+            ):
+                continue
+            profile_of_ip.setdefault(
+                host_row["ip"], (network_id, host_row["ip"])
+            )
+        return profile_of_ip
+
+    def _get_identity_facts_of_ips(
+        self, ip_batch: list[str]
+    ) -> dict[ProfileKey, list[sqlite3.Row]]:
+        """Read the MACs and names of every profile of the given addresses.
+
+        Parameters:
+            ip_batch: Addresses being resolved.
+
+        Returns:
+            Fact rows, newest first, indexed by network identity and IP.
+        """
+        facts_of_profile: dict[ProfileKey, list[sqlite3.Row]] = {}
+        for fact_row in self._fetch_rows(
+            IDENTITY_FACTS_SQL.format(
+                condition=f"ip IN ({self._make_placeholders(ip_batch)})"
+            ),
+            ip_batch,
+        ):
+            facts_of_profile.setdefault(
+                (fact_row["network_id"], fact_row["ip"]), []
+            ).append(fact_row)
+        return facts_of_profile
+
+    def _get_current_mac_of_ips(
+        self,
+        profile_of_ip: dict[str, ProfileKey],
+        facts_of_profile: dict[ProfileKey, list[sqlite3.Row]],
+        live_mac_of_ip: dict[str, str],
+    ) -> tuple[dict[str, str], set[str]]:
+        """Decide which device owns each address right now.
+
+        Parameters:
+            profile_of_ip: Chosen profile of each address.
+            facts_of_profile: Stored facts of those profiles.
+            live_mac_of_ip: MACs seen in the running capture, they win over
+                the stored ones.
+
+        Returns:
+            The MAC of each address, and the addresses whose live MAC
+            differs from the stored one.
+        """
+        mac_of_ip: dict[str, str] = {}
+        ips_with_mac_conflict: set[str] = set()
+        for ip, profile_key in profile_of_ip.items():
+            stored_mac = next(
+                (
+                    self._normalize_unicast_mac(fact_row["value"])
+                    for fact_row in facts_of_profile.get(profile_key, [])
+                    if fact_row["kind"] == "mac"
+                ),
+                "",
+            )
+            live_mac = self._normalize_unicast_mac(live_mac_of_ip.get(ip))
+            if live_mac and stored_mac and live_mac != stored_mac:
+                ips_with_mac_conflict.add(ip)
+            mac_of_ip[ip] = live_mac or stored_mac
+        return mac_of_ip, ips_with_mac_conflict
+
+    def _add_facts_of_profiles_sharing_macs(
+        self,
+        facts_of_profile: dict[ProfileKey, list[sqlite3.Row]],
+        macs: list[str],
+    ) -> None:
+        """Load the facts of other addresses used by the same devices.
+
+        A device keeps its MAC when its address changes, so a name learned
+        on an old address still belongs to it.
+
+        Parameters:
+            facts_of_profile: Facts loaded so far, extended in place.
+            macs: MACs of the addresses being resolved.
+        """
+        if not macs:
+            return
+        profiles_sharing_macs = self._fetch_rows(
+            "SELECT DISTINCT network_id,ip FROM facts "
+            f"WHERE kind='mac' AND value IN ({self._make_placeholders(macs)}) "
+            "AND network_id!='public'",
+            macs,
+        )
+        profiles_not_loaded = [
+            (profile_row["network_id"], profile_row["ip"])
+            for profile_row in profiles_sharing_macs
+            if (profile_row["network_id"], profile_row["ip"])
+            not in facts_of_profile
+        ]
+        for batch_start in range(
+            0, len(profiles_not_loaded), MAX_IPS_PER_QUERY
+        ):
+            profile_batch = profiles_not_loaded[
+                batch_start : batch_start + MAX_IPS_PER_QUERY
+            ]
+            pair_placeholders = ",".join("(?,?)" for _ in profile_batch)
+            for fact_row in self._fetch_rows(
+                IDENTITY_FACTS_SQL.format(
+                    condition=f"(network_id,ip) IN ({pair_placeholders})"
+                ),
+                [
+                    key_part
+                    for profile_key in profile_batch
+                    for key_part in profile_key
+                ],
+            ):
+                facts_of_profile.setdefault(
+                    (fact_row["network_id"], fact_row["ip"]), []
+                ).append(fact_row)
+
+    def _collect_name_candidates(
+        self, facts_of_profile: dict[ProfileKey, list[sqlite3.Row]]
+    ) -> tuple[
+        dict[str, set[str]],
+        dict[str, list[NameCandidate]],
+        dict[ProfileKey, list[NameCandidate]],
+    ]:
+        """Sort every learned name by the device or profile it belongs to.
+
+        A name belongs to a MAC only when exactly one MAC used the address
+        while the name was seen. Profiles that never had a MAC keep their
+        names to themselves.
+
+        Parameters:
+            facts_of_profile: MAC and name facts of the loaded profiles.
+
+        Returns:
+            Every MAC ever seen on each IP, name candidates of each MAC,
+            and name candidates of each MAC-less profile.
+        """
+        macs_seen_on_ip: dict[str, set[str]] = {}
+        candidates_of_mac: dict[str, list[NameCandidate]] = {}
+        candidates_of_profile: dict[ProfileKey, list[NameCandidate]] = {}
+        for profile_key, fact_rows in facts_of_profile.items():
+            network_id, ip = profile_key
+            mac_rows = [
+                fact_row
+                for fact_row in fact_rows
+                if fact_row["kind"] == "mac"
+                and self._normalize_unicast_mac(fact_row["value"])
+            ]
+            macs_seen_on_ip.setdefault(ip, set()).update(
+                self._normalize_unicast_mac(mac_row["value"])
+                for mac_row in mac_rows
+            )
+            for fact_row in fact_rows:
+                fact_kind = fact_row["kind"]
+                if fact_kind not in NAME_KIND_PRIORITY:
+                    continue
+                name = str(fact_row["value"] or "").strip()
+                if fact_kind == "mdns_hostname":
+                    name = self._get_stable_mdns_name(name)
+                if not name:
+                    continue
+                name_candidate = (
+                    NAME_KIND_PRIORITY[fact_kind],
+                    float(fact_row["last_seen"]),
+                    name,
+                    NAME_KIND_LABELS[fact_kind],
+                )
+                owner_macs = {
+                    self._normalize_unicast_mac(mac_row["value"])
+                    for mac_row in mac_rows
+                    if mac_row["first_seen"] <= fact_row["last_seen"]
+                    and mac_row["last_seen"] >= fact_row["first_seen"]
+                }
+                if not owner_macs:
+                    owner_macs = {
+                        self._normalize_unicast_mac(mac_row["value"])
+                        for mac_row in mac_rows
+                        if mac_row["first_seen"] <= fact_row["last_seen"]
+                    }
+                if len(owner_macs) == 1 and network_id != PUBLIC_NETWORK_ID:
+                    candidates_of_mac.setdefault(
+                        next(iter(owner_macs)), []
+                    ).append(name_candidate)
+                if not mac_rows:
+                    candidates_of_profile.setdefault(profile_key, []).append(
+                        name_candidate
+                    )
+        return macs_seen_on_ip, candidates_of_mac, candidates_of_profile
+
+    def _get_identities_of_ip_batch(
+        self,
+        ip_batch: list[str],
+        rank_of_network: dict[str, int],
+        live_mac_of_ip: dict[str, str],
+    ) -> dict[str, dict[str, Any]]:
+        """Resolve the identity of a group of addresses small enough to query.
+
+        Parameters:
+            ip_batch: Addresses being resolved.
+            rank_of_network: Preferred networks, the lowest rank wins.
+            live_mac_of_ip: MACs seen in the running capture.
+
+        Returns:
+            Names, sources and verified MACs indexed by address.
+        """
+        profile_of_ip = self._select_preferred_profile_of_ips(
+            ip_batch, rank_of_network
+        )
+        if not profile_of_ip:
+            return {}
+        facts_of_profile = self._get_identity_facts_of_ips(ip_batch)
+        mac_of_ip, ips_with_mac_conflict = self._get_current_mac_of_ips(
+            profile_of_ip, facts_of_profile, live_mac_of_ip
+        )
+        self._add_facts_of_profiles_sharing_macs(
+            facts_of_profile, sorted(set(mac_of_ip.values()) - {""})
+        )
+        macs_seen_on_ip, candidates_of_mac, candidates_of_profile = (
+            self._collect_name_candidates(facts_of_profile)
+        )
+        identity_of_ip: dict[str, dict[str, Any]] = {}
+        for ip, profile_key in profile_of_ip.items():
+            network_id = profile_key[0]
+            device_mac = (
+                mac_of_ip[ip] if network_id != PUBLIC_NETWORK_ID else ""
+            )
+            name_candidates = (
+                candidates_of_mac.get(device_mac, [])
+                if device_mac
+                else candidates_of_profile.get(profile_key, [])
+            )
+            best_candidate = (
+                max(name_candidates, default=NO_NAME_CANDIDATE)
+                if ip not in ips_with_mac_conflict
+                else NO_NAME_CANDIDATE
+            )
+            _, _, name, name_source = best_candidate
+            identity_of_ip[ip] = {
+                "name": name,
+                "source": name_source,
+                "mac": device_mac,
+            }
+            other_macs_seen_on_ip = macs_seen_on_ip.get(ip, set()) - {
+                device_mac
+            }
+            if device_mac and other_macs_seen_on_ip:
+                identity_of_ip[ip]["identity_changed"] = True
+        return identity_of_ip
+
+    def get_identities_of_ips(
+        self,
         ips: Iterable[str],
         network_ids: Iterable[str] = (),
         current_macs: dict[str, str] | None = None,
@@ -860,236 +1337,83 @@ class HostProfileStore:
         """Recover learned device names from durable, scoped identity facts.
 
         Parameters:
-            path: Permanent host database, opened without creating it.
             ips: Addresses whose displayed identity is being resolved.
-            network_ids: Preferred capture networks; empty selects recent history.
-            current_macs: Live MACs that override historical address ownership.
+            network_ids: Preferred capture networks; empty selects recent
+                history.
+            current_macs: Live MACs that override historical address
+                ownership.
 
         Returns:
             Names, sources and verified MACs indexed by requested address.
         """
-        keys = list(dict.fromkeys(ips))
-        if not keys or not path.exists():
+        unique_ips = list(dict.fromkeys(ips))
+        if not unique_ips:
             return {}
-        networks = list(dict.fromkeys(key for key in network_ids if key))
-        preference = {key: index for index, key in enumerate(networks)}
-        result: dict[str, dict[str, Any]] = {}
-        priority = {"hostname": 3, "mdns_hostname": 2, "reverse_dns": 1}
-        sources = {
-            "hostname": "Hostname",
-            "mdns_hostname": "mDNS",
-            "reverse_dns": "rDNS",
+        preferred_network_ids = list(
+            dict.fromkeys(
+                network_id for network_id in network_ids if network_id
+            )
+        )
+        rank_of_network = {
+            network_id: rank
+            for rank, network_id in enumerate(preferred_network_ids)
         }
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=5
-        ) as connection:
-            connection.row_factory = sqlite3.Row
-            for offset in range(0, len(keys), 200):
-                batch = keys[offset : offset + 200]
-                marks = ",".join("?" for _ in batch)
-                try:
-                    profiles = connection.execute(
-                        "SELECT h.network_id,h.ip,h.last_seen,o.last_seen AS endpoint_seen "
-                        "FROM hosts h LEFT JOIN host_endpoint_observations o "
-                        "ON o.network_id=h.network_id AND o.ip=h.ip "
-                        f"WHERE h.ip IN ({marks}) ORDER BY h.last_seen DESC",
-                        batch,
-                    ).fetchall()
-                except sqlite3.OperationalError:
-                    profiles = connection.execute(
-                        "SELECT network_id,ip,last_seen,NULL AS endpoint_seen "
-                        f"FROM hosts WHERE ip IN ({marks}) ORDER BY last_seen DESC",
-                        batch,
-                    ).fetchall()
-                profiles = sorted(
-                    profiles,
-                    key=lambda row: (
-                        preference.get(row["network_id"], len(preference)),
-                        row["endpoint_seen"] is None,
-                        -float(row["endpoint_seen"] or row["last_seen"]),
-                    ),
+        identity_of_ip: dict[str, dict[str, Any]] = {}
+        for batch_start in range(0, len(unique_ips), MAX_IPS_PER_QUERY):
+            identity_of_ip.update(
+                self._get_identities_of_ip_batch(
+                    unique_ips[batch_start : batch_start + MAX_IPS_PER_QUERY],
+                    rank_of_network,
+                    current_macs or {},
                 )
-                selected = {}
-                for row in profiles:
-                    if (
-                        preference
-                        and row["network_id"] not in preference
-                        and row["network_id"] != "public"
-                    ):
-                        continue
-                    selected.setdefault(
-                        row["ip"], (row["network_id"], row["ip"])
-                    )
-                if not selected:
-                    continue
-                facts = connection.execute(
-                    "SELECT network_id,ip,kind,value,first_seen,last_seen FROM facts "
-                    f"WHERE ip IN ({marks}) AND kind IN ('mac','hostname','mdns_hostname','reverse_dns') "
-                    "ORDER BY last_seen DESC,first_seen DESC",
-                    batch,
-                ).fetchall()
-                by_profile: dict[tuple[str, str], list[sqlite3.Row]] = {}
-                for fact in facts:
-                    by_profile.setdefault(
-                        (fact["network_id"], fact["ip"]), []
-                    ).append(fact)
-                target_macs = {}
-                conflicts = set()
-                for ip, key in selected.items():
-                    mac = next(
-                        (
-                            HostProfileStore._usable_mac(f["value"])
-                            for f in by_profile.get(key, [])
-                            if f["kind"] == "mac"
-                        ),
-                        "",
-                    )
-                    live_mac = HostProfileStore._usable_mac(
-                        (current_macs or {}).get(ip)
-                    )
-                    if live_mac and mac and live_mac != mac:
-                        conflicts.add(ip)
-                    target_macs[ip] = live_mac or mac
-                macs = sorted(set(target_macs.values()) - {""})
-                if macs:
-                    mac_marks = ",".join("?" for _ in macs)
-                    aliases = connection.execute(
-                        "SELECT DISTINCT network_id,ip FROM facts "
-                        f"WHERE kind='mac' AND value IN ({mac_marks}) AND network_id!='public'",
-                        macs,
-                    ).fetchall()
-                    missing = [
-                        (row[0], row[1])
-                        for row in aliases
-                        if (row[0], row[1]) not in by_profile
-                    ]
-                    for start in range(0, len(missing), 200):
-                        chunk = missing[start : start + 200]
-                        pairs = ",".join("(?,?)" for _ in chunk)
-                        extra = connection.execute(
-                            "SELECT network_id,ip,kind,value,first_seen,last_seen FROM facts "
-                            f"WHERE (network_id,ip) IN ({pairs}) "
-                            "AND kind IN ('mac','hostname','mdns_hostname','reverse_dns') "
-                            "ORDER BY last_seen DESC,first_seen DESC",
-                            [value for pair in chunk for value in pair],
-                        ).fetchall()
-                        for fact in extra:
-                            by_profile.setdefault(
-                                (fact["network_id"], fact["ip"]), []
-                            ).append(fact)
-                previous_owners: dict[str, set[str]] = {}
-                by_mac: dict[str, list[tuple[int, float, str, str]]] = {}
-                direct: dict[
-                    tuple[str, str], list[tuple[int, float, str, str]]
-                ] = {}
-                for key, values in by_profile.items():
-                    hardware = [
-                        f
-                        for f in values
-                        if f["kind"] == "mac"
-                        and HostProfileStore._usable_mac(f["value"])
-                    ]
-                    previous_owners.setdefault(key[1], set()).update(
-                        HostProfileStore._usable_mac(f["value"])
-                        for f in hardware
-                    )
-                    for fact in values:
-                        kind = fact["kind"]
-                        if kind not in priority:
-                            continue
-                        name = str(fact["value"] or "").strip()
-                        if kind == "mdns_hostname":
-                            name = HostProfileStore._stable_mdns_name(name)
-                        if not name:
-                            continue
-                        candidate = (
-                            priority[kind],
-                            float(fact["last_seen"]),
-                            name,
-                            sources[kind],
-                        )
-                        owners = {
-                            HostProfileStore._usable_mac(mac["value"])
-                            for mac in hardware
-                            if mac["first_seen"] <= fact["last_seen"]
-                            and mac["last_seen"] >= fact["first_seen"]
-                        }
-                        if not owners:
-                            owners = {
-                                HostProfileStore._usable_mac(mac["value"])
-                                for mac in hardware
-                                if mac["first_seen"] <= fact["last_seen"]
-                            }
-                        if len(owners) == 1 and key[0] != "public":
-                            by_mac.setdefault(next(iter(owners)), []).append(
-                                candidate
-                            )
-                        if not hardware:
-                            direct.setdefault(key, []).append(candidate)
-                for ip, key in selected.items():
-                    mac = target_macs[ip] if key[0] != "public" else ""
-                    candidates = (
-                        by_mac.get(mac, []) if mac else direct.get(key, [])
-                    )
-                    best = (
-                        max(candidates, default=(0, 0, "", ""))
-                        if ip not in conflicts
-                        else (0, 0, "", "")
-                    )
-                    result[ip] = {
-                        "name": best[2],
-                        "source": best[3],
-                        "mac": mac,
-                    }
-                    if mac and previous_owners.get(ip, set()) - {mac}:
-                        result[ip]["identity_changed"] = True
-        return result
+            )
+        return identity_of_ip
 
-    @staticmethod
-    def annotations_for_ips(
-        path: Path, ips: Iterable[str], network_ids: Iterable[str] = ()
+    def get_annotations_of_ips(
+        self, ips: Iterable[str], network_ids: Iterable[str] = ()
     ) -> dict[str, dict[str, str]]:
         """Read each displayed device's effective saved annotation.
 
         Parameters:
-            path: Permanent host profile database.
             ips: IP addresses displayed in the current view.
-            network_ids: Selected capture networks; empty includes all history.
+            network_ids: Selected capture networks; empty includes all
+                history.
 
         Returns:
             User names and notes indexed by IP address.
         """
-        keys = list(dict.fromkeys(ips))
-        if not keys or not path.exists():
-            return {}
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=1
-        ) as connection:
-            rows = HostProfileStore._resolved_annotations(connection, keys)
-        result: dict[str, dict[str, str]] = {}
-        preference = {
-            key: index for index, key in enumerate(network_ids) if key
+        annotation_of_profile = self._resolve_annotations(ips)
+        rank_of_network = {
+            network_id: rank
+            for rank, network_id in enumerate(network_ids)
+            if network_id
         }
-        ordered = (
+        profiles_by_preference = (
             sorted(
-                rows.items(),
-                key=lambda row: preference.get(row[0][0], len(preference)),
+                annotation_of_profile.items(),
+                key=lambda profile_annotation: rank_of_network.get(
+                    profile_annotation[0][0], len(rank_of_network)
+                ),
             )
-            if preference
-            else rows.items()
+            if rank_of_network
+            else annotation_of_profile.items()
         )
-        for (network_id, ip), annotation in ordered:
+        annotation_of_ip: dict[str, dict[str, str]] = {}
+        for (network_id, ip), annotation in profiles_by_preference:
             if (
-                preference
-                and network_id not in preference
-                and network_id != "public"
+                rank_of_network
+                and network_id not in rank_of_network
+                and network_id != PUBLIC_NETWORK_ID
             ):
                 continue
-            result.setdefault(ip, annotation)
-        return result
+            annotation_of_ip.setdefault(ip, annotation)
+        return annotation_of_ip
 
-    def _network_state(self, interface: str) -> dict[str, Any]:
+    def _get_cached_network_state(self, interface: str) -> dict[str, Any]:
         """Read a recent network state for an interface.
+
+        The state is cached for a few seconds, so a batch of flows doesn't
+        ask Redis once per flow.
 
         Parameters:
             interface: Interface name from a flow or run configuration.
@@ -1097,46 +1421,53 @@ class HostProfileStore:
         Returns:
             Current network settings, or an empty dictionary.
         """
-        name = (
-            interface
-            if interface in self.interfaces
-            else (self.interfaces[0] if len(self.interfaces) == 1 else "")
-        )
-        if not name:
+        if interface in self.interfaces:
+            monitored_interface = interface
+        elif len(self.interfaces) == 1:
+            monitored_interface = self.interfaces[0]
+        else:
             return {}
         now = time.monotonic()
-        cached = self._network_cache.get(name)
-        if cached and now - cached[0] < 5:
-            return cached[1]
-        state = self.network_lookup(name) or {}
-        self._network_cache[name] = (now, state)
-        return state
+        cached_entry = self._network_state_cache.get(monitored_interface)
+        if cached_entry:
+            cached_at, cached_network_state = cached_entry
+            if now - cached_at < NETWORK_STATE_CACHE_SECONDS:
+                return cached_network_state
+        network_state = self.network_state_lookup(monitored_interface) or {}
+        self._network_state_cache[monitored_interface] = (now, network_state)
+        return network_state
 
     @staticmethod
-    def _observation_network(
-        state: dict[str, Any], observed_at: float, flow: Any = None
+    def _get_network_state_at(
+        network_state: dict[str, Any], observed_at: float, flow: Any = None
     ) -> dict[str, Any]:
         """Select capture settings at packet time when replaying retained flows.
 
         Parameters:
-            state: Current cached interface settings and bounded history.
+            network_state: Current cached interface settings and bounded
+                history.
             observed_at: Packet observation time.
             flow: Optional endpoints and hardware addresses for polling gaps.
 
         Returns:
-            Recorded settings, or an unidentified network if history is missing.
+            Recorded settings, or an unidentified network if history is
+            missing.
         """
-        return network_state_at(state, observed_at, flow) or {}
+        return network_state_at(network_state, observed_at, flow) or {}
 
-    def _identity(
-        self, ip: str, interface: str, state: dict[str, Any] | None = None
+    def _get_network_identity_of_ip(
+        self,
+        ip: str,
+        interface: str,
+        network_state: dict[str, Any] | None = None,
     ) -> tuple[str, str, str] | None:
         """Find a safe public or network-specific key for an IP.
 
         Parameters:
             ip: Candidate host address.
             interface: Interface on which it was observed.
-            state: Optional capture settings at the packet's timestamp.
+            network_state: Optional capture settings at the packet's
+                timestamp.
 
         Returns:
             Normalized IP, network key, and display label when valid.
@@ -1151,41 +1482,124 @@ class HostProfileStore:
             or address.is_loopback
         ):
             return None
-        normalized = str(address)
+        normalized_ip = str(address)
         if address.is_global:
-            return normalized, "public", "Public internet"
-        state = self._network_state(interface) if state is None else state
+            return normalized_ip, PUBLIC_NETWORK_ID, "Public internet"
+        if network_state is None:
+            network_state = self._get_cached_network_state(interface)
         try:
-            network = ipaddress.ip_network(
-                state.get("local_network", ""), strict=False
+            local_network = ipaddress.ip_network(
+                network_state.get("local_network", ""), strict=False
             )
         except ValueError:
-            network = None
-        if network and address in network and state.get("gateway_mac"):
-            gateway_mac = str(state["gateway_mac"]).lower()
+            local_network = None
+        gateway_mac = str(network_state.get("gateway_mac") or "").lower()
+        if local_network and address in local_network and gateway_mac:
             return (
-                normalized,
-                self.network_id_for_state(state, self.run_name),
-                f"{network} · router {gateway_mac}",
+                normalized_ip,
+                self.build_network_id(network_state, self.run_name),
+                f"{local_network} · router {gateway_mac}",
             )
-        if (
-            address.version == 6
-            and address.is_link_local
-            and state.get("gateway_mac")
-        ):
-            gateway_mac = str(state["gateway_mac"]).lower()
+        if address.version == 6 and address.is_link_local and gateway_mac:
+            link_interface = network_state.get("interface") or interface
             return (
-                normalized,
-                self.network_id_for_state(state, self.run_name),
-                f"Link-local on {state.get('interface') or interface} · router {gateway_mac}",
+                normalized_ip,
+                self.build_network_id(network_state, self.run_name),
+                f"Link-local on {link_interface} · router {gateway_mac}",
             )
         return (
-            normalized,
-            self.network_id_for_state({}, self.run_name),
+            normalized_ip,
+            self.build_network_id({}, self.run_name),
             f"Unidentified network · {self.run_name}",
         )
 
-    def _save(
+    def _drop_empty_and_repeated_facts(
+        self,
+        profile_key: ProfileKey,
+        facts: list[tuple[str, str]],
+        now: float,
+    ) -> tuple[list[tuple[str, str]], str]:
+        """Keep only the facts worth a database write.
+
+        A MAC is seen in every flow of a host, so the same MAC is only
+        written once per minute.
+
+        Parameters:
+            profile_key: Network identity and IP the facts describe.
+            facts: Kind and value pairs learned from one observation.
+            now: Monotonic time of the observation.
+
+        Returns:
+            The facts to save, and the MAC among them if there is one.
+        """
+        facts_to_save = []
+        mac_to_save = ""
+        for fact_kind, fact_value in facts:
+            if not isinstance(fact_value, str) or not fact_value.strip():
+                continue
+            if fact_kind == "mac":
+                fact_value = self._normalize_unicast_mac(fact_value)
+                if not fact_value:
+                    continue
+                recent_mac, recent_mac_saved_at = self._recent_macs.get(
+                    profile_key, ("", 0)
+                )
+                if (
+                    recent_mac == fact_value
+                    and now - recent_mac_saved_at
+                    < REPEATED_WRITE_INTERVAL_SECONDS
+                ):
+                    continue
+                mac_to_save = fact_value
+            facts_to_save.append(
+                (fact_kind, fact_value.strip()[:MAX_VALUE_LENGTH])
+            )
+        return facts_to_save, mac_to_save
+
+    @staticmethod
+    def _upsert_fact(
+        transaction_cursor: sqlite3.Cursor,
+        profile_key: ProfileKey,
+        fact_kind: str,
+        fact_value: str,
+        observed_at: float,
+    ) -> None:
+        """Save one fact, unless the host already has too many of its kind.
+
+        The limit stops a host that keeps changing e.g. its SNI from
+        growing the store forever.
+
+        Parameters:
+            transaction_cursor: Cursor of the open write transaction.
+            profile_key: Network identity and IP the fact describes.
+            fact_kind: Type of the clue, e.g. "mac" or "hostname".
+            fact_value: The clue itself.
+            observed_at: Observation timestamp.
+        """
+        network_id, ip = profile_key
+        is_known_fact = transaction_cursor.execute(
+            "SELECT 1 FROM facts WHERE network_id=? AND ip=? "
+            "AND kind=? AND value=?",
+            (network_id, ip, fact_kind, fact_value),
+        ).fetchone()
+        if not is_known_fact:
+            facts_of_this_kind = transaction_cursor.execute(
+                "SELECT COUNT(*) FROM facts WHERE network_id=? "
+                "AND ip=? AND kind=?",
+                (network_id, ip, fact_kind),
+            ).fetchone()[0]
+            if facts_of_this_kind >= MAX_FACTS_PER_KIND:
+                return
+        transaction_cursor.execute(
+            "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, 1) "
+            "ON CONFLICT(network_id, ip, kind, value) DO UPDATE SET "
+            "first_seen=MIN(first_seen, excluded.first_seen), "
+            "last_seen=MAX(last_seen, excluded.last_seen), "
+            "observations=observations+1",
+            (network_id, ip, fact_kind, fact_value, observed_at, observed_at),
+        )
+
+    def _save_host_facts(
         self,
         ip: str,
         interface: str,
@@ -1193,7 +1607,8 @@ class HostProfileStore:
         facts: list[tuple[str, str]],
         observed_traffic: bool = False,
         from_packet: bool = False,
-        capture_state: dict[str, Any] | None = None,
+        capture_network_state: dict[str, Any] | None = None,
+        transaction_cursor: sqlite3.Cursor | None = None,
     ) -> None:
         """Upsert a sighting and bounded distinct facts in one transaction.
 
@@ -1202,93 +1617,116 @@ class HostProfileStore:
             interface: Capture interface.
             observed_at: Observation timestamp.
             facts: Kind and value pairs learned from this observation.
-            observed_traffic: Whether a parsed packet flow caused the sighting.
-            from_packet: Use capture-time settings for DNS-advertised metadata.
-            capture_state: Already selected packet-time network settings.
+            observed_traffic: Whether a parsed packet flow caused the
+                sighting.
+            from_packet: Use capture-time settings for DNS-advertised
+                metadata.
+            capture_network_state: Already selected packet-time network
+                settings.
+            transaction_cursor: Cursor of the caller's open transaction.
+                A new transaction is opened when it's missing.
         """
-        state = (
-            self._network_state(interface)
-            if capture_state is None
-            else capture_state
+        network_state = (
+            self._get_cached_network_state(interface)
+            if capture_network_state is None
+            else capture_network_state
         )
-        if capture_state is None and (observed_traffic or from_packet):
-            state = self._observation_network(state, observed_at)
-        identity = self._identity(ip, interface, state)
-        if identity is None:
+        if capture_network_state is None and (observed_traffic or from_packet):
+            network_state = self._get_network_state_at(
+                network_state, observed_at
+            )
+        network_identity = self._get_network_identity_of_ip(
+            ip, interface, network_state
+        )
+        if network_identity is None:
             return
-        normalized, network_id, network_label = identity
-        key = (network_id, normalized)
+        normalized_ip, network_id, network_label = network_identity
+        profile_key = (network_id, normalized_ip)
         now = time.monotonic()
-        own_ips = {item.get("ip") for item in state.get("addresses", [])}
-        if state.get("host_ip"):
-            own_ips.add(state["host_ip"])
+        seconds_since_last_sighting = now - self._recent_sightings.get(
+            profile_key, 0
+        )
+        own_ips = {
+            own_address.get("ip")
+            for own_address in network_state.get("addresses", [])
+        }
+        if network_state.get("host_ip"):
+            own_ips.add(network_state["host_ip"])
         if (
             observed_traffic
-            and normalized in own_ips
-            and time.monotonic() - self._recent_sightings.get(key, 0) >= 60
-            and (mac := self._usable_mac(state.get("mac")))
+            and normalized_ip in own_ips
+            and seconds_since_last_sighting >= REPEATED_WRITE_INTERVAL_SECONDS
+            and (
+                own_mac := self._normalize_unicast_mac(
+                    network_state.get("mac")
+                )
+            )
         ):
-            facts = [*facts, ("mac", mac)]
-        filtered = []
-        saved_mac = ""
-        for kind, value in facts:
-            if not isinstance(value, str) or not value.strip():
-                continue
-            if kind == "mac":
-                value = self._usable_mac(value)
-                if not value:
-                    continue
-                previous_mac, saved_at = self._recent_macs.get(key, ("", 0))
-                if previous_mac == value and now - saved_at < 60:
-                    continue
-                saved_mac = value
-            filtered.append((kind, value.strip()[:MAX_VALUE_LENGTH]))
-        capture_id = self.network_id_for_state(state, self.run_name)
-        capture_key = (
-            f"capture:{capture_id}:{state.get('changed_at', '')}",
-            normalized,
+            facts = [*facts, ("mac", own_mac)]
+        facts_to_save, mac_to_save = self._drop_empty_and_repeated_facts(
+            profile_key, facts, now
         )
-        save_observation = (
+        capture_network_id = self.build_network_id(
+            network_state, self.run_name
+        )
+        capture_sighting_key = (
+            f"capture:{capture_network_id}:"
+            f"{network_state.get('changed_at', '')}",
+            normalized_ip,
+        )
+        should_save_endpoint_observation = (
             observed_traffic
-            and now - self._recent_sightings.get(capture_key, 0) >= 60
+            and now - self._recent_sightings.get(capture_sighting_key, 0)
+            >= REPEATED_WRITE_INTERVAL_SECONDS
         )
         if (
-            not filtered
-            and not save_observation
-            and now - self._recent_sightings.get(key, 0) < 60
+            not facts_to_save
+            and not should_save_endpoint_observation
+            and seconds_since_last_sighting < REPEATED_WRITE_INTERVAL_SECONDS
         ):
             return
-        context = (
-            nullcontext(self._active_connection)
-            if self._active_connection is not None
-            else self._connect()
+        transaction = (
+            nullcontext(transaction_cursor)
+            if transaction_cursor is not None
+            else self._open_write_transaction()
         )
-        with context as connection:
-            metadata_update = not observed_traffic and not from_packet
-            write_host = not metadata_update or network_id == "public"
-            if metadata_update and network_id != "public":
-                existing_host = connection.execute(
+        with transaction as cursor:
+            # ip info and hostnames arrive without a packet
+            is_metadata_update = not observed_traffic and not from_packet
+            should_save_host = (
+                not is_metadata_update or network_id == PUBLIC_NETWORK_ID
+            )
+            if is_metadata_update and network_id != PUBLIC_NETWORK_ID:
+                is_host_known_on_network = cursor.execute(
                     "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
-                    (network_id, normalized),
+                    profile_key,
                 ).fetchone()
-                if not existing_host:
-                    network_id = self.network_id_for_state({}, self.run_name)
+                if not is_host_known_on_network:
+                    # metadata alone doesn't prove the host is on this
+                    # network, keep it under this run instead
+                    network_id = self.build_network_id({}, self.run_name)
                     network_label = f"Unidentified network · {self.run_name}"
-                    key = (network_id, normalized)
-                    write_host = not connection.execute(
+                    profile_key = (network_id, normalized_ip)
+                    should_save_host = not cursor.execute(
                         "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
-                        key,
+                        profile_key,
                     ).fetchone()
-            if save_observation:
-                connection.execute(
-                    "INSERT INTO host_endpoint_observations VALUES (?, ?, ?, ?) "
+            if should_save_endpoint_observation:
+                cursor.execute(
+                    "INSERT INTO host_endpoint_observations "
+                    "VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(network_id, ip) DO UPDATE SET "
                     "first_seen=MIN(first_seen, excluded.first_seen), "
                     "last_seen=MAX(last_seen, excluded.last_seen)",
-                    (capture_id, normalized, observed_at, observed_at),
+                    (
+                        capture_network_id,
+                        normalized_ip,
+                        observed_at,
+                        observed_at,
+                    ),
                 )
-            if write_host:
-                connection.execute(
+            if should_save_host:
+                cursor.execute(
                     "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
                     "ON CONFLICT(network_id, ip) DO UPDATE SET "
                     "network_label=excluded.network_label, "
@@ -1296,67 +1734,47 @@ class HostProfileStore:
                     "last_seen=MAX(last_seen, excluded.last_seen)",
                     (
                         network_id,
-                        normalized,
+                        normalized_ip,
                         network_label,
                         observed_at,
                         observed_at,
                     ),
                 )
-            for kind, value in dict.fromkeys(filtered):
-                existing = connection.execute(
-                    "SELECT 1 FROM facts WHERE network_id=? AND ip=? "
-                    "AND kind=? AND value=?",
-                    (network_id, normalized, kind, value),
-                ).fetchone()
-                if not existing:
-                    count = connection.execute(
-                        "SELECT COUNT(*) FROM facts WHERE network_id=? "
-                        "AND ip=? AND kind=?",
-                        (network_id, normalized, kind),
-                    ).fetchone()[0]
-                    if count >= MAX_FACTS_PER_KIND:
-                        continue
-                connection.execute(
-                    "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, 1) "
-                    "ON CONFLICT(network_id, ip, kind, value) DO UPDATE SET "
-                    "first_seen=MIN(first_seen, excluded.first_seen), "
-                    "last_seen=MAX(last_seen, excluded.last_seen), "
-                    "observations=observations+1",
-                    (
-                        network_id,
-                        normalized,
-                        kind,
-                        value,
-                        observed_at,
-                        observed_at,
-                    ),
+            for fact_kind, fact_value in dict.fromkeys(facts_to_save):
+                self._upsert_fact(
+                    cursor, profile_key, fact_kind, fact_value, observed_at
                 )
-        self._recent_sightings[key] = now
-        if saved_mac:
-            self._recent_macs[key] = (saved_mac, now)
-            if len(self._recent_macs) > 4096:
+        self._recent_sightings[profile_key] = now
+        if mac_to_save:
+            self._recent_macs[profile_key] = (mac_to_save, now)
+            if len(self._recent_macs) > MAX_RECENT_MACS:
                 self._recent_macs.clear()
-        if save_observation:
-            self._recent_sightings[capture_key] = now
-        if len(self._recent_sightings) > 10000:
+        if should_save_endpoint_observation:
+            self._recent_sightings[capture_sighting_key] = now
+        if len(self._recent_sightings) > MAX_RECENT_SIGHTINGS:
             self._recent_sightings.clear()
 
     @staticmethod
-    def _local_link_mac(
-        ip: str, value: str, state: dict[str, Any], arp: bool = False
+    def _get_local_link_mac(
+        ip: str,
+        observed_mac: str,
+        network_state: dict[str, Any],
+        is_arp_binding: bool = False,
     ) -> str:
         """Accept an endpoint MAC only when the address belongs to this link.
 
         Parameters:
             ip: Endpoint address.
-            value: Ethernet or ARP hardware address.
-            state: Capture settings at the packet timestamp.
-            arp: Whether the ARP payload explicitly binds the address.
+            observed_mac: Ethernet or ARP hardware address.
+            network_state: Capture settings at the packet timestamp.
+            is_arp_binding: Whether the ARP payload explicitly binds the
+                address.
 
         Returns:
-            Usable local MAC, or an empty string for routed or invalid addresses.
+            Usable local MAC, or an empty string for routed or invalid
+            addresses.
         """
-        mac = HostProfileStore._usable_mac(value)
+        mac = HostProfileStore._normalize_unicast_mac(observed_mac)
         if not mac:
             return ""
         try:
@@ -1370,226 +1788,353 @@ class HostProfileStore:
             or address.is_loopback
         ):
             return ""
-        own = {item.get("ip") for item in state.get("addresses", [])}
-        own.add(state.get("host_ip"))
-        own_mac = HostProfileStore._usable_mac(state.get("mac"))
-        if str(address) in own and own_mac and mac != own_mac:
+        own_ips = {
+            own_address.get("ip")
+            for own_address in network_state.get("addresses", [])
+        }
+        own_ips.add(network_state.get("host_ip"))
+        own_mac = HostProfileStore._normalize_unicast_mac(
+            network_state.get("mac")
+        )
+        if str(address) in own_ips and own_mac and mac != own_mac:
             return ""
-        if arp:
+        if is_arp_binding:
             return mac
-        if mac == HostProfileStore._usable_mac(
-            state.get("gateway_mac")
-        ) and str(address) != state.get("gateway_ip"):
+        gateway_mac = HostProfileStore._normalize_unicast_mac(
+            network_state.get("gateway_mac")
+        )
+        if mac == gateway_mac and str(address) != network_state.get(
+            "gateway_ip"
+        ):
+            # a routed packet carries the router's MAC, not the host's
             return ""
         if address.is_link_local:
             return mac
-        networks = [
-            state.get("local_network", ""),
-            *(item.get("network", "") for item in state.get("addresses", [])),
+        local_network_cidrs = [
+            network_state.get("local_network", ""),
+            *(
+                own_address.get("network", "")
+                for own_address in network_state.get("addresses", [])
+            ),
         ]
-        for value in networks:
+        for local_network_cidr in local_network_cidrs:
             try:
-                network = ipaddress.ip_network(value, strict=False)
+                local_network = ipaddress.ip_network(
+                    local_network_cidr, strict=False
+                )
             except ValueError:
                 continue
-            if address in network and address != network.broadcast_address:
+            if (
+                address in local_network
+                and address != local_network.broadcast_address
+            ):
                 return mac
         return ""
 
-    def observe_flow(self, flow: Any) -> None:
-        """Store both endpoints and names learned from one parsed flow.
+    @staticmethod
+    def _get_observation_time_of_flow(flow: Any) -> float:
+        """Read when a flow started, as a Unix timestamp.
 
         Parameters:
-            flow: Conn, DNS, HTTP, TLS, DHCP, or other parsed flow.
+            flow: Parsed flow.
+
+        Returns:
+            Start time of the flow, or the current time when it's missing.
         """
-        interface = str(getattr(flow, "interface", "") or "")
         try:
-            observed_at = float(
+            return float(
                 utils.convert_ts_format(
                     getattr(flow, "starttime", None), "unixtimestamp"
                 )
             )
         except (TypeError, ValueError, AttributeError):
-            observed_at = time.time()
-        source = str(getattr(flow, "saddr", "") or "")
-        target = str(getattr(flow, "daddr", "") or "")
-        kind = str(getattr(flow, "type_", "") or "").lower()
-        state = self._observation_network(
-            self._network_state(interface), observed_at, flow
+            return time.time()
+
+    def _get_endpoint_macs_of_flow(
+        self,
+        flow: Any,
+        source_ip: str,
+        destination_ip: str,
+        capture_network_state: dict[str, Any],
+    ) -> tuple[str, str]:
+        """Read the MACs that a conn or ARP flow proves for its endpoints.
+
+        Parameters:
+            flow: Parsed conn or ARP flow.
+            source_ip: Source address of the flow.
+            destination_ip: Destination address of the flow.
+            capture_network_state: Network settings at the packet timestamp.
+
+        Returns:
+            Source and destination MACs, each empty when it isn't a local
+            device's.
+        """
+        is_arp = str(getattr(flow, "type_", "") or "").lower() == "arp"
+        if is_arp:
+            source_mac = str(
+                getattr(flow, "src_hw", "") or getattr(flow, "smac", "") or ""
+            )
+            destination_mac = str(getattr(flow, "dst_hw", "") or "")
+        else:
+            source_mac = str(getattr(flow, "smac", "") or "")
+            destination_mac = str(getattr(flow, "dmac", "") or "")
+        return (
+            self._get_local_link_mac(
+                source_ip, source_mac, capture_network_state, is_arp
+            ),
+            self._get_local_link_mac(
+                destination_ip, destination_mac, capture_network_state, is_arp
+            ),
+        )
+
+    @staticmethod
+    def _get_http_facts_of_flow(flow: Any) -> list[tuple[str, str]]:
+        """Read the host and URL an HTTP flow reveals about its server.
+
+        Parameters:
+            flow: Parsed HTTP flow.
+
+        Returns:
+            Kind and value pairs for the destination host.
+        """
+        http_host = str(getattr(flow, "host", "") or "")
+        uri = str(getattr(flow, "uri", "") or "")
+        http_facts = [("http_host", http_host)]
+        if uri.startswith(("http://", "https://")):
+            http_facts.append(("url", uri))
+        elif http_host and uri:
+            url_path = uri if uri.startswith("/") else f"/{uri}"
+            http_facts.append(("url", f"http://{http_host}{url_path}"))
+        return http_facts
+
+    def _save_names_from_dns_flow(
+        self,
+        flow: Any,
+        interface: str,
+        observed_at: float,
+        capture_network_state: dict[str, Any],
+        transaction_cursor: sqlite3.Cursor,
+    ) -> None:
+        """Store the names a DNS or mDNS flow gives to other addresses.
+
+        Parameters:
+            flow: Parsed DNS flow.
+            interface: Capture interface.
+            observed_at: Observation timestamp.
+            capture_network_state: Network settings at the packet timestamp.
+            transaction_cursor: Cursor of the open write transaction.
+        """
+        dns_query = str(getattr(flow, "query", "") or "")
+        is_mdns = "5353" in {
+            str(getattr(flow, "sport", "") or ""),
+            str(getattr(flow, "dport", "") or ""),
+        }
+        if is_mdns:
+            mdns_bindings = getattr(flow, "mdns_bindings", []) or []
+            if isinstance(mdns_bindings, str):
+                mdns_bindings = mdns_bindings.split(",")
+            for mdns_binding in mdns_bindings[:MAX_MDNS_BINDINGS_PER_FLOW]:
+                owner_name, separator, bound_ip = str(mdns_binding).partition(
+                    "|"
+                )
+                stable_mdns_name = self._get_stable_mdns_name(owner_name)
+                if separator and stable_mdns_name:
+                    self._save_host_facts(
+                        bound_ip,
+                        interface,
+                        observed_at,
+                        [("mdns_hostname", stable_mdns_name)],
+                        from_packet=True,
+                        capture_network_state=capture_network_state,
+                        transaction_cursor=transaction_cursor,
+                    )
+        for dns_answer in getattr(flow, "answers", []) or []:
+            if isinstance(dns_answer, dict):
+                dns_answer = (
+                    dns_answer.get("rdata") or dns_answer.get("data") or ""
+                )
+            self._save_host_facts(
+                str(dns_answer),
+                interface,
+                observed_at,
+                [] if is_mdns else [("dns_name", dns_query)],
+                from_packet=True,
+                capture_network_state=capture_network_state,
+                transaction_cursor=transaction_cursor,
+            )
+
+    def _save_identity_from_flow(
+        self, flow: Any, transaction_cursor: sqlite3.Cursor
+    ) -> None:
+        """Store both endpoints and names learned from one parsed flow.
+
+        Parameters:
+            flow: Conn, DNS, HTTP, TLS, DHCP, or other parsed flow.
+            transaction_cursor: Cursor of the open write transaction.
+        """
+        interface = str(getattr(flow, "interface", "") or "")
+        observed_at = self._get_observation_time_of_flow(flow)
+        source_ip = str(getattr(flow, "saddr", "") or "")
+        destination_ip = str(getattr(flow, "daddr", "") or "")
+        flow_type = str(getattr(flow, "type_", "") or "").lower()
+        capture_network_state = self._get_network_state_at(
+            self._get_cached_network_state(interface), observed_at, flow
         )
         source_facts: list[tuple[str, str]] = []
-        target_facts: list[tuple[str, str]] = []
-        if kind in {"arp", "conn"}:
-            if kind == "arp":
-                source_mac = str(
-                    getattr(flow, "src_hw", "")
-                    or getattr(flow, "smac", "")
-                    or ""
-                )
-                target_mac = str(getattr(flow, "dst_hw", "") or "")
-            else:
-                source_mac = str(getattr(flow, "smac", "") or "")
-                target_mac = str(getattr(flow, "dmac", "") or "")
-            source_mac = self._local_link_mac(
-                source, source_mac, state, kind == "arp"
-            )
-            target_mac = self._local_link_mac(
-                target, target_mac, state, kind == "arp"
+        destination_facts: list[tuple[str, str]] = []
+        if flow_type in {"arp", "conn"}:
+            source_mac, destination_mac = self._get_endpoint_macs_of_flow(
+                flow, source_ip, destination_ip, capture_network_state
             )
             source_facts.append(("mac", source_mac))
-            target_facts.append(("mac", target_mac))
-        if kind == "dhcp":
-            if self._identity(source, interface) is None:
-                source = str(getattr(flow, "requested_addr", "") or "")
+            destination_facts.append(("mac", destination_mac))
+        if flow_type == "dhcp":
+            if self._get_network_identity_of_ip(source_ip, interface) is None:
+                # a client asking for an address has no usable source yet
+                source_ip = str(getattr(flow, "requested_addr", "") or "")
             source_facts.extend(
                 [
                     ("hostname", str(getattr(flow, "host_name", "") or "")),
                     ("mac", str(getattr(flow, "smac", "") or "")),
                 ]
             )
-        elif kind == "http":
-            host = str(getattr(flow, "host", "") or "")
-            uri = str(getattr(flow, "uri", "") or "")
-            target_facts.append(("http_host", host))
-            if uri.startswith(("http://", "https://")):
-                target_facts.append(("url", uri))
-            elif host and uri:
-                path = uri if uri.startswith("/") else f"/{uri}"
-                target_facts.append(("url", f"http://{host}{path}"))
-        elif kind in {"ssl", "tls"}:
-            target_facts.append(
+        elif flow_type == "http":
+            destination_facts.extend(self._get_http_facts_of_flow(flow))
+        elif flow_type in {"ssl", "tls"}:
+            destination_facts.append(
                 ("sni", str(getattr(flow, "server_name", "") or ""))
             )
-        elif kind == "dns":
-            query = str(getattr(flow, "query", "") or "")
-            mdns = "5353" in {
-                str(getattr(flow, "sport", "") or ""),
-                str(getattr(flow, "dport", "") or ""),
-            }
-            if mdns:
-                bindings = getattr(flow, "mdns_bindings", []) or []
-                if isinstance(bindings, str):
-                    bindings = bindings.split(",")
-                for binding in bindings[:64]:
-                    owner, separator, address = str(binding).partition("|")
-                    if separator and (
-                        hostname := self._stable_mdns_name(owner)
-                    ):
-                        self._save(
-                            address,
-                            interface,
-                            observed_at,
-                            [("mdns_hostname", hostname)],
-                            from_packet=True,
-                            capture_state=state,
-                        )
-            for answer in getattr(flow, "answers", []) or []:
-                if isinstance(answer, dict):
-                    answer = answer.get("rdata") or answer.get("data") or ""
-                answer = str(answer)
-                self._save(
-                    answer,
-                    interface,
-                    observed_at,
-                    [] if mdns else [("dns_name", query)],
-                    from_packet=True,
-                    capture_state=state,
-                )
-        self._save(
-            source,
-            interface,
-            observed_at,
-            source_facts,
-            observed_traffic=True,
-            capture_state=state,
-        )
-        self._save(
-            target,
-            interface,
-            observed_at,
-            target_facts,
-            observed_traffic=True,
-            capture_state=state,
-        )
+        elif flow_type == "dns":
+            self._save_names_from_dns_flow(
+                flow,
+                interface,
+                observed_at,
+                capture_network_state,
+                transaction_cursor,
+            )
+        for endpoint_ip, endpoint_facts in (
+            (source_ip, source_facts),
+            (destination_ip, destination_facts),
+        ):
+            self._save_host_facts(
+                endpoint_ip,
+                interface,
+                observed_at,
+                endpoint_facts,
+                observed_traffic=True,
+                capture_network_state=capture_network_state,
+                transaction_cursor=transaction_cursor,
+            )
 
-    def observe_flows(self, flows: Iterable[Any]) -> None:
+    def save_host_identity_from_flow(self, flow: Any) -> None:
+        """Store both endpoints and names learned from one parsed flow.
+
+        Parameters:
+            flow: Conn, DNS, HTTP, TLS, DHCP, or other parsed flow.
+        """
+        with self._open_write_transaction() as transaction_cursor:
+            self._save_identity_from_flow(flow, transaction_cursor)
+
+    def save_host_identity_from_flows(self, flows: Iterable[Any]) -> None:
         """Persist one bounded flow batch in a single SQLite transaction.
 
         Parameters:
             flows: Parsed flow objects read by the host profile module.
         """
-        with self._connect() as connection:
-            self._active_connection = connection
-            try:
-                for flow in flows:
-                    self.observe_flow(flow)
-            finally:
-                self._active_connection = None
+        with self._open_write_transaction() as transaction_cursor:
+            for flow in flows:
+                self._save_identity_from_flow(flow, transaction_cursor)
 
-    def observe_ip_info(self, ip: str, to_store: dict[str, Any]) -> None:
+    def save_host_identity_from_ip_info(
+        self, ip: str, ip_info: dict[str, Any]
+    ) -> None:
         """Keep learned reverse DNS, SNI, and threat feed appearances.
 
         Parameters:
             ip: Address being enriched.
-            to_store: Redis IPInfo fields written by a Slips module.
+            ip_info: Redis IPInfo fields written by a Slips module.
         """
         try:
             is_public = ipaddress.ip_address(ip).is_global
         except ValueError:
             return
         facts: list[tuple[str, str]] = []
-        reverse_dns = to_store.get("reverse_dns")
+        reverse_dns = ip_info.get("reverse_dns")
         if reverse_dns:
             facts.append(("reverse_dns", str(reverse_dns)))
-        asn = to_store.get("asn")
+        asn = ip_info.get("asn")
         if isinstance(asn, dict):
-            description = " ".join(
-                str(asn.get(field, "") or "") for field in ("number", "org")
+            asn_description = " ".join(
+                str(asn.get(asn_field, "") or "")
+                for asn_field in ("number", "org")
             ).strip()
-            facts.append(("asn", description))
-        country = to_store.get("geocountry")
-        if (
-            is_public
-            and country
-            and str(country).strip().casefold()
-            not in {
-                "private",
-                "unknown",
-            }
-        ):
+            facts.append(("asn", asn_description))
+        country = ip_info.get("geocountry")
+        is_real_country = country and str(country).strip().casefold() not in {
+            "private",
+            "unknown",
+        }
+        if is_public and is_real_country:
             facts.append(("country", str(country)))
-        sni = to_store.get("SNI") or []
-        for item in sni if isinstance(sni, list) else [sni]:
-            if isinstance(item, dict):
-                facts.append(("sni", str(item.get("server_name", ""))))
-        ti = to_store.get("threatintelligence") or {}
-        if isinstance(ti, dict):
-            sources = ti.get("source", [])
-            for source in sources if isinstance(sources, list) else [sources]:
-                facts.append(("threat_feed", str(source)))
+        server_names = ip_info.get("SNI") or []
+        if not isinstance(server_names, list):
+            server_names = [server_names]
+        for server_name in server_names:
+            if isinstance(server_name, dict):
+                facts.append(("sni", str(server_name.get("server_name", ""))))
+        threat_intelligence = ip_info.get("threatintelligence") or {}
+        if isinstance(threat_intelligence, dict):
+            threat_feeds = threat_intelligence.get("source", [])
+            if not isinstance(threat_feeds, list):
+                threat_feeds = [threat_feeds]
+            for threat_feed in threat_feeds:
+                facts.append(("threat_feed", str(threat_feed)))
         if facts:
-            self._save(ip, "", time.time(), facts)
+            self._save_host_facts(ip, "", time.time(), facts)
 
-    def observe_hostname(self, hostname: str, profileid: str) -> None:
+    def save_hostname_of_profile(self, hostname: str, profileid: str) -> None:
         """Persist a name learned through a host profile update.
 
         Parameters:
             hostname: Newly learned hostname.
             profileid: Profile identifier containing the host IP.
         """
-        self._save(
+        self._save_host_facts(
             profileid.removeprefix("profile_"),
             "",
             time.time(),
             [("hostname", hostname)],
         )
 
-    @staticmethod
-    def read(path: Path, ip: str) -> list[dict[str, Any]]:
+    def _get_endpoint_times_of_ip(
+        self, ip: str, network_ids: list[str]
+    ) -> dict[str, tuple[float, float]]:
+        """Read when an address really sent or received traffic per network.
+
+        Parameters:
+            ip: Normalized host address.
+            network_ids: Networks the address has a profile on.
+
+        Returns:
+            First and last sighting indexed by network identity.
+        """
+        return {
+            str(observation_row["network_id"]): (
+                float(observation_row["first_seen"]),
+                float(observation_row["last_seen"]),
+            )
+            for observation_row in self._fetch_rows(
+                "SELECT network_id, first_seen, last_seen "
+                "FROM host_endpoint_observations WHERE ip=? "
+                f"AND network_id IN ({self._make_placeholders(network_ids)})",
+                (ip, *network_ids),
+            )
+        }
+
+    def get_host_profiles(self, ip: str) -> list[dict[str, Any]]:
         """Read all network-separated profiles for one host address.
 
         Parameters:
-            path: Permanent SQLite database path.
             ip: Host address shown in the web interface.
 
         Returns:
@@ -1597,79 +2142,59 @@ class HostProfileStore:
         """
         try:
             address = ipaddress.ip_address(ip)
-            normalized = str(address)
         except ValueError:
             return []
-        if not path.exists():
+        normalized_ip = str(address)
+        host_rows = self._fetch_rows(
+            "SELECT * FROM hosts WHERE ip=? "
+            "ORDER BY last_seen DESC LIMIT 50",
+            (normalized_ip,),
+        )
+        if not host_rows:
             return []
-        with sqlite3.connect(
-            f"file:{path}?mode=ro", uri=True, timeout=5
-        ) as conn:
-            conn.row_factory = sqlite3.Row
-            hosts = conn.execute(
-                "SELECT * FROM hosts WHERE ip=? "
-                "ORDER BY last_seen DESC LIMIT 50",
-                (normalized,),
-            ).fetchall()
-            names = HostProfileStore._network_names_from_connection(
-                conn, (host["network_id"] for host in hosts)
+        network_ids = [host_row["network_id"] for host_row in host_rows]
+        network_names = self.get_network_names(network_ids)
+        annotation_of_profile = self._resolve_annotations((normalized_ip,))
+        endpoint_times_of_network = self._get_endpoint_times_of_ip(
+            normalized_ip, network_ids
+        )
+        host_profiles = []
+        for host_row in host_rows:
+            network_id = host_row["network_id"]
+            fact_rows = self._fetch_rows(
+                "SELECT kind, value, first_seen, last_seen, observations "
+                "FROM facts WHERE network_id=? AND ip=? "
+                "ORDER BY last_seen DESC",
+                (network_id, normalized_ip),
             )
-            annotations = HostProfileStore._resolved_annotations(
-                conn, (normalized,)
+            annotation = annotation_of_profile.get(
+                (network_id, normalized_ip), {}
             )
-            endpoint_times: dict[str, tuple[float, float]] = {}
-            try:
-                network_ids = [host["network_id"] for host in hosts]
-                marks = ",".join("?" for _ in network_ids)
-                endpoint_times = {
-                    str(network_id): (float(first), float(last))
-                    for network_id, first, last in conn.execute(
-                        "SELECT network_id, first_seen, last_seen "
-                        "FROM host_endpoint_observations WHERE ip=? "
-                        f"AND network_id IN ({marks})",
-                        (normalized, *network_ids),
-                    )
+            endpoint_first_seen, endpoint_last_seen = (
+                endpoint_times_of_network.get(network_id, (None, None))
+            )
+            host_profiles.append(
+                {
+                    **dict(host_row),
+                    "default_network_label": host_row["network_label"],
+                    "network_name": network_names.get(network_id, ""),
+                    "network_label": network_names.get(
+                        network_id, host_row["network_label"]
+                    ),
+                    "user_name": annotation.get("name", ""),
+                    "user_note": annotation.get("note", ""),
+                    "endpoint_first_seen": endpoint_first_seen,
+                    "endpoint_last_seen": endpoint_last_seen,
+                    "facts": [
+                        dict(fact_row)
+                        for fact_row in fact_rows
+                        if fact_row["kind"] != "country"
+                        or (
+                            address.is_global
+                            and str(fact_row["value"]).strip().casefold()
+                            not in {"private", "unknown"}
+                        )
+                    ],
                 }
-            except sqlite3.OperationalError:
-                pass
-            profiles = []
-            for host in hosts:
-                facts = conn.execute(
-                    "SELECT kind, value, first_seen, last_seen, observations "
-                    "FROM facts WHERE network_id=? AND ip=? "
-                    "ORDER BY last_seen DESC",
-                    (host["network_id"], normalized),
-                ).fetchall()
-                profiles.append(
-                    {
-                        **dict(host),
-                        "default_network_label": host["network_label"],
-                        "network_name": names.get(host["network_id"], ""),
-                        "network_label": names.get(
-                            host["network_id"], host["network_label"]
-                        ),
-                        "user_name": annotations.get(
-                            (host["network_id"], normalized), {}
-                        ).get("name", ""),
-                        "user_note": annotations.get(
-                            (host["network_id"], normalized), {}
-                        ).get("note", ""),
-                        "endpoint_first_seen": endpoint_times.get(
-                            host["network_id"], (None, None)
-                        )[0],
-                        "endpoint_last_seen": endpoint_times.get(
-                            host["network_id"], (None, None)
-                        )[1],
-                        "facts": [
-                            dict(fact)
-                            for fact in facts
-                            if fact["kind"] != "country"
-                            or (
-                                address.is_global
-                                and str(fact["value"]).strip().casefold()
-                                not in {"private", "unknown"}
-                            )
-                        ],
-                    }
-                )
-            return profiles
+            )
+        return host_profiles
