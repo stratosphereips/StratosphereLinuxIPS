@@ -159,6 +159,138 @@ def test_the_window_boundary_drains_every_queued_flow(tmp_path):
     assert set(m._live_pred) == {"c0", "c1", "c2", "c3", "c4", "r0"}
 
 
+# --------------------------------------------------------------------------
+# emit_evidence (blocking experiments)
+# --------------------------------------------------------------------------
+@pytest.fixture
+def emitted(monkeypatch):
+    """(flow uid, twid) of every call to the base class's
+    set_evidence_malicious_flow, the method _emit_evidence calls."""
+    calls = []
+    monkeypatch.setattr(
+        fnm.ml_base.MLBaseDetection,
+        "set_evidence_malicious_flow",
+        lambda self, flow, twid: calls.append((flow["uid"], twid)),
+    )
+    return calls
+
+
+def _emit_msg(flow, twid="timewindow3"):
+    data = {"flow": flow, "profileid": "p"}
+    if twid:
+        data["twid"] = twid
+    return {"data": json.dumps(data)}
+
+
+def _feed(m, conn, arp=()):
+    queues = {"new_flow": list(conn), "new_arp": list(arp)}
+    m.channels = {"new_flow": object(), "new_arp": object()}
+    m.get_msg = lambda ch: queues[ch].pop(0) if queues[ch] else None
+    m._read_live(None)
+
+
+def _emitter(tmp_path, scope="all"):
+    m = _module(tmp_path)
+    m.emit_evidence, m.emit_evidence_scope, m._live_twid = True, scope, {}
+    return m
+
+
+@pytest.mark.parametrize(
+    "scope, want", [("all", ["c1", "r1"]), ("conn", ["c1"])]
+)
+def test_emit_evidence_sends_one_per_live_flow_predicted_malicious(
+    tmp_path, emitted, scope, want
+):
+    """Malicious live predictions of the serving merged model become
+    evidence in the flow's SLIPS time window; benign ones and flows without
+    a time window do not; scope conn skips ARP records. No twid is kept."""
+    m = _emitter(tmp_path, scope)
+    _feed(
+        m,
+        [
+            _emit_msg({"uid": "c1", "x": 1.0, "type_": "conn"}),
+            _emit_msg({"uid": "c2", "x": -1.0, "type_": "conn"}),
+            _emit_msg({"uid": "c3", "x": 1.0, "type_": "conn"}, twid=None),
+        ],
+        [_emit_msg({"uid": "r1", "x": 1.0, "type_": "arp"})],
+    )
+    assert emitted == [(u, "timewindow3") for u in want]
+    assert m._live_counters()["evidence"] == len(want)
+    assert m._live_twid == {}
+
+
+def test_emit_evidence_is_off_by_default(tmp_path, emitted):
+    m = _module(tmp_path)
+    _feed(m, [_emit_msg({"uid": "c1", "x": 1.0, "type_": "conn"})])
+    assert m._live_pred["c1"][0] == MAL
+    assert emitted == [] and not getattr(m, "_live_twid", None)
+
+
+def test_emit_evidence_needs_a_serving_merged_model(tmp_path, emitted):
+    m = _emitter(tmp_path)
+    m._using_merged_model = False
+    _feed(m, [_emit_msg({"uid": "c1", "x": 1.0, "type_": "conn"})])
+    assert emitted == [] and m._live_twid == {}
+
+
+def test_emitted_evidence_names_the_source_ip_in_the_flows_time_window(
+    tmp_path,
+):
+    """Through the real base implementation: LOW threat, confidence 0.1,
+    attacker = source IP, victim = destination, the flow's time window and
+    uid, the module's own evidence type; ARP records too."""
+    m = _emitter(tmp_path)
+    m.db = MagicMock()
+    flows = [
+        {
+            "uid": "c1",
+            "x": 1.0,
+            "type_": "conn",
+            "saddr": "10.0.0.5",
+            "daddr": "10.0.0.9",
+            "sport": 4444,
+            "dport": 22,
+            "starttime": 1.0,
+        },
+        {
+            "uid": "r1",
+            "x": 1.0,
+            "type_": "arp",
+            "saddr": "10.0.0.5",
+            "daddr": "10.0.0.7",
+            "sport": "",
+            "dport": "",
+            "starttime": 2.0,
+        },
+    ]
+    _feed(
+        m,
+        [_emit_msg(flows[0], "timewindow2")],
+        [_emit_msg(flows[1], "timewindow2")],
+    )
+    evs = [c.args[0] for c in m.db.set_evidence.call_args_list]
+    assert [e.uid for e in evs] == [["c1"], ["r1"]]
+    for e, victim in zip(evs, ("10.0.0.9", "10.0.0.7")):
+        assert (
+            e.evidence_type
+            == fnm.EvidenceType.FEDERATED_NETWORK_MALICIOUS_FLOW
+        )
+        assert (e.attacker.value, e.victim.value) == ("10.0.0.5", victim)
+        assert e.profile.ip == "10.0.0.5" and e.timewindow.number == 2
+        assert e.threat_level.value == 0.2 and e.confidence == 0.1
+    assert m._error_count == 0
+
+
+@pytest.mark.parametrize("emit", [False, True])
+def test_the_live_summary_shows_evidence_only_when_emitting(tmp_path, emit):
+    m = _module(tmp_path)
+    m.emit_evidence = emit
+    m._live_counters()["evidence"] = 4
+    m._write_live_summary()
+    line = _lines(tmp_path, "live_consistency")[-1]
+    assert line.endswith(" | evidence 4") == emit
+
+
 def test_reading_the_live_channels_never_raises(tmp_path):
     m = _module(tmp_path)
     m.channels = {"new_flow": object()}

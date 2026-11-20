@@ -435,6 +435,8 @@ federated_network_module:
 | `class_weighting` | per model class | – | used only when `balancing` is unset |
 | `merge_head` | `false` | – | |
 | `merge_scaler` | `false` | – | |
+| `emit_evidence` | `false` | – | true = emit one SLIPS evidence per flow the serving merged model predicts malicious live (see Evidence and Alerts); the module's own evidence is then kept out of its labels |
+| `emit_evidence_scope` | `all` | – | `all` or `conn` (ARP records emit none); unknown → `all` |
 | `gt_baseline` | `false` | – | true = also train a ground-truth baseline on the side: same model class, initial weights, scaler, balancing and training as the local model, trained at every close on that window's flows labeled with the simulated ground truth (no label delay), scored before it trains (`gt_test.log`, `gt_test_conn.log`, `gt_train.log`); never sent, merged or used for labels, so the local and merged models are unchanged |
 | `global_scaler` | `true` | `true` | |
 | `test_log_batch_size` | `training_batch_size` | `1` | test mode only |
@@ -686,15 +688,24 @@ In input order (`_get_feature_order()`; also the `features` list of
 
 ## Evidence and Alerts
 
-The module raises no SLIPS evidence and no alerts, in train or test mode:
-`set_evidence_malicious_flow` is overridden to do nothing, because evidence of
-its own would feed back into the alerts it labels its training data with (and
-would change SLIPS's alerting). Its predictions only go to the logs above.
-`malicious_flow_evidence_type` and `malicious_flow_description_template` are
-defined only because the base class requires them. No code path of the
-module calls the method either (its test path does not use the base class's
-`_test_default`), so turning evidence on takes more than deleting the
-override: the classification paths would also have to call it.
+By default the module raises no SLIPS evidence and no alerts, in train or
+test mode: `set_evidence_malicious_flow` is overridden to do nothing, because
+evidence of its own would feed back into the alerts it labels its training
+data with (and would change SLIPS's alerting). Its predictions only go to the
+logs above.
+
+`emit_evidence: true` (train mode; for the blocking experiments) turns
+evidence on: every flow the serving merged model predicts malicious live gets
+one evidence through the base class's implementation
+(`FEDERATED_NETWORK_MALICIOUS_FLOW`, LOW threat level, confidence 0.1, attacker
+= the flow's source IP, victim = its destination, in the SLIPS time window the
+flow message carried; nothing before the first merge). With
+`emit_evidence_scope: conn` ARP records get none. The override stays a no-op:
+`_emit_evidence` calls the base implementation directly. With evidence on, the
+module's own evidence is kept out of its training labels (the label queries
+skip evidence of its own type); an alert its evidence helped trigger still
+labels the flows cited by the alert's other evidence. `live_consistency.log`
+then ends each line with `| evidence N` (evidence emitted that close).
 
 ## Ground Truth (evaluation only)
 

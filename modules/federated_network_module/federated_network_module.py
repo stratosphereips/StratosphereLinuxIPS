@@ -50,7 +50,10 @@ also trains a ground-truth baseline on the side (gt_test*.log), never sent
 or merged.
 merging_data.log records per merge how much of the merge the fine-tunes undo
 ("finetune | ... | undone="). The module emits no SLIPS evidence
-(set_evidence_malicious_flow is a no-op).
+(set_evidence_malicious_flow is a no-op) unless emit_evidence is on: then each
+flow the merged model predicts malicious live gets one evidence (conn flows
+only with emit_evidence_scope: conn), and its own evidence is kept out of its
+labels.
 
 Artifact Paths:
 - Base (shared): artifacts/random_projection.bin, artifacts/global_scaler.json
@@ -1611,6 +1614,31 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._gt_buffer_y: list = []
         if self.gt_baseline:
             self.logger.add_files(["gt_train", "gt_test", "gt_test_conn"])
+        # Optional SLIPS evidence (blocking experiments): one evidence per
+        # flow the merged model predicts malicious live, through the base
+        # class's set_evidence_malicious_flow; scope "conn" skips ARP records.
+        # With it on, the module's own evidence is kept out of its training
+        # labels. Unset = off: no evidence, labels as before.
+        self.emit_evidence = self._read_module_config_bool(
+            "emit_evidence", default=False
+        )
+        scope = (
+            str(conf.read_configuration(section, "emit_evidence_scope", "all"))
+            .strip()
+            .lower()
+        )
+        if scope not in ("all", "conn"):
+            self.print(
+                f"emit_evidence_scope '{scope}' unknown (all|conn); using all",
+                0,
+                1,
+            )
+            scope = "all"
+        self.emit_evidence_scope = scope
+        self._live_twid: Dict[str, str] = {}
+        self.print(
+            f"emit_evidence: {self.emit_evidence} (scope {scope})", 0, 2
+        )
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -2368,6 +2396,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "gen_race": 0,
             "no_live": 0,
             "pruned": 0,
+            "evidence": 0,
         }
 
     def _live_counters(self) -> dict:
@@ -2391,6 +2420,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if not isinstance(flow, dict):
             self._live_counters()["bad_msg"] += 1
             return None
+        if getattr(self, "emit_evidence", False) and data.get("twid"):
+            # emit_evidence: the SLIPS time window the evidence belongs to
+            self._live_twid[self._get_flow_id(flow)] = data["twid"]
         return flow
 
     def _read_live(self, limit: Optional[int] = None) -> int:
@@ -2425,10 +2457,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         for the end-of-window consistency check."""
         counts = self._live_counters()
         counts["seen"] += len(flows)
+        items = [(self._get_flow_id(f), f) for f in flows]
+        twids = {}
+        if getattr(self, "emit_evidence", False):
+            twids = {fid: self._live_twid.pop(fid, None) for fid, _ in items}
         if not (self._is_fitted and self._using_merged_model):
             counts["no_model"] += len(flows)
             return
-        items = [(self._get_flow_id(f), f) for f in flows]
         try:
             kept, x_scaled = self._scaled_features(items)
             counts["no_features"] += len(items) - len(kept)
@@ -2438,6 +2473,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self._record_error("_on_live_flows")
             return
+        if twids:
+            self._emit_evidence(kept, preds, twids)
         gen = getattr(self, "_model_gen", 0)
         window = self.training_count_window
         live = getattr(self, "_live_pred", None)
@@ -2503,6 +2540,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             f"MISMATCH {c['mismatched']} | gen_race {c['gen_race']} "
             f"no_live {c['no_live']} pruned {c['pruned']}"
         )
+        if getattr(self, "emit_evidence", False):
+            line += f" | evidence {c['evidence']}"
         self.logger._write("live_consistency", line)
         if c["mismatched"]:
             self._record_error(
@@ -2693,6 +2732,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         db = self._db()
         uids = list(uids)
         found: set = set()
+        own_sql, own_args = self._own_evidence_filter("ef.evidence_id")
         for i in range(0, len(uids), self._SQL_CHUNK):
             chunk = uids[i : i + self._SQL_CHUNK]
             marks = ",".join("?" * len(chunk))
@@ -2703,11 +2743,27 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "JOIN alert_evidence ae ON ae.evidence_id = ef.evidence_id "
                     "JOIN alerts a ON a.alert_id = ae.alert_id "
                     f"WHERE ef.uid IN ({marks}) "
-                    "AND a.alert_time >= ? AND a.alert_time <= ?",
-                    (*chunk, since, until),
+                    "AND a.alert_time >= ? AND a.alert_time <= ?" + own_sql,
+                    (*chunk, since, until, *own_args),
                 )
             )
         return found
+
+    def _own_evidence_filter(self, column: str) -> tuple:
+        """With emit_evidence, an SQL condition that keeps the module's own
+        evidence out of its labels (the evidence ids of its own evidence
+        type); without it nothing (the queries are unchanged).
+
+        :param column: the evidence id column to filter
+        :return: (" AND <condition>" or "", its parameters)
+        """
+        if not getattr(self, "emit_evidence", False):
+            return "", ()
+        return (
+            f" AND {column} NOT IN (SELECT evidence_id FROM evidence "
+            "WHERE evidence_type = ?)",
+            (str(self.malicious_flow_evidence_type),),
+        )
 
     def _new_alerts(self, since: float, until: float):
         """Alerts created in (since, until]: their count, the number of
@@ -2717,12 +2773,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "SELECT COUNT(*) FROM alerts WHERE alert_time > ? AND alert_time <= ?",
             (since, until),
         ).fetchone()[0]
+        own_sql, own_args = self._own_evidence_filter("ef.evidence_id")
         rows = db.execute(
             "SELECT ae.evidence_id, ef.uid FROM alerts a "
             "JOIN alert_evidence ae ON ae.alert_id = a.alert_id "
-            "LEFT JOIN evidence_flows ef ON ef.evidence_id = ae.evidence_id "
-            "WHERE a.alert_time > ? AND a.alert_time <= ?",
-            (since, until),
+            "LEFT JOIN evidence_flows ef ON ef.evidence_id = ae.evidence_id"
+            + own_sql
+            + " WHERE a.alert_time > ? AND a.alert_time <= ?",
+            (*own_args, since, until),
         ).fetchall()
         evidence_ids = {evidence_id for evidence_id, _ in rows}
         uids = {uid for _, uid in rows if uid}
@@ -4904,6 +4962,33 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self._record_error("run_test_on_flow")
 
+    def _emit_evidence(self, kept: list, preds, twids: dict) -> None:
+        """emit_evidence: one SLIPS evidence per live flow the merged model
+        predicted malicious (conn flows only with emit_evidence_scope
+        "conn"), through the base class's set_evidence_malicious_flow (LOW
+        threat, confidence 0.1, attacker = the flow's source IP). Flows
+        without a SLIPS time window are skipped. Errors are logged, never
+        raised.
+
+        :param kept: (flow id, flow) pairs that were predicted
+        :param preds: their predictions, aligned with kept
+        :param twids: flow id -> the SLIPS time window of the flow message
+        """
+        conn_only = self.emit_evidence_scope == "conn"
+        for (fid, flow), pred in zip(kept, preds):
+            twid = twids.get(fid)
+            if pred != MALICIOUS or not twid:
+                continue
+            if conn_only and flow.get("type_") != "conn":
+                continue
+            try:
+                ml_base.MLBaseDetection.set_evidence_malicious_flow(
+                    self, flow, twid
+                )
+                self._live_counters()["evidence"] += 1
+            except Exception:
+                self._record_error("_emit_evidence")
+
     def set_evidence_malicious_flow(self, *args, **kwargs):
         """DISABLED for the federation experiments: the module must not emit
         evidence, because its own malicious-flow evidence would feed back into
@@ -4913,9 +4998,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Nothing in this module calls this method either: SLIPS calls it only
         from the base class's _test_default, which this module's own
         run_test_on_flow and window scoring replace. To emit evidence, a
-        dedicated experiment must call it from the scoring path AND delete
-        this override so the base implementation runs:
-            return super().set_evidence_malicious_flow(*args, **kwargs)
+        dedicated experiment must call it from the scoring path. The
+        emit_evidence option does exactly that (_emit_evidence calls the
+        base implementation directly), so this override stays a no-op and
+        nothing else can emit by accident.
         """
         return None
 

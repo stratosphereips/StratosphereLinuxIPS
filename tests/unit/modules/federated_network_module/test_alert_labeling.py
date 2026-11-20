@@ -193,6 +193,24 @@ def test_new_alerts_counts_distinct_evidence_and_nonempty_uids():
     assert uids == {"a", "b", "c", "d"}  # empty uid dropped
 
 
+@pytest.mark.parametrize("emit, want", [(False, {"a", "b"}), (True, {"a"})])
+def test_own_evidence_labels_nothing_only_when_the_module_emits(emit, want):
+    """emit_evidence: the module's own evidence must not label the flows it
+    trains on (circular); the same alert's other evidence still labels.
+    Without emit_evidence the queries are unchanged."""
+    db = _make_db()
+    db.execute("CREATE TABLE evidence(evidence_id TEXT, evidence_type TEXT)")
+    db.executemany(
+        "INSERT INTO evidence VALUES (?,?)",
+        [("E1", "ARP_SCAN"), ("E2", "FEDERATED_NETWORK_MALICIOUS_FLOW")],
+    )
+    m = _module(db)
+    m.emit_evidence = emit
+    _insert_alert(db, "A1", [], BASE, evidence_map={"E1": ["a"], "E2": ["b"]})
+    assert m._alerted_uids(["a", "b"], BASE - WIN, BASE + WIN) == want
+    assert m._new_alerts(BASE - WIN, BASE + WIN) == (1, 2, want)
+
+
 def test_alerted_uids_only_returns_cited_uids_in_window():
     db = _make_db()
     m = _module(db)
