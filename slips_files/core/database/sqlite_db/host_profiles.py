@@ -19,11 +19,11 @@ from slips_files.core.output import Output
 
 MAX_FACTS_PER_KIND = 200
 MAX_VALUE_LENGTH = 2048
-# how long to wait before writing the same sighting or MAC again
+# how long to wait before writing the same seen-host record or MAC again
 REPEATED_WRITE_INTERVAL_SECONDS = 60
 NETWORK_STATE_CACHE_SECONDS = 5
 MAX_RECENT_MACS = 4096
-MAX_RECENT_SIGHTINGS = 10000
+MAX_RECENT_HOST_SEEN = 10000
 # sqlite limits how many "?" one query can hold
 MAX_IPS_PER_QUERY = 200
 MAX_IPS_PER_TRIAGE_QUERY = 300
@@ -136,7 +136,7 @@ NameCandidate = tuple[int, float, str, str]
 
 
 class HostProfileStore(ISQLite):
-    """Persist host sightings and distinct identity clues across Slips runs."""
+    """Persist seen hosts and distinct identity clues across Slips runs."""
 
     name = "host_profiles"
 
@@ -166,7 +166,7 @@ class HostProfileStore(ISQLite):
         self.network_state_lookup = network_state_lookup
         self.interfaces = interfaces
         self._network_state_cache: dict[str, tuple[float, dict[str, Any]]] = {}
-        self._recent_sightings: dict[ProfileKey, float] = {}
+        self._recent_host_seen: dict[ProfileKey, float] = {}
         self._recent_macs: dict[ProfileKey, tuple[str, float]] = {}
         self._create_private_db_dir()
         super().__init__(self.name, main_pid, str(db_path))
@@ -247,7 +247,7 @@ class HostProfileStore(ISQLite):
                     self.conn.rollback()
                     # the rolled back rows were never saved, so a retry
                     # must not be skipped as a repeated write
-                    self._recent_sightings.clear()
+                    self._recent_host_seen.clear()
                     self._recent_macs.clear()
                     raise
 
@@ -668,7 +668,7 @@ class HostProfileStore(ISQLite):
     def get_last_observation_times(
         self, network_ids: Iterable[str]
     ) -> dict[str, float]:
-        """Read real sightings on selected networks without refreshing them.
+        """Read seen hosts on selected networks without refreshing them.
 
         Parameters:
             network_ids: Verified networks and the current run fallback.
@@ -1610,7 +1610,7 @@ class HostProfileStore(ISQLite):
         capture_network_state: dict[str, Any] | None = None,
         transaction_cursor: sqlite3.Cursor | None = None,
     ) -> None:
-        """Upsert a sighting and bounded distinct facts in one transaction.
+        """Upsert a seen host and bounded distinct facts in one transaction.
 
         Parameters:
             ip: Observed host IP.
@@ -1618,7 +1618,7 @@ class HostProfileStore(ISQLite):
             observed_at: Observation timestamp.
             facts: Kind and value pairs learned from this observation.
             observed_traffic: Whether a parsed packet flow caused the
-                sighting.
+                host-seen record.
             from_packet: Use capture-time settings for DNS-advertised
                 metadata.
             capture_network_state: Already selected packet-time network
@@ -1626,15 +1626,12 @@ class HostProfileStore(ISQLite):
             transaction_cursor: Cursor of the caller's open transaction.
                 A new transaction is opened when it's missing.
         """
-        network_state = (
-            self._get_cached_network_state(interface)
-            if capture_network_state is None
-            else capture_network_state
+        network_state = self._resolve_network_state_for_host_seen(
+            interface,
+            observed_at,
+            observed_traffic or from_packet,
+            capture_network_state,
         )
-        if capture_network_state is None and (observed_traffic or from_packet):
-            network_state = self._get_network_state_at(
-                network_state, observed_at
-            )
         network_identity = self._get_network_identity_of_ip(
             ip, interface, network_state
         )
@@ -1643,46 +1640,29 @@ class HostProfileStore(ISQLite):
         normalized_ip, network_id, network_label = network_identity
         profile_key = (network_id, normalized_ip)
         now = time.monotonic()
-        seconds_since_last_sighting = now - self._recent_sightings.get(
+        seconds_since_host_last_seen = now - self._recent_host_seen.get(
             profile_key, 0
         )
-        own_ips = {
-            own_address.get("ip")
-            for own_address in network_state.get("addresses", [])
-        }
-        if network_state.get("host_ip"):
-            own_ips.add(network_state["host_ip"])
         if (
             observed_traffic
-            and normalized_ip in own_ips
-            and seconds_since_last_sighting >= REPEATED_WRITE_INTERVAL_SECONDS
-            and (
-                own_mac := self._normalize_unicast_mac(
-                    network_state.get("mac")
-                )
-            )
+            and seconds_since_host_last_seen >= REPEATED_WRITE_INTERVAL_SECONDS
         ):
-            facts = [*facts, ("mac", own_mac)]
+            facts = self._add_own_mac_fact(facts, normalized_ip, network_state)
         facts_to_save, mac_to_save = self._drop_empty_and_repeated_facts(
             profile_key, facts, now
         )
-        capture_network_id = self.build_network_id(
-            network_state, self.run_name
-        )
-        capture_sighting_key = (
-            f"capture:{capture_network_id}:"
-            f"{network_state.get('changed_at', '')}",
-            normalized_ip,
+        capture_network_id, capture_host_seen_key = (
+            self._build_capture_host_seen_key(network_state, normalized_ip)
         )
         should_save_endpoint_observation = (
             observed_traffic
-            and now - self._recent_sightings.get(capture_sighting_key, 0)
+            and now - self._recent_host_seen.get(capture_host_seen_key, 0)
             >= REPEATED_WRITE_INTERVAL_SECONDS
         )
         if (
             not facts_to_save
             and not should_save_endpoint_observation
-            and seconds_since_last_sighting < REPEATED_WRITE_INTERVAL_SECONDS
+            and seconds_since_host_last_seen < REPEATED_WRITE_INTERVAL_SECONDS
         ):
             return
         transaction = (
@@ -1693,66 +1673,271 @@ class HostProfileStore(ISQLite):
         with transaction as cursor:
             # ip info and hostnames arrive without a packet
             is_metadata_update = not observed_traffic and not from_packet
-            should_save_host = (
-                not is_metadata_update or network_id == PUBLIC_NETWORK_ID
+            network_id, network_label, should_save_host = (
+                self._resolve_host_network_for_host_seen(
+                    cursor,
+                    network_id,
+                    network_label,
+                    normalized_ip,
+                    is_metadata_update,
+                )
             )
-            if is_metadata_update and network_id != PUBLIC_NETWORK_ID:
-                is_host_known_on_network = cursor.execute(
-                    "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
-                    profile_key,
-                ).fetchone()
-                if not is_host_known_on_network:
-                    # metadata alone doesn't prove the host is on this
-                    # network, keep it under this run instead
-                    network_id = self.build_network_id({}, self.run_name)
-                    network_label = f"Unidentified network · {self.run_name}"
-                    profile_key = (network_id, normalized_ip)
-                    should_save_host = not cursor.execute(
-                        "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
-                        profile_key,
-                    ).fetchone()
+            profile_key = (network_id, normalized_ip)
             if should_save_endpoint_observation:
-                cursor.execute(
-                    "INSERT INTO host_endpoint_observations "
-                    "VALUES (?, ?, ?, ?) "
-                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
-                    "first_seen=MIN(first_seen, excluded.first_seen), "
-                    "last_seen=MAX(last_seen, excluded.last_seen)",
-                    (
-                        capture_network_id,
-                        normalized_ip,
-                        observed_at,
-                        observed_at,
-                    ),
+                self._upsert_endpoint_observation(
+                    cursor, capture_network_id, normalized_ip, observed_at
                 )
             if should_save_host:
-                cursor.execute(
-                    "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
-                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
-                    "network_label=excluded.network_label, "
-                    "first_seen=MIN(first_seen, excluded.first_seen), "
-                    "last_seen=MAX(last_seen, excluded.last_seen)",
-                    (
-                        network_id,
-                        normalized_ip,
-                        network_label,
-                        observed_at,
-                        observed_at,
-                    ),
+                self._upsert_host(
+                    cursor, profile_key, network_label, observed_at
                 )
             for fact_kind, fact_value in dict.fromkeys(facts_to_save):
                 self._upsert_fact(
                     cursor, profile_key, fact_kind, fact_value, observed_at
                 )
-        self._recent_sightings[profile_key] = now
+        self._remember_host_seen(
+            profile_key,
+            (
+                capture_host_seen_key
+                if should_save_endpoint_observation
+                else None
+            ),
+            mac_to_save,
+            now,
+        )
+
+    def _resolve_network_state_for_host_seen(
+        self,
+        interface: str,
+        observed_at: float,
+        is_packet_time: bool,
+        capture_network_state: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        """Pick the network settings a seen host should be judged against.
+
+        A caller that already selected the packet-time settings wins.
+        Otherwise packet-driven host-seen events use the settings that were
+        active at the packet timestamp, and metadata-only updates use
+        the current settings of the interface.
+
+        Parameters:
+            interface: Capture interface.
+            observed_at: Observation timestamp.
+            is_packet_time: Whether a packet caused the host-seen event.
+            capture_network_state: Already selected packet-time network
+                settings, or None.
+
+        Returns:
+            The network settings to use for this host-seen event.
+        """
+        if capture_network_state is not None:
+            return capture_network_state
+        network_state = self._get_cached_network_state(interface)
+        if is_packet_time:
+            return self._get_network_state_at(network_state, observed_at)
+        return network_state
+
+    def _add_own_mac_fact(
+        self,
+        facts: list[tuple[str, str]],
+        normalized_ip: str,
+        network_state: dict[str, Any],
+    ) -> list[tuple[str, str]]:
+        """Attach the capture host's own MAC when the seen host is its own IP.
+
+        Packets sent by the capture host carry its MAC, but the parsed
+        flow doesn't, so the MAC is taken from the interface settings.
+
+        Parameters:
+            facts: Kind and value pairs learned from this observation.
+            normalized_ip: Observed host IP.
+            network_state: Network settings at the time of the host-seen event.
+
+        Returns:
+            The facts, plus a "mac" fact when the IP belongs to the
+            capture host and its MAC is a usable unicast address.
+        """
+        own_ips = {
+            own_address.get("ip")
+            for own_address in network_state.get("addresses", [])
+        }
+        if network_state.get("host_ip"):
+            own_ips.add(network_state["host_ip"])
+        if normalized_ip not in own_ips:
+            return facts
+        own_mac = self._normalize_unicast_mac(network_state.get("mac"))
+        if not own_mac:
+            return facts
+        return [*facts, ("mac", own_mac)]
+
+    def _build_capture_host_seen_key(
+        self, network_state: dict[str, Any], normalized_ip: str
+    ) -> tuple[str, ProfileKey]:
+        """Build the throttle key for endpoint observations of this capture.
+
+        The key changes whenever the capture network settings change,
+        so a host is recorded once per network configuration it was
+        seen under.
+
+        Parameters:
+            network_state: Network settings at the time of the host-seen event.
+            normalized_ip: Observed host IP.
+
+        Returns:
+            The capture network id, and the key used to throttle
+            repeated endpoint observation writes.
+        """
+        capture_network_id = self.build_network_id(
+            network_state, self.run_name
+        )
+        capture_host_seen_key = (
+            f"capture:{capture_network_id}:"
+            f"{network_state.get('changed_at', '')}",
+            normalized_ip,
+        )
+        return capture_network_id, capture_host_seen_key
+
+    def _resolve_host_network_for_host_seen(
+        self,
+        cursor: sqlite3.Cursor,
+        network_id: str,
+        network_label: str,
+        normalized_ip: str,
+        is_metadata_update: bool,
+    ) -> tuple[str, str, bool]:
+        """Decide which network a host row belongs to and if it needs saving.
+
+        A packet proves the host is on the network, so the row is always
+        saved there. Metadata alone (ip info, hostnames) doesn't, so an
+        unknown host is kept under this run's "unidentified" network
+        instead of being invented on the real one. Public hosts aren't
+        tied to a local network, so they're always saved.
+
+        Parameters:
+            cursor: Cursor of the open write transaction.
+            network_id: Network the seen host resolved to.
+            network_label: Human readable name of that network.
+            normalized_ip: Observed host IP.
+            is_metadata_update: Whether it came without a packet.
+
+        Returns:
+            The network id and label to save under, and whether the
+            host row should be written.
+        """
+        if not is_metadata_update or network_id == PUBLIC_NETWORK_ID:
+            return network_id, network_label, True
+        if self._is_host_known_on_network(cursor, (network_id, normalized_ip)):
+            return network_id, network_label, False
+        unidentified_network_id = self.build_network_id({}, self.run_name)
+        unidentified_label = f"Unidentified network · {self.run_name}"
+        should_save_host = not self._is_host_known_on_network(
+            cursor, (unidentified_network_id, normalized_ip)
+        )
+        return unidentified_network_id, unidentified_label, should_save_host
+
+    @staticmethod
+    def _is_host_known_on_network(
+        cursor: sqlite3.Cursor, profile_key: ProfileKey
+    ) -> bool:
+        """Check whether a host row already exists for this network and IP.
+
+        Parameters:
+            cursor: Cursor of the open write transaction.
+            profile_key: Network identity and IP to look up.
+
+        Returns:
+            True when the host row exists.
+        """
+        return bool(
+            cursor.execute(
+                "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
+                profile_key,
+            ).fetchone()
+        )
+
+    @staticmethod
+    def _upsert_endpoint_observation(
+        cursor: sqlite3.Cursor,
+        capture_network_id: str,
+        normalized_ip: str,
+        observed_at: float,
+    ) -> None:
+        """Record that an IP was seen as a traffic endpoint of this capture.
+
+        Parameters:
+            cursor: Cursor of the open write transaction.
+            capture_network_id: Network id of the capture itself.
+            normalized_ip: Observed host IP.
+            observed_at: Observation timestamp.
+        """
+        cursor.execute(
+            "INSERT INTO host_endpoint_observations "
+            "VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(network_id, ip) DO UPDATE SET "
+            "first_seen=MIN(first_seen, excluded.first_seen), "
+            "last_seen=MAX(last_seen, excluded.last_seen)",
+            (capture_network_id, normalized_ip, observed_at, observed_at),
+        )
+
+    @staticmethod
+    def _upsert_host(
+        cursor: sqlite3.Cursor,
+        profile_key: ProfileKey,
+        network_label: str,
+        observed_at: float,
+    ) -> None:
+        """Create the host row or widen its first/last seen window.
+
+        Parameters:
+            cursor: Cursor of the open write transaction.
+            profile_key: Network identity and IP of the host.
+            network_label: Human readable name of the network.
+            observed_at: Observation timestamp.
+        """
+        network_id, normalized_ip = profile_key
+        cursor.execute(
+            "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(network_id, ip) DO UPDATE SET "
+            "network_label=excluded.network_label, "
+            "first_seen=MIN(first_seen, excluded.first_seen), "
+            "last_seen=MAX(last_seen, excluded.last_seen)",
+            (
+                network_id,
+                normalized_ip,
+                network_label,
+                observed_at,
+                observed_at,
+            ),
+        )
+
+    def _remember_host_seen(
+        self,
+        profile_key: ProfileKey,
+        capture_host_seen_key: ProfileKey | None,
+        mac_to_save: str,
+        now: float,
+    ) -> None:
+        """Update the in-memory throttles after a successful write.
+
+        The caches are bounded by clearing them wholesale once they grow
+        past their limit, which only costs a few extra writes later.
+
+        Parameters:
+            profile_key: Network identity and IP that was just saved.
+            capture_host_seen_key: Endpoint observation key to refresh, or
+                None when no endpoint observation was written.
+            mac_to_save: MAC that was just saved, empty when none was.
+            now: Monotonic time of the write.
+        """
+        self._recent_host_seen[profile_key] = now
         if mac_to_save:
             self._recent_macs[profile_key] = (mac_to_save, now)
             if len(self._recent_macs) > MAX_RECENT_MACS:
                 self._recent_macs.clear()
-        if should_save_endpoint_observation:
-            self._recent_sightings[capture_sighting_key] = now
-        if len(self._recent_sightings) > MAX_RECENT_SIGHTINGS:
-            self._recent_sightings.clear()
+        if capture_host_seen_key is not None:
+            self._recent_host_seen[capture_host_seen_key] = now
+        if len(self._recent_host_seen) > MAX_RECENT_HOST_SEEN:
+            self._recent_host_seen.clear()
 
     @staticmethod
     def _get_local_link_mac(
@@ -1980,6 +2165,7 @@ class HostProfileStore(ISQLite):
         capture_network_state = self._get_network_state_at(
             self._get_cached_network_state(interface), observed_at, flow
         )
+        # -------------------------------------------
         source_facts: list[tuple[str, str]] = []
         destination_facts: list[tuple[str, str]] = []
         if flow_type in {"arp", "conn"}:
@@ -1988,6 +2174,7 @@ class HostProfileStore(ISQLite):
             )
             source_facts.append(("mac", source_mac))
             destination_facts.append(("mac", destination_mac))
+
         if flow_type == "dhcp":
             if self._get_network_identity_of_ip(source_ip, interface) is None:
                 # a client asking for an address has no usable source yet
@@ -1998,6 +2185,7 @@ class HostProfileStore(ISQLite):
                     ("mac", str(getattr(flow, "smac", "") or "")),
                 ]
             )
+
         elif flow_type == "http":
             destination_facts.extend(self._get_http_facts_of_flow(flow))
         elif flow_type in {"ssl", "tls"}:
@@ -2012,6 +2200,7 @@ class HostProfileStore(ISQLite):
                 capture_network_state,
                 transaction_cursor,
             )
+
         for endpoint_ip, endpoint_facts in (
             (source_ip, source_facts),
             (destination_ip, destination_facts),
@@ -2116,7 +2305,7 @@ class HostProfileStore(ISQLite):
             network_ids: Networks the address has a profile on.
 
         Returns:
-            First and last sighting indexed by network identity.
+            First and last time seen indexed by network identity.
         """
         return {
             str(observation_row["network_id"]): (
