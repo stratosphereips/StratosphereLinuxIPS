@@ -82,6 +82,7 @@ These rules MUST be followed:
 - modules shouldn't create and use their own databases, instead, have all the creation/usage of databases inside the databases/ dir. so that other modules can access that db if they need to
 - module names should follow the format: X_doer. e.g http_analyzer, brute_force_detector, etc.
 - when a generated function is too long, split it into shorter helpers.
+- when a module is too long, and contains logic that can be grouped together in a helper class, do it. like exporting_alerts module, it has idmef, slack and stix exporter helpers.
 
 
 

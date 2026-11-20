@@ -98,6 +98,28 @@ class HostProfile(IModule):
         )
         return seconds_since_enrichment < self.ENRICHMENT_INTERVAL_SECONDS
 
+    def _get_ips_of_flow(self, flow: dict[str, Any]) -> list[str]:
+        """Pick the source and destination addresses out of a flow.
+
+        Flows without a usable address, like ARP or broken rows, give
+        nothing.
+
+        Parameters:
+            flow: Parsed flow row.
+
+        Returns:
+            The valid IP addresses of the flow.
+        """
+        ips = []
+        for address_field in ("saddr", "daddr"):
+            ip = str(flow.get(address_field) or "")
+            try:
+                ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            ips.append(ip)
+        return ips
+
     def _queue_ips_for_enrichment(self, flow_rows: list[FlowRow]) -> None:
         """Queue the addresses of a flow batch for eventual Redis enrichment.
 
@@ -109,12 +131,7 @@ class HostProfile(IModule):
         """
         now = time.monotonic()
         for _, flow in flow_rows:
-            for address_field in ("saddr", "daddr"):
-                ip = str(flow.get(address_field) or "")
-                try:
-                    ipaddress.ip_address(ip)
-                except ValueError:
-                    continue
+            for ip in self._get_ips_of_flow(flow):
                 if self._was_enriched_recently(ip, now):
                     continue
                 if len(self._ips_awaiting_enrichment) < self.MAX_TRACKED_IPS:
@@ -125,7 +142,11 @@ class HostProfile(IModule):
 
         Names and threat intelligence can change long after an address was
         first seen, so each address is checked again every few minutes.
+        Newly seen addresses go first, so nothing is re-queued while some
+        are still waiting.
         """
+        if self._ips_awaiting_enrichment:
+            return
         now = time.monotonic()
         for ip in self._last_enrichment_time_of_ip:
             if not self._was_enriched_recently(ip, now):
@@ -168,12 +189,34 @@ class HostProfile(IModule):
                 ip_info[info_type] = info
         return cached_hostname, ip_info
 
+    def _get_identity_signature(
+        self, cached_hostname: str | None, ip_info: dict[str, Any]
+    ) -> int:
+        """Sum up the cached identity of an address in one number.
+
+        Comparing it with the last saved one tells whether anything
+        changed, without keeping every value in memory.
+
+        Parameters:
+            cached_hostname: Hostname of the address' profile, if known.
+            ip_info: Known IP info fields of the address.
+
+        Returns:
+            Hash of the hostname and the IP info fields.
+        """
+        return hash(
+            (
+                str(cached_hostname),
+                *(str(ip_info.get(field)) for field in self.IP_INFO_FIELDS),
+            )
+        )
+
     def _save_cached_identity_of_ip(
         self, ip: str, cached_hostname: str | None, ip_info: dict[str, Any]
     ) -> None:
         """Persist the cached identity of an address, if it changed.
 
-        A signature of the last saved values is kept in memory, so
+        The signature of the last saved values is kept in memory, so
         unchanged addresses cost no database write.
 
         Parameters:
@@ -181,23 +224,18 @@ class HostProfile(IModule):
             cached_hostname: Hostname of the address' profile, if known.
             ip_info: Known IP info fields of the address.
         """
-        enrichment_signature = hash(
-            (
-                str(cached_hostname),
-                *(str(ip_info.get(field)) for field in self.IP_INFO_FIELDS),
-            )
+        identity_signature = self._get_identity_signature(
+            cached_hostname, ip_info
         )
-        if enrichment_signature != self._last_enrichment_signature_of_ip.get(
-            ip
-        ):
-            if ip_info:
-                self.db.save_host_identity_from_ip_info(ip, ip_info)
-            if cached_hostname:
-                self.db.save_hostname_of_profile(
-                    str(cached_hostname), f"profile_{ip}"
-                )
-            self._last_enrichment_signature_of_ip[ip] = enrichment_signature
-        self._last_enrichment_time_of_ip[ip] = time.monotonic()
+        if identity_signature == self._last_enrichment_signature_of_ip.get(ip):
+            return
+        if ip_info:
+            self.db.save_host_identity_from_ip_info(ip, ip_info)
+        if cached_hostname:
+            self.db.save_hostname_of_profile(
+                str(cached_hostname), f"profile_{ip}"
+            )
+        self._last_enrichment_signature_of_ip[ip] = identity_signature
 
     def _forget_enrichment_history_if_too_big(self) -> None:
         """Keep the in-memory enrichment history bounded.
@@ -210,8 +248,6 @@ class HostProfile(IModule):
 
     def _enrich_queued_ips(self) -> None:
         """Save names and threat context of a small group of queued IPs."""
-        if not self._ips_awaiting_enrichment:
-            self._requeue_ips_due_for_refresh()
         ips_to_enrich = self._pop_ips_to_enrich()
         for position, ip in enumerate(ips_to_enrich):
             try:
@@ -222,7 +258,7 @@ class HostProfile(IModule):
                 return
             self._request_missing_hostname_lookup(ip, ip_info)
             self._save_cached_identity_of_ip(ip, cached_hostname, ip_info)
-        self._forget_enrichment_history_if_too_big()
+            self._last_enrichment_time_of_ip[ip] = time.monotonic()
 
     def _request_missing_hostname_lookup(
         self, ip: str, ip_info: dict[str, Any]
@@ -250,11 +286,11 @@ class HostProfile(IModule):
             return
         self.db.set_new_ip(ip)
 
-    def process_batch(self) -> int:
-        """Persist and checkpoint one bounded batch outside the profiler.
+    def _archive_new_flows(self) -> int:
+        """Persist and checkpoint one bounded flow batch outside the profiler.
 
         Returns:
-            Number of rows processed in this iteration.
+            Number of flow rows archived in this iteration.
         """
         new_flows_of_table = self._read_new_flows()
         new_flow_rows = [
@@ -268,7 +304,6 @@ class HostProfile(IModule):
             )
             self._queue_ips_for_enrichment(new_flow_rows)
             self._mark_flows_as_processed(new_flows_of_table)
-        self._enrich_queued_ips()
         return len(new_flow_rows)
 
     def _get_pause_after_batch(
@@ -319,10 +354,13 @@ class HostProfile(IModule):
             False to keep the background module running.
         """
         batch_started_at = time.monotonic()
-        processed_flows_count = self.process_batch()
+        archived_flows_count = self._archive_new_flows()
+        self._requeue_ips_due_for_refresh()
+        self._enrich_queued_ips()
+        self._forget_enrichment_history_if_too_big()
         batch_duration = time.monotonic() - batch_started_at
         self._sleep_unless_stopping(
-            self._get_pause_after_batch(processed_flows_count, batch_duration)
+            self._get_pause_after_batch(archived_flows_count, batch_duration)
         )
         return False
 
@@ -330,5 +368,7 @@ class HostProfile(IModule):
         """Give pending observations a short bounded chance to persist."""
         flush_deadline = time.monotonic() + self.SHUTDOWN_FLUSH_SECONDS
         while time.monotonic() < flush_deadline:
-            if not self.process_batch():
+            archived_flows_count = self._archive_new_flows()
+            self._enrich_queued_ips()
+            if not archived_flows_count:
                 break
