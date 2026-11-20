@@ -220,11 +220,11 @@ class IPInfo(IAsyncModule):
             if status == "no_record" and ipaddress.ip_address(ip).is_global
             else self.negative_cache_ttl
         )
-        data = {"reverse_dns": hostname} if hostname else {}
+        rdns_info = {"reverse_dns": hostname} if hostname else {}
         self.db.set_ip_info(
             ip,
             {
-                **data,
+                **rdns_info,
                 "reverse_dns_lookup": {
                     "status": status,
                     "checked_at": now,
@@ -236,7 +236,7 @@ class IPInfo(IAsyncModule):
             self.failed_rdns_lookups.pop(ip, None)
         else:
             self._store_negative_cache(self.failed_rdns_lookups, ip)
-        return data or False
+        return rdns_info or False
 
     def get_rdns(self, ip: str) -> dict | bool:
         """
@@ -246,10 +246,10 @@ class IPInfo(IAsyncModule):
         """
         if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
             return False
-        previous = self.db.get_ip_info(ip, "reverse_dns_lookup")
+        previous_lookup = self.db.get_ip_info(ip, "reverse_dns_lookup")
         if (
-            isinstance(previous, dict)
-            and previous.get("retry_after", 0) > time.time()
+            isinstance(previous_lookup, dict)
+            and previous_lookup.get("retry_after", 0) > time.time()
         ):
             return False
         try:
@@ -265,7 +265,7 @@ class IPInfo(IAsyncModule):
                 # reverse_dns is a valid hostname, store it
                 return self._save_rdns_result(ip, "resolved", reverse_dns)
         except (socket.gaierror, socket.herror) as error:
-            no_record = (
+            is_record_missing = (
                 isinstance(error, socket.herror) and error.errno in (1, 4)
             ) or (
                 isinstance(error, socket.gaierror)
@@ -276,7 +276,7 @@ class IPInfo(IAsyncModule):
                 )
             )
             return self._save_rdns_result(
-                ip, "no_record" if no_record else "error"
+                ip, "no_record" if is_record_missing else "error"
             )
         except OSError:
             return self._save_rdns_result(ip, "error")
@@ -483,10 +483,13 @@ class IPInfo(IAsyncModule):
 
     async def gather_tasks_and_shutdown_gracefully(self) -> None:
         """Stop the optional MAC database retry before draining lookups."""
-        reader = getattr(self, "reading_mac_db_task", None)
-        if isinstance(reader, asyncio.Task) and not reader.done():
-            reader.cancel()
-            await asyncio.gather(reader, return_exceptions=True)
+        mac_db_reader_task = getattr(self, "reading_mac_db_task", None)
+        if (
+            isinstance(mac_db_reader_task, asyncio.Task)
+            and not mac_db_reader_task.done()
+        ):
+            mac_db_reader_task.cancel()
+            await asyncio.gather(mac_db_reader_task, return_exceptions=True)
         await super().gather_tasks_and_shutdown_gracefully()
 
     async def shutdown_gracefully(self):
