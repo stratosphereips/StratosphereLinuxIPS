@@ -11,7 +11,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.input_profilers.zeek import ZeekJSON
 from slips_files.common.flow_classifier import FlowClassifier
 from tests.module_factory import ModuleFactory
@@ -136,8 +135,8 @@ def test_mdns_names_follow_address_record_owners(
             "gateway_mac": "aa:bb:cc:dd:ee:01",
             "local_network": "192.168.1.0/24",
         }
-        store = HostProfileStore(path, "old-run", lambda _: network, ["en0"])
-        store.observe_flow(
+        store = module_factory.create_host_profile_store_obj(path, "old-run", lambda _: network, ["en0"])
+        store.save_host_identity_from_flow(
             SimpleNamespace(
                 type_="conn",
                 interface="en0",
@@ -151,8 +150,7 @@ def test_mdns_names_follow_address_record_owners(
                 "INSERT INTO facts VALUES (?,?,'mdns_name','storm.local',100,100,1)",
                 ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.112"),
             )
-        HostProfileStore.set_host_annotation(
-            path,
+        store.set_host_annotation(
             "192.168.1.112",
             "gateway:aa:bb:cc:dd:ee:01",
             "iPad-Storm",
@@ -165,21 +163,21 @@ def test_mdns_names_follow_address_record_owners(
             )
             assert not error
             flow = FlowClassifier().convert_to_flow_obj(json.loads(json.dumps(asdict(flow))))
-            store.observe_flow(flow)
+            store.save_host_identity_from_flow(flow)
         # A new network must establish ownership before inheriting the old name.
         network = {
             "gateway_mac": "aa:bb:cc:dd:ee:02",
             "local_network": "192.168.1.0/24",
         }
-        current = HostProfileStore(path, "new-run", lambda _: network, ["en0"])
+        current = module_factory.create_host_profile_store_obj(path, "new-run", lambda _: network, ["en0"])
         for row in rows:
             flow, error = parser.process_line(
                 {"type": "dns.log", "interface": "en0", "data": row}
             )
             assert not error
-            current.observe_flow(flow)
-        names = HostProfileStore.annotations_for_ips(
-            path, ["192.168.1.1", "192.168.1.112", "fd9f:2ebd:5f8::112"]
+            current.save_host_identity_from_flow(flow)
+        names = current.get_annotations_of_ips(
+            ["192.168.1.1", "192.168.1.112", "fd9f:2ebd:5f8::112"]
         )
         assert names["192.168.1.1"] == {"name": "", "note": ""}
         if expected:

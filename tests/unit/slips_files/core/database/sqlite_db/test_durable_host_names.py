@@ -5,7 +5,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
@@ -34,8 +33,8 @@ def test_learned_names_survive_network_changes_and_restarts(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    home = HostProfileStore(path, "first-run", lambda _: state, ["en0"])
-    home._save(
+    home = _factory.create_host_profile_store_obj(path, "first-run", lambda _: state, ["en0"])
+    home._save_host_facts(
         "192.168.1.128",
         "en0",
         100,
@@ -43,20 +42,20 @@ def test_learned_names_survive_network_changes_and_restarts(
         observed_traffic=True,
     )
     guest_state = {**state, "gateway_mac": "aa:bb:cc:dd:ee:02"}
-    guest = HostProfileStore(path, "guest-run", lambda _: guest_state, ["en0"])
-    guest._save(
+    guest = _factory.create_host_profile_store_obj(path, "guest-run", lambda _: guest_state, ["en0"])
+    guest._save_host_facts(
         "192.168.1.128",
         "en0",
         200,
         [("mac", "02:00:00:00:00:99")],
         observed_traffic=True,
     )
-    unknown = HostProfileStore.identities_for_ips(
-        path, ["192.168.1.128"], ["gateway:aa:bb:cc:dd:ee:02"]
+    unknown = guest.get_identities_of_ips(
+        ["192.168.1.128"], ["gateway:aa:bb:cc:dd:ee:02"]
     )
     assert unknown["192.168.1.128"]["name"] == ""
-    returned = HostProfileStore(path, "returned-run", lambda _: state, ["en0"])
-    returned.observe_flow(
+    returned = _factory.create_host_profile_store_obj(path, "returned-run", lambda _: state, ["en0"])
+    returned.save_host_identity_from_flow(
         SimpleNamespace(
             type_="conn",
             interface="en0",
@@ -66,7 +65,7 @@ def test_learned_names_survive_network_changes_and_restarts(
             smac="00:08:9b:d1:04:d2",
         )
     )
-    assert HostProfileStore.identities_for_ips(path, ["192.168.1.128"])[
+    assert returned.get_identities_of_ips(["192.168.1.128"])[
         "192.168.1.128"
     ] == {
         "name": value,
@@ -92,30 +91,30 @@ def test_learned_name_follows_mac_but_not_reassigned_ip(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         100,
         [("mac", "00:08:9b:d1:04:d2"), ("hostname", "elhuevito")],
         observed_traffic=True,
     )
-    store._save(
+    store._save_host_facts(
         new_ip,
         "en0",
         200,
         [("mac", "00:08:9b:d1:04:d2")],
         observed_traffic=True,
     )
-    store._save(
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         300,
         [("mac", "02:00:00:00:00:99")],
         observed_traffic=True,
     )
-    identities = HostProfileStore.identities_for_ips(
-        path, ["192.168.1.128", new_ip]
+    identities = store.get_identities_of_ips(
+        ["192.168.1.128", new_ip]
     )
     assert identities[new_ip]["name"] == "elhuevito"
     assert identities["192.168.1.128"]["name"] == ""
@@ -135,16 +134,15 @@ def test_live_mac_rejects_an_old_address_name_before_archival(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         100,
         [("mac", "00:08:9b:d1:04:d2"), ("hostname", "elhuevito")],
         observed_traffic=True,
     )
-    identities = HostProfileStore.identities_for_ips(
-        path,
+    identities = store.get_identities_of_ips(
         ["192.168.1.128"],
         current_macs={"192.168.1.128": "02:00:00:00:00:99"},
     )
@@ -177,30 +175,29 @@ def test_unverified_names_are_not_device_names(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store._save_host_facts(
         "192.168.1.128", "en0", 100, [(kind, value)], observed_traffic=True
     )
     assert (
-        HostProfileStore.identities_for_ips(path, ["192.168.1.128"])[
+        store.get_identities_of_ips(["192.168.1.128"])[
             "192.168.1.128"
         ]["name"]
         == ""
     )
 
 
-def test_missing_database_is_not_created_for_name_reads(
+def test_new_store_knows_no_identities(
     tmp_path: Path,
 ) -> None:
-    """Keep name lookup read-only when no permanent store exists.
+    """Return no identity for an address the store has never seen.
 
     Parameters:
-        tmp_path: Directory without an identity database.
+        tmp_path: Directory of a new identity database.
     """
     _factory = ModuleFactory()
-    path = tmp_path / "missing.sqlite"
-    assert HostProfileStore.identities_for_ips(path, ["192.168.1.128"]) == {}
-    assert not path.exists()
+    store = _factory.create_host_profile_store_obj(tmp_path / "new.sqlite")
+    assert store.get_identities_of_ips(["192.168.1.128"]) == {}
 
 
 @pytest.mark.parametrize(
@@ -222,15 +219,15 @@ def test_name_can_follow_an_earlier_mac_but_never_a_later_owner(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         mac_time,
         [("mac", "00:08:9b:d1:04:d2")],
         observed_traffic=True,
     )
-    store._save(
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         150,
@@ -238,7 +235,7 @@ def test_name_can_follow_an_earlier_mac_but_never_a_later_owner(
         from_packet=True,
     )
     assert (
-        HostProfileStore.identities_for_ips(path, ["192.168.1.128"])[
+        store.get_identities_of_ips(["192.168.1.128"])[
             "192.168.1.128"
         ]["name"]
         == expected
@@ -270,8 +267,8 @@ def test_core_hostname_uses_durable_network_identity(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: home, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: home, ["en0"])
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         100,
@@ -279,11 +276,9 @@ def test_core_hostname_uses_durable_network_identity(
         observed_traffic=True,
     )
     assert (
-        HostProfileStore.hostname_for_profile(
+        store.get_hostname_of_profile(
             "profile_192.168.1.128",
-            path,
             [{**home, "gateway_mac": gateway}],
-            "run",
             cached_name=cached_name,
         )
         == expected
@@ -304,15 +299,15 @@ def test_a_conflicting_cache_mac_cannot_override_archived_ownership(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run", lambda _: home, ["en0"])
-    store._save(
+    store = _factory.create_host_profile_store_obj(path, "run", lambda _: home, ["en0"])
+    store._save_host_facts(
         "192.168.1.128",
         "en0",
         100,
         [("mac", "00:08:9b:d1:04:d2"), ("hostname", "elhuevito")],
         observed_traffic=True,
     )
-    store._save(
+    store._save_host_facts(
         "192.168.1.130",
         "en0",
         200,
@@ -320,11 +315,9 @@ def test_a_conflicting_cache_mac_cannot_override_archived_ownership(
         observed_traffic=True,
     )
     assert (
-        HostProfileStore.hostname_for_profile(
+        store.get_hostname_of_profile(
             "profile_192.168.1.128",
-            path,
             [home],
-            "run",
             current_mac="02:00:00:00:00:99",
             cached_name="different-device",
         )
@@ -333,19 +326,18 @@ def test_a_conflicting_cache_mac_cannot_override_archived_ownership(
 
 
 @pytest.mark.parametrize("profileid", ["not-an-address", "profile_bad"])
-def test_invalid_core_profile_does_not_create_an_identity_database(
+def test_invalid_core_profile_has_no_hostname(
     tmp_path: Path, profileid: str
 ) -> None:
-    """Reject invalid profile identifiers without mutating permanent storage.
+    """Reject invalid profile identifiers, even when a cached name exists.
 
     Parameters:
-        tmp_path: Independent nonexistent store location.
+        tmp_path: Directory of a new identity database.
         profileid: Invalid profile identifier.
     """
     _factory = ModuleFactory()
-    path = tmp_path / "missing.sqlite"
+    store = _factory.create_host_profile_store_obj(tmp_path / "new.sqlite")
     assert (
-        HostProfileStore.hostname_for_profile(profileid, path, [], "run")
+        store.get_hostname_of_profile(profileid, [], cached_name="cached")
         is None
     )
-    assert not path.exists()

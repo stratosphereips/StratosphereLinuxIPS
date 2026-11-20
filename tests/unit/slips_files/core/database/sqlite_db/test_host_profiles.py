@@ -43,8 +43,8 @@ def test_poll_gap_keeps_hotspot_hosts_on_the_hotspot(
         else dict(hotspot, history=[home])
     )
     path = tmp_path / "hosts.sqlite"
-    store = HostProfileStore(path, "roaming", lambda _: state, ["en0"])
-    store.observe_flow(
+    store = _factory.create_host_profile_store_obj(path, "roaming", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             type_="conn",
             interface="en0",
@@ -59,7 +59,7 @@ def test_poll_gap_keeps_hotspot_hosts_on_the_hotspot(
         ("172.20.10.1", "ce:3f:36:4b:ad:64"),
         ("172.20.10.2", "12:5b:07:66:c0:22"),
     ]:
-        profiles = HostProfileStore.read(path, address)
+        profiles = store.get_host_profiles(address)
         assert len(profiles) == 1
         assert profiles[0]["network_id"] == "gateway:ce:3f:36:4b:ad:64"
         assert any(
@@ -82,22 +82,22 @@ def test_arp_name_follows_mac_and_does_not_follow_a_reused_ip(
     path = tmp_path / "hosts.sqlite"
     state = {"local_network": "192.168.1.0/24", "gateway_ip": "192.168.1.1",
              "gateway_mac": "aa:bb:cc:dd:ee:01" if known_network else ""}
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store.observe_flow(SimpleNamespace(type_="arp", interface="en0", starttime=100,
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(type_="arp", interface="en0", starttime=100,
         saddr="192.168.1.20", daddr="192.168.1.1", operation="request",
         src_hw="02:00:00:00:00:20", smac="02:00:00:00:00:20", dst_hw="00:00:00:00:00:00", dmac="ff:ff:ff:ff:ff:ff"))
-    network_id = HostProfileStore.read(path, "192.168.1.20")[0]["network_id"]
-    HostProfileStore.set_host_annotation(path, "192.168.1.20", network_id, "iPad-Storm", "Tablet")
-    restarted = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    restarted.observe_flow(SimpleNamespace(type_="conn", interface="en0", starttime=200,
+    network_id = store.get_host_profiles("192.168.1.20")[0]["network_id"]
+    store.set_host_annotation("192.168.1.20", network_id, "iPad-Storm", "Tablet")
+    restarted = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    restarted.save_host_identity_from_flow(SimpleNamespace(type_="conn", interface="en0", starttime=200,
         saddr="fe80::20", daddr="ff02::fb", smac="02:00:00:00:00:20", dmac="33:33:00:00:00:fb"))
-    assert HostProfileStore.read(path, "fe80::20")[0]["user_name"] == "iPad-Storm"
-    restarted.observe_flow(SimpleNamespace(type_="arp", interface="en0", starttime=300,
+    assert restarted.get_host_profiles("fe80::20")[0]["user_name"] == "iPad-Storm"
+    restarted.save_host_identity_from_flow(SimpleNamespace(type_="arp", interface="en0", starttime=300,
         saddr="192.168.1.20", daddr="192.168.1.1", operation="request",
         src_hw="02:00:00:00:00:99", smac="02:00:00:00:00:99", dst_hw="00:00:00:00:00:00", dmac="ff:ff:ff:ff:ff:ff"))
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
-    assert HostProfileStore.read(path, "fe80::20")[0]["user_name"] == "iPad-Storm"
-    assert not any(fact["kind"] == "mac" for fact in HostProfileStore.read(path, "192.168.1.1")[0]["facts"])
+    assert restarted.get_host_profiles("192.168.1.20")[0]["user_name"] == ""
+    assert restarted.get_host_profiles("fe80::20")[0]["user_name"] == "iPad-Storm"
+    assert not any(fact["kind"] == "mac" for fact in restarted.get_host_profiles("192.168.1.1")[0]["facts"])
 
 
 @pytest.mark.parametrize(
@@ -130,11 +130,11 @@ def test_endpoint_mac_requires_local_ownership(
     path = tmp_path / "hosts.sqlite"
     state = {"local_network": "192.168.1.0/24", "gateway_ip": "192.168.1.1",
              "gateway_mac": "aa:bb:cc:dd:ee:01"}
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store.observe_flow(SimpleNamespace(type_=kind, interface="en0", starttime=100,
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(type_=kind, interface="en0", starttime=100,
         saddr="192.168.1.20", daddr=target, smac="02:00:00:00:00:20",
         dmac=target_mac, dst_hw=hardware))
-    facts = HostProfileStore.read(path, target)[0]["facts"]
+    facts = store.get_host_profiles(target)[0]["facts"]
     assert [fact["value"] for fact in facts if fact["kind"] == "mac"] == (
         [expected] if expected else []
     )
@@ -150,21 +150,21 @@ def test_repeated_mac_writes_are_throttled_and_changes_are_immediate(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {
         "local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
     }, ["en0"])
     flow = SimpleNamespace(type_="conn", interface="en0", starttime=100,
         saddr="192.168.1.20", daddr="8.8.8.8", smac="02:00:00:00:00:20")
     with patch.object(host_profiles.time, "monotonic", return_value=100):
-        store.observe_flow(flow)
-        store.observe_flows([flow] * 100)
+        store.save_host_identity_from_flow(flow)
+        store.save_host_identity_from_flows([flow] * 100)
     with sqlite3.connect(path) as connection:
         assert connection.execute("SELECT SUM(observations) FROM facts WHERE kind='mac'").fetchone()[0] == 1
     with patch.object(host_profiles.time, "monotonic", return_value=101):
         flow.smac = "02:00:00:00:00:99"
-        store.observe_flow(flow)
+        store.save_host_identity_from_flow(flow)
     with patch.object(host_profiles.time, "monotonic", return_value=162):
-        store.observe_flow(flow)
+        store.save_host_identity_from_flow(flow)
     with sqlite3.connect(path) as connection:
         assert dict(connection.execute("SELECT value, observations FROM facts WHERE kind='mac'")) == {
             "02:00:00:00:00:20": 1, "02:00:00:00:00:99": 2,
@@ -179,19 +179,19 @@ def test_legacy_annotation_uses_mac_observed_when_named(tmp_path: Path) -> None:
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {
         "local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
     }, ["en0"])
     for ip, mac, timestamp in [("192.168.1.20", "02:00:00:00:00:20", 100),
                                ("192.168.1.20", "02:00:00:00:00:99", 300),
                                ("fe80::20", "02:00:00:00:00:20", 400)]:
-        store.observe_flow(SimpleNamespace(type_="conn", interface="en0", starttime=timestamp,
+        store.save_host_identity_from_flow(SimpleNamespace(type_="conn", interface="en0", starttime=timestamp,
             saddr=ip, daddr="8.8.8.8", smac=mac))
     with sqlite3.connect(path) as connection:
         connection.execute("INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
             ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20", "iPad-Storm", "Tablet", 200))
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
-    alias = HostProfileStore.read(path, "fe80::20")[0]
+    assert store.get_host_profiles("192.168.1.20")[0]["user_name"] == ""
+    alias = store.get_host_profiles("fe80::20")[0]
     assert (alias["user_name"], alias["user_note"]) == ("iPad-Storm", "Tablet")
 
 
@@ -209,8 +209,8 @@ def test_network_scoped_annotations_do_not_name_an_unverified_reused_ip(
         "gateway_mac": "aa:bb:cc:dd:ee:01",
         "local_network": "192.168.1.0/24",
     }
-    store = HostProfileStore(path, "old", lambda _: old, ["en0"])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "old", lambda _: old, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             type_="conn",
             interface="en0",
@@ -219,22 +219,21 @@ def test_network_scoped_annotations_do_not_name_an_unverified_reused_ip(
             daddr="8.8.8.8",
         )
     )
-    HostProfileStore.set_host_annotation(
-        path,
+    store.set_host_annotation(
         "192.168.1.112",
         "gateway:aa:bb:cc:dd:ee:01",
         "iPad-Storm",
         "Tablet",
     )
     assert (
-        HostProfileStore.annotations_for_ips(
-            path, ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:02"]
+        store.get_annotations_of_ips(
+            ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:02"]
         )
         == {}
     )
     assert (
-        HostProfileStore.annotations_for_ips(
-            path, ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:01"]
+        store.get_annotations_of_ips(
+            ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:01"]
         )["192.168.1.112"]["name"]
         == "iPad-Storm"
     )
@@ -263,8 +262,8 @@ def test_replayed_identity_never_uses_a_later_network(
         "local_network": "192.168.1.0/24",
         "history": [previous] if recorded else [],
     }
-    store = HostProfileStore(path, "replay", lambda _: current, ["en0"])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "replay", lambda _: current, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             type_="dns",
             interface="en0",
@@ -278,7 +277,7 @@ def test_replayed_identity_never_uses_a_later_network(
             mdns_bindings=["storm.local|192.168.1.112"],
         )
     )
-    profiles = HostProfileStore.read(path, "192.168.1.112")
+    profiles = store.get_host_profiles("192.168.1.112")
     assert profiles[0]["network_id"] == (
         "gateway:aa:bb:cc:dd:ee:01" if recorded else "run:replay"
     )
@@ -304,9 +303,9 @@ def test_ambiguous_mdns_answers_never_transfer_a_saved_device_name(
         "gateway_mac": "aa:bb:cc:dd:ee:01",
         "local_network": "192.168.1.0/24",
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
     for ip in ("192.168.1.112", "192.168.1.1"):
-        store.observe_flow(
+        store.save_host_identity_from_flow(
             SimpleNamespace(
                 interface="en0",
                 starttime=100,
@@ -326,15 +325,14 @@ def test_ambiguous_mdns_answers_never_transfer_a_saved_device_name(
                 "INSERT INTO facts VALUES (?, ?, 'mac', ?, 100, 100, 1)",
                 ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.112", ipad_mac),
             )
-    HostProfileStore.set_host_annotation(
-        path,
+    store.set_host_annotation(
         "192.168.1.112",
         "gateway:aa:bb:cc:dd:ee:01",
         "iPad-Storm",
         "Tablet",
     )
-    names = HostProfileStore.annotations_for_ips(
-        path, ["192.168.1.112", "192.168.1.1"]
+    names = store.get_annotations_of_ips(
+        ["192.168.1.112", "192.168.1.1"]
     )
     assert names["192.168.1.112"] == {"name": "iPad-Storm", "note": "Tablet"}
     assert names["192.168.1.1"] == {"name": "", "note": ""}
@@ -355,27 +353,27 @@ def test_dns_advertisements_do_not_establish_device_network_presence(
     home = {"changed_at":100,"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
     guest = {"changed_at":200,"gateway_mac":"aa:bb:cc:dd:ee:02","local_network":"192.168.1.0/24"}
     ip = "192.168.1.185"
-    store = HostProfileStore(path,"home",lambda _: home,["en0"])
-    store.observe_flow(SimpleNamespace(type_="arp",interface="en0",starttime=110,
+    store = _module_factory.create_host_profile_store_obj(path,"home",lambda _: home,["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(type_="arp",interface="en0",starttime=110,
         saddr=ip,daddr="192.168.1.1",src_hw="2c:cf:67:5a:2e:bd",dst_hw="00:00:00:00:00:00"))
-    HostProfileStore.set_host_annotation(path,ip,"gateway:aa:bb:cc:dd:ee:01","homeassistant","Keep this name")
-    other = HostProfileStore(path,"guest",lambda _: guest,["en0"])
-    other.observe_flow(SimpleNamespace(type_="dns",interface="en0",starttime=210,
+    store.set_host_annotation(ip,"gateway:aa:bb:cc:dd:ee:01","homeassistant","Keep this name")
+    other = _module_factory.create_host_profile_store_obj(path,"guest",lambda _: guest,["en0"])
+    other.save_host_identity_from_flow(SimpleNamespace(type_="dns",interface="en0",starttime=210,
         saddr="192.168.1.1",daddr="224.0.0.251" if mdns else "192.168.1.100",
         sport=5353 if mdns else 53,dport=5353 if mdns else 50000,
         query="homeassistant.local",answers=[ip],
         mdns_bindings=[f"homeassistant.local|{ip}"] if mdns else []))
-    profiles = {row["network_id"]:row for row in HostProfileStore.read(path,ip)}
+    profiles = {row["network_id"]:row for row in other.get_host_profiles(ip)}
     assert profiles["gateway:aa:bb:cc:dd:ee:01"]["user_name"] == "homeassistant"
     assert profiles["gateway:aa:bb:cc:dd:ee:01"]["endpoint_last_seen"] == 110
     advertised = profiles["gateway:aa:bb:cc:dd:ee:02"]
     assert advertised["endpoint_last_seen"] is None
     assert advertised["user_name"] == ""
     assert advertised["facts"][0]["kind"] == ("mdns_hostname" if mdns else "dns_name")
-    observed = HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:02"])
+    observed = other.get_last_observation_times(["gateway:aa:bb:cc:dd:ee:02"])
     assert ip not in observed
     assert observed["192.168.1.1"] == 210
-    assert HostProfileStore.network_for_observation(path,ip,210)["network_id"] == ""
+    assert other.get_network_of_observation(ip,210)["network_id"] == ""
 
 
 @pytest.mark.parametrize("kind", ["hostname", "reverse_dns"])
@@ -392,19 +390,19 @@ def test_cached_private_identity_does_not_create_a_named_network_visit(
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
     home = {"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
-    store = HostProfileStore(path,"home",lambda _: home,["en0"])
-    store.observe_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
+    store = _module_factory.create_host_profile_store_obj(path,"home",lambda _: home,["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
         saddr="192.168.1.185",daddr="8.8.8.8"))
     guest = {"gateway_mac":"aa:bb:cc:dd:ee:02","local_network":"192.168.1.0/24"}
-    other = HostProfileStore(path,"guest",lambda _: guest,["en0"])
+    other = _module_factory.create_host_profile_store_obj(path,"guest",lambda _: guest,["en0"])
     monkeypatch.setattr(host_profiles.time,"time",lambda:300)
     if kind == "hostname":
-        other.observe_hostname("homeassistant","profile_192.168.1.185")
+        other.save_hostname_of_profile("homeassistant","profile_192.168.1.185")
     else:
-        other.observe_ip_info("192.168.1.185",{"reverse_dns":"homeassistant.local"})
-    profiles = HostProfileStore.read(path,"192.168.1.185")
+        other.save_host_identity_from_ip_info("192.168.1.185",{"reverse_dns":"homeassistant.local"})
+    profiles = other.get_host_profiles("192.168.1.185")
     assert {row["network_id"] for row in profiles} == {"gateway:aa:bb:cc:dd:ee:01","run:guest"}
-    assert HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:02"]) == {}
+    assert other.get_last_observation_times(["gateway:aa:bb:cc:dd:ee:02"]) == {}
     assert next(row for row in profiles if row["network_id"]=="run:guest")["endpoint_last_seen"] is None
 
 
@@ -420,15 +418,17 @@ def test_legacy_observations_do_not_prove_endpoint_presence(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
-    HostProfileStore(path,"old",lambda _: {},[])
+    store = _module_factory.create_host_profile_store_obj(path,"old",lambda _: {},[])
     with sqlite3.connect(path) as connection:
         connection.execute("INSERT INTO hosts VALUES ('gateway:guest','192.168.1.185','Stratoguest',100,500)")
         connection.execute("INSERT INTO host_observations VALUES ('gateway:guest','192.168.1.185',100,500)")
         if not migrated:
             connection.execute("DROP TABLE host_endpoint_observations")
-    assert HostProfileStore.observation_times(path,["gateway:guest"]) == {}
-    assert HostProfileStore.network_for_observation(path,"192.168.1.185",300)["network_id"] == ""
-    profiles = HostProfileStore.read(path,"192.168.1.185")
+    # the next Slips start adds the tables an older store is missing
+    store = _module_factory.create_host_profile_store_obj(path, "new")
+    assert store.get_last_observation_times(["gateway:guest"]) == {}
+    assert store.get_network_of_observation("192.168.1.185",300)["network_id"] == ""
+    profiles = store.get_host_profiles("192.168.1.185")
     assert profiles[0]["network_label"] == "Stratoguest"
     assert profiles[0]["endpoint_last_seen"] is None
     with sqlite3.connect(path) as connection:
@@ -444,12 +444,12 @@ def test_public_endpoint_keeps_its_public_identity_namespace(tmp_path: Path) -> 
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
     state = {"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
-    store = HostProfileStore(path,"home",lambda _: state,["en0"])
-    store.observe_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
+    store = _module_factory.create_host_profile_store_obj(path,"home",lambda _: state,["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
         saddr="192.168.1.20",daddr="8.8.8.8"))
-    assert HostProfileStore.network_for_observation(path,"8.8.8.8",110) == {
+    assert store.get_network_of_observation("8.8.8.8",110) == {
         "network_id":"public","network_name":"","network_label":"Public internet"}
-    assert HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:01"])["8.8.8.8"] == 110
+    assert store.get_last_observation_times(["gateway:aa:bb:cc:dd:ee:01"])["8.8.8.8"] == 110
 
 
 def test_only_parsed_traffic_advances_network_observations(
@@ -468,8 +468,8 @@ def test_only_parsed_traffic_advances_network_observations(
         "local_network": "192.168.1.0/24",
         "changed_at": 100,
     }
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime=110,
@@ -482,12 +482,12 @@ def test_only_parsed_traffic_advances_network_observations(
         "slips_files.core.database.sqlite_db.host_profiles.time.time",
         lambda: 500,
     )
-    store.observe_hostname("refreshed-name", "profile_192.168.1.20")
-    store.observe_ip_info("192.168.1.20", {"reverse_dns": "refreshed.local"})
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["last_seen"] == 110
+    store.save_hostname_of_profile("refreshed-name", "profile_192.168.1.20")
+    store.save_host_identity_from_ip_info("192.168.1.20", {"reverse_dns": "refreshed.local"})
+    assert store.get_host_profiles("192.168.1.20")[0]["last_seen"] == 110
     assert (
-        HostProfileStore.observation_times(
-            path, ["gateway:aa:bb:cc:dd:ee:01"]
+        store.get_last_observation_times(
+            ["gateway:aa:bb:cc:dd:ee:01"]
         )["192.168.1.20"]
         == 110
     )
@@ -496,8 +496,8 @@ def test_only_parsed_traffic_advances_network_observations(
         "local_network": "192.168.1.0/24",
         "changed_at": 200,
     }
-    other = HostProfileStore(path, "second", lambda _: state, ["en0"])
-    other.observe_flow(
+    other = _module_factory.create_host_profile_store_obj(path, "second", lambda _: state, ["en0"])
+    other.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime=210,
@@ -507,14 +507,14 @@ def test_only_parsed_traffic_advances_network_observations(
         )
     )
     assert (
-        HostProfileStore.observation_times(
-            path, ["gateway:aa:bb:cc:dd:ee:02"]
+        other.get_last_observation_times(
+            ["gateway:aa:bb:cc:dd:ee:02"]
         )["192.168.1.20"]
         == 210
     )
     assert (
-        HostProfileStore.observation_times(
-            path, ["gateway:aa:bb:cc:dd:ee:01"]
+        other.get_last_observation_times(
+            ["gateway:aa:bb:cc:dd:ee:01"]
         )["192.168.1.20"]
         == 110
     )
@@ -525,27 +525,27 @@ def test_triage_persists_by_verified_mac_and_isolates_reused_ips(tmp_path: Path)
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
     state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01"}
-    store = HostProfileStore(path, "first", lambda _: state, ["en0"])
-    store.observe_flow(SimpleNamespace(interface="en0", starttime="100", type_="dhcp",
+    store = _module_factory.create_host_profile_store_obj(path, "first", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(SimpleNamespace(interface="en0", starttime="100", type_="dhcp",
         saddr="192.168.1.20", daddr="192.168.1.1", host_name="laptop", smac="02:00:00:00:00:20"))
-    HostProfileStore.set_host_annotation(path, "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "Laptop", "Check DNS")
-    HostProfileStore.set_host_triage(path, "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "to_analyze", ["lab", "dns"])
-    restarted = HostProfileStore(path, "second", lambda _: state, ["en0"])
-    restarted.observe_flow(SimpleNamespace(interface="en0", starttime="200", type_="dhcp",
+    store.set_host_annotation("192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "Laptop", "Check DNS")
+    store.set_host_triage("192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "to_analyze", ["lab", "dns"])
+    restarted = _module_factory.create_host_profile_store_obj(path, "second", lambda _: state, ["en0"])
+    restarted.save_host_identity_from_flow(SimpleNamespace(interface="en0", starttime="200", type_="dhcp",
         saddr="192.168.1.21", daddr="192.168.1.1", host_name="laptop", smac="02:00:00:00:00:20"))
-    assert HostProfileStore.triage_for_ips(path, ["192.168.1.21"])["192.168.1.21"] == {
+    assert restarted.get_triage_of_ips(["192.168.1.21"])["192.168.1.21"] == {
         "status": "to_analyze", "labels": ["lab", "dns"]}
-    assert HostProfileStore.annotations_for_ips(path, ["192.168.1.21"])["192.168.1.21"]["note"] == "Check DNS"
+    assert restarted.get_annotations_of_ips(["192.168.1.21"])["192.168.1.21"]["note"] == "Check DNS"
     state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:02"}
-    other = HostProfileStore(path, "third", lambda _: state, ["en0"])
-    other.observe_flow(SimpleNamespace(interface="en0", starttime="300", type_="dhcp",
+    other = _module_factory.create_host_profile_store_obj(path, "third", lambda _: state, ["en0"])
+    other.save_host_identity_from_flow(SimpleNamespace(interface="en0", starttime="300", type_="dhcp",
         saddr="192.168.1.20", daddr="192.168.1.1", host_name="unrelated", smac="02:00:00:00:00:30"))
-    profiles = HostProfileStore.triage_for_profiles(path, ["192.168.1.20"])
+    profiles = other.get_triage_of_profiles(["192.168.1.20"])
     assert profiles[("gateway:aa:bb:cc:dd:ee:02", "192.168.1.20")] == {"status": "", "labels": []}
-    assert HostProfileStore.triage_for_ips(path, ["192.168.1.20"])["192.168.1.20"] == {"status": "", "labels": []}
+    assert other.get_triage_of_ips(["192.168.1.20"])["192.168.1.20"] == {"status": "", "labels": []}
     assert profiles[("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20")]["status"] == "to_analyze"
-    HostProfileStore.set_host_triage(path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:01", "", [])
-    assert HostProfileStore.triage_for_ips(path, ["192.168.1.20", "192.168.1.21"])["192.168.1.21"] == {"status": "", "labels": []}
+    other.set_host_triage("192.168.1.21", "gateway:aa:bb:cc:dd:ee:01", "", [])
+    assert other.get_triage_of_ips(["192.168.1.20", "192.168.1.21"])["192.168.1.21"] == {"status": "", "labels": []}
 
 
 def test_own_interface_mac_is_saved_without_gateway_mac_confusion(tmp_path: Path) -> None:
@@ -555,13 +555,13 @@ def test_own_interface_mac_is_saved_without_gateway_mac_confusion(tmp_path: Path
     state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
              "host_ip": "192.168.1.163", "mac": "02:00:00:00:00:20",
              "addresses": [{"ip": "192.168.1.163"}, {"ip": "fe80::20"}]}
-    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: state, ["en0"])
     for ip in ("192.168.1.163", "fe80::20", "8.8.8.8"):
-        store.observe_flow(SimpleNamespace(interface="en0", starttime="100", type_="conn", saddr=ip, daddr="1.1.1.1"))
+        store.save_host_identity_from_flow(SimpleNamespace(interface="en0", starttime="100", type_="conn", saddr=ip, daddr="1.1.1.1"))
     for ip in ("192.168.1.163", "fe80::20"):
-        macs = [fact["value"] for fact in HostProfileStore.read(path, ip)[0]["facts"] if fact["kind"] == "mac"]
+        macs = [fact["value"] for fact in store.get_host_profiles(ip)[0]["facts"] if fact["kind"] == "mac"]
         assert macs == [state["mac"]]
-    assert not any(fact["kind"] == "mac" for fact in HostProfileStore.read(path, "8.8.8.8")[0]["facts"])
+    assert not any(fact["kind"] == "mac" for fact in store.get_host_profiles("8.8.8.8")[0]["facts"])
 
 
 def test_review_write_failure_rolls_back_name_and_note(tmp_path: Path) -> None:
@@ -572,13 +572,13 @@ def test_review_write_failure_rolls_back_name_and_note(tmp_path: Path) -> None:
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {}, [])
-    store.observe_hostname("dns.google", "profile_8.8.8.8")
-    HostProfileStore.set_host_annotation(path, "8.8.8.8", "public", "DNS", "Original note")
-    with patch.object(HostProfileStore, "set_host_triage", side_effect=sqlite3.OperationalError("write failed")):
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {}, [])
+    store.save_hostname_of_profile("dns.google", "profile_8.8.8.8")
+    store.set_host_annotation("8.8.8.8", "public", "DNS", "Original note")
+    with patch.object(HostProfileStore, "_save_host_triage", side_effect=sqlite3.OperationalError("write failed")):
         with pytest.raises(sqlite3.OperationalError):
-            HostProfileStore.set_host_annotation(path, "8.8.8.8", "public", "Changed", "Changed note", "reviewed", ["dns"])
-    annotation = HostProfileStore.annotations_for_ips(path, ["8.8.8.8"])["8.8.8.8"]
+            store.set_host_annotation("8.8.8.8", "public", "Changed", "Changed note", "reviewed", ["dns"])
+    annotation = store.get_annotations_of_ips(["8.8.8.8"])["8.8.8.8"]
     assert annotation == {"name": "DNS", "note": "Original note"}
 
 
@@ -596,10 +596,10 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    first = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
+    first = _module_factory.create_host_profile_store_obj(path, "run-one", lambda _: state, ["en0"])
     assert path.stat().st_mode & 0o777 == 0o600
     assert path.parent.stat().st_mode & 0o777 == 0o700
-    first.observe_flow(
+    first.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="100",
@@ -610,7 +610,7 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
             uri="/about",
         )
     )
-    first.observe_ip_info(
+    first.save_host_identity_from_ip_info(
         "8.8.8.8",
         {
             "reverse_dns": "dns.google",
@@ -618,7 +618,7 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
             "threatintelligence": {"source": ["feed-one"]},
         },
     )
-    first.observe_flow(
+    first.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="110",
@@ -633,8 +633,8 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:02",
     }
-    second = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
-    second.observe_flow(
+    second = _module_factory.create_host_profile_store_obj(path, "run-two", lambda _: state, ["en0"])
+    second.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="200",
@@ -646,8 +646,8 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
         )
     )
 
-    local = HostProfileStore.read(path, "192.168.1.20")
-    public = HostProfileStore.read(path, "8.8.8.8")
+    local = second.get_host_profiles("192.168.1.20")
+    public = second.get_host_profiles("8.8.8.8")
 
     assert len(local) == 2
     assert local[0]["network_id"] == "gateway:aa:bb:cc:dd:ee:02"
@@ -681,8 +681,8 @@ def test_ipv6_link_local_uses_the_captured_network(tmp_path: Path) -> None:
         "local_network": "192.168.1.0/24",
         "gateway_mac": "AA:BB:CC:DD:EE:01",
     }
-    store = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "run-one", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="100",
@@ -692,7 +692,7 @@ def test_ipv6_link_local_uses_the_captured_network(tmp_path: Path) -> None:
         )
     )
 
-    profile = HostProfileStore.read(path, "fe80::1234")[0]
+    profile = store.get_host_profiles("fe80::1234")[0]
     assert profile["network_id"] == "gateway:aa:bb:cc:dd:ee:01"
     assert profile["network_label"] == ("Link-local on en0 · router aa:bb:cc:dd:ee:01")
 
@@ -711,8 +711,8 @@ def test_user_annotation_persists_for_exact_network_host(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    store = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "run-one", lambda _: state, ["en0"])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="100",
@@ -722,13 +722,13 @@ def test_user_annotation_persists_for_exact_network_host(
         )
     )
     network_id = "gateway:aa:bb:cc:dd:ee:01"
-    HostProfileStore.set_host_annotation(
-        path, "192.168.1.20", network_id, "My iPad", "Tablet in the kitchen"
+    store.set_host_annotation(
+        "192.168.1.20", network_id, "My iPad", "Tablet in the kitchen"
     )
 
     state["gateway_mac"] = "aa:bb:cc:dd:ee:02"
-    another = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
-    another.observe_flow(
+    another = _module_factory.create_host_profile_store_obj(path, "run-two", lambda _: state, ["en0"])
+    another.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="200",
@@ -737,17 +737,17 @@ def test_user_annotation_persists_for_exact_network_host(
             daddr="8.8.8.8",
         )
     )
-    profiles = HostProfileStore.read(path, "192.168.1.20")
+    profiles = another.get_host_profiles("192.168.1.20")
 
     assert profiles[0]["user_name"] == ""
     assert profiles[1]["user_name"] == "My iPad"
     assert profiles[1]["user_note"] == "Tablet in the kitchen"
-    assert HostProfileStore.annotations_for_ips(path, ["192.168.1.20"])[
+    assert another.get_annotations_of_ips(["192.168.1.20"])[
         "192.168.1.20"
     ] == {"name": "", "note": ""}
 
-    HostProfileStore.set_host_annotation(path, "192.168.1.20", network_id, "", "")
-    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
+    another.set_host_annotation("192.168.1.20", network_id, "", "")
+    assert another.get_host_profiles("192.168.1.20")[1]["user_name"] == ""
 
 
 @pytest.mark.parametrize("known_mac", [False, True])
@@ -762,7 +762,7 @@ def test_saved_name_uses_mac_before_confirmed_mdns(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
-    HostProfileStore(path, "run-one", lambda _: {}, ["en0"])
+    store = _module_factory.create_host_profile_store_obj(path, "run-one", lambda _: {}, ["en0"])
     with sqlite3.connect(path) as connection:
         for index, ip in enumerate(("192.168.1.20", "192.168.1.21", "192.168.1.22")):
             network_id = f"gateway:aa:bb:cc:dd:ee:0{index + 1}"
@@ -792,21 +792,21 @@ def test_saved_name_uses_mac_before_confirmed_mdns(
             ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20", "Cherry", "", 1),
         )
 
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == (
+    assert store.get_host_profiles("192.168.1.21")[0]["user_name"] == (
         "" if known_mac else "Cherry"
     )
-    HostProfileStore.set_host_annotation(
-        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "Cherry II", ""
+    store.set_host_annotation(
+        "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "Cherry II", ""
     )
-    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == (
+    assert store.get_host_profiles("192.168.1.22")[0]["user_name"] == (
         "" if known_mac else "Cherry II"
     )
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry II"
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == "Cherry"
-    HostProfileStore.set_host_annotation(
-        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
+    assert store.get_host_profiles("192.168.1.21")[0]["user_name"] == "Cherry II"
+    assert store.get_host_profiles("192.168.1.20")[0]["user_name"] == "Cherry"
+    store.set_host_annotation(
+        "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
     )
-    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == ""
+    assert store.get_host_profiles("192.168.1.22")[0]["user_name"] == ""
 
 
 def test_device_annotation_survives_network_and_address_changes(
@@ -823,8 +823,8 @@ def test_device_annotation_survives_network_and_address_changes(
         "local_network": "192.168.1.0/24",
         "gateway_mac": "aa:bb:cc:dd:ee:01",
     }
-    old = HostProfileStore(path, "old-run", lambda _: network, ["en0"])
-    old.observe_flow(
+    old = _module_factory.create_host_profile_store_obj(path, "old-run", lambda _: network, ["en0"])
+    old.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="100",
@@ -848,12 +848,12 @@ def test_device_annotation_survives_network_and_address_changes(
         )
 
     network["gateway_mac"] = "aa:bb:cc:dd:ee:02"
-    current = HostProfileStore(path, "new-run", lambda _: network, ["en0"])
+    current = _module_factory.create_host_profile_store_obj(path, "new-run", lambda _: network, ["en0"])
     for ip, mac, when in (
         ("192.168.1.21", "02:00:00:00:00:20", "200"),
         ("192.168.1.20", "02:00:00:00:00:21", "201"),
     ):
-        current.observe_flow(
+        current.save_host_identity_from_flow(
             SimpleNamespace(
                 interface="en0",
                 starttime=when,
@@ -866,31 +866,34 @@ def test_device_annotation_survives_network_and_address_changes(
         )
     with sqlite3.connect(path) as connection:
         connection.execute("DROP TABLE device_annotations")
+    # the next Slips start adds the tables an older store is missing
+    current = _module_factory.create_host_profile_store_obj(
+        path, "new-run", lambda _: network, ["en0"]
+    )
 
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry"
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
-    assert HostProfileStore.annotations_for_ips(
-        path, ["192.168.1.21", "192.168.1.20"]
+    assert current.get_host_profiles("192.168.1.21")[0]["user_name"] == "Cherry"
+    assert current.get_host_profiles("192.168.1.20")[0]["user_name"] == ""
+    assert current.get_annotations_of_ips(
+        ["192.168.1.21", "192.168.1.20"]
     ) == {
         "192.168.1.21": {"name": "Cherry", "note": "My device"},
         "192.168.1.20": {"name": "", "note": ""},
     }
 
-    HostProfileStore.set_host_annotation(
-        path,
+    current.set_host_annotation(
         "192.168.1.21",
         "gateway:aa:bb:cc:dd:ee:02",
         "Cherry II",
         "Updated note",
     )
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry II"
-    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == "Cherry II"
+    assert current.get_host_profiles("192.168.1.21")[0]["user_name"] == "Cherry II"
+    assert current.get_host_profiles("192.168.1.20")[1]["user_name"] == "Cherry II"
 
-    HostProfileStore.set_host_annotation(
-        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
+    current.set_host_annotation(
+        "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
     )
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == ""
-    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
+    assert current.get_host_profiles("192.168.1.21")[0]["user_name"] == ""
+    assert current.get_host_profiles("192.168.1.20")[1]["user_name"] == ""
 
 
 @pytest.mark.parametrize(
@@ -910,7 +913,7 @@ def test_device_annotation_uses_only_unicast_macs(value: str, expected: str) -> 
         expected: Safe normalized device MAC, if any.
     """
     _module_factory = ModuleFactory()
-    assert HostProfileStore._usable_mac(value) == expected
+    assert HostProfileStore._normalize_unicast_mac(value) == expected
 
 
 @pytest.mark.parametrize(
@@ -929,8 +932,8 @@ def test_dns_answers_identify_the_answered_host(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {}, [])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {}, [])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="",
             starttime="100",
@@ -943,11 +946,11 @@ def test_dns_answers_identify_the_answered_host(
         )
     )
 
-    profile = HostProfileStore.read(path, "9.9.9.9")[0]
+    profile = store.get_host_profiles("9.9.9.9")[0]
     assert [(fact["kind"], fact["value"]) for fact in profile["facts"]] == (
         [(expected_kind, "printer.local")] if expected_kind else []
     )
-    assert HostProfileStore.read(path, "not-an-ip") == []
+    assert store.get_host_profiles("not-an-ip") == []
 
 
 def test_unknown_private_networks_do_not_merge_across_runs(
@@ -961,10 +964,10 @@ def test_unknown_private_networks_do_not_merge_across_runs(
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
     for run in ("one", "two"):
-        store = HostProfileStore(path, run, lambda _: {}, [])
-        store.observe_hostname("device-" + run, "profile_10.0.0.5")
+        store = _module_factory.create_host_profile_store_obj(path, run, lambda _: {}, [])
+        store.save_hostname_of_profile("device-" + run, "profile_10.0.0.5")
 
-    profiles = HostProfileStore.read(path, "10.0.0.5")
+    profiles = store.get_host_profiles("10.0.0.5")
     assert {profile["network_id"] for profile in profiles} == {
         "run:one",
         "run:two",
@@ -986,9 +989,9 @@ def test_distinct_clues_are_bounded_per_host_and_source(
     _module_factory = ModuleFactory()
     monkeypatch.setattr(host_profiles, "MAX_FACTS_PER_KIND", 2)
     path = tmp_path / "host_profiles.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {}, [])
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {}, [])
     for uri in ("/one", "/two", "/three", "/one"):
-        store.observe_flow(
+        store.save_host_identity_from_flow(
             SimpleNamespace(
                 interface="",
                 starttime="100",
@@ -1000,7 +1003,7 @@ def test_distinct_clues_are_bounded_per_host_and_source(
             )
         )
 
-    facts = HostProfileStore.read(path, "9.9.9.9")[0]["facts"]
+    facts = store.get_host_profiles("9.9.9.9")[0]["facts"]
     urls = {fact["value"]: fact for fact in facts if fact["kind"] == "url"}
     assert set(urls) == {"http://example.org/one", "http://example.org/two"}
     assert urls["http://example.org/one"]["observations"] == 2
@@ -1014,8 +1017,8 @@ def test_historical_flow_keeps_its_capture_time(tmp_path: Path) -> None:
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
-    store = HostProfileStore(path, "old-run", lambda _: {}, [])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "old-run", lambda _: {}, [])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="",
             starttime="2020-01-02T03:04:05+00:00",
@@ -1027,7 +1030,7 @@ def test_historical_flow_keeps_its_capture_time(tmp_path: Path) -> None:
     )
 
     expected = datetime(2020, 1, 2, 3, 4, 5, tzinfo=timezone.utc).timestamp()
-    profile = HostProfileStore.read(path, "9.9.9.9")[0]
+    profile = store.get_host_profiles("9.9.9.9")[0]
     assert profile["first_seen"] == expected
     assert profile["facts"][0]["first_seen"] == expected
 
@@ -1042,8 +1045,8 @@ def test_dhcp_request_identifies_client_before_it_has_an_address(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {}, [])
-    store.observe_flow(
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {}, [])
+    store.save_host_identity_from_flow(
         SimpleNamespace(
             interface="",
             starttime="100",
@@ -1056,7 +1059,7 @@ def test_dhcp_request_identifies_client_before_it_has_an_address(
         )
     )
 
-    profile = HostProfileStore.read(path, "10.0.0.25")[0]
+    profile = store.get_host_profiles("10.0.0.25")[0]
     assert {fact["value"] for fact in profile["facts"]} == {
         "new-device",
         "02:00:00:00:00:25",
@@ -1085,9 +1088,9 @@ def test_country_facts_are_real_public_geolocations(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
-    store = HostProfileStore(path, "run", lambda _: {}, [])
-    store.observe_ip_info(ip, {"reverse_dns": "example.org", "geocountry": country})
-    profile = HostProfileStore.read(path, ip)[0]
+    store = _module_factory.create_host_profile_store_obj(path, "run", lambda _: {}, [])
+    store.save_host_identity_from_ip_info(ip, {"reverse_dns": "example.org", "geocountry": country})
+    profile = store.get_host_profiles(ip)[0]
     saved_countries = {
         fact["value"] for fact in profile["facts"] if fact["kind"] == "country"
     }
@@ -1099,7 +1102,7 @@ def test_country_facts_are_real_public_geolocations(
                 "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (profile["network_id"], ip, "country", country, 1, 1, 1),
             )
-        profile = HostProfileStore.read(path, ip)[0]
+        profile = store.get_host_profiles(ip)[0]
         assert all(fact["kind"] != "country" for fact in profile["facts"])
 
 
@@ -1113,14 +1116,14 @@ def test_network_names_survive_runs_and_label_existing_host_profiles(
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "hosts.sqlite"
-    unidentified = HostProfileStore(path, "run-one", lambda _: {}, [])
-    unidentified.observe_hostname("early-device", "profile_192.168.1.20")
+    unidentified = _module_factory.create_host_profile_store_obj(path, "run-one", lambda _: {}, [])
+    unidentified.save_hostname_of_profile("early-device", "profile_192.168.1.20")
     state = {
         "local_network": "192.168.1.0/24",
         "gateway_mac": "AA:BB:CC:DD:EE:01",
     }
-    identified = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
-    identified.observe_flow(
+    identified = _module_factory.create_host_profile_store_obj(path, "run-two", lambda _: state, ["en0"])
+    identified.save_host_identity_from_flow(
         SimpleNamespace(
             interface="en0",
             starttime="200",
@@ -1129,17 +1132,61 @@ def test_network_names_survive_runs_and_label_existing_host_profiles(
             daddr="8.8.8.8",
         )
     )
-    router_id = HostProfileStore.network_id_for_state(state, "run-two")
-    HostProfileStore.set_network_name(path, router_id, "Home Wi-Fi")
-    HostProfileStore.set_network_name(path, "run:run-one", "Home Wi-Fi")
+    router_id = HostProfileStore.build_network_id(state, "run-two")
+    identified.set_network_name(router_id, "Home Wi-Fi")
+    identified.set_network_name("run:run-one", "Home Wi-Fi")
 
-    profiles = HostProfileStore.read(path, "192.168.1.20")
+    profiles = identified.get_host_profiles("192.168.1.20")
 
     assert router_id == "gateway:aa:bb:cc:dd:ee:01"
     assert {profile["network_label"] for profile in profiles} == {"Home Wi-Fi"}
     assert {profile["network_name"] for profile in profiles} == {"Home Wi-Fi"}
-    assert HostProfileStore.network_names(path, [router_id])[router_id] == (
+    assert identified.get_network_names([router_id])[router_id] == (
         "Home Wi-Fi"
     )
-    HostProfileStore.set_network_name(path, router_id, "")
-    assert router_id not in HostProfileStore.network_names(path, [router_id])
+    identified.set_network_name(router_id, "")
+    assert router_id not in identified.get_network_names([router_id])
+
+
+def test_failed_flow_batch_saves_none_of_its_flows(tmp_path: Path) -> None:
+    """Roll back the whole batch, so the module can safely read it again.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    store = _module_factory.create_host_profile_store_obj(
+        tmp_path / "hosts.sqlite"
+    )
+
+    def yield_one_flow_then_fail():
+        yield SimpleNamespace(
+            type_="conn", starttime="100", saddr="8.8.8.8", daddr="1.1.1.1"
+        )
+        raise RuntimeError("flow could not be parsed")
+
+    with pytest.raises(RuntimeError):
+        store.save_host_identity_from_flows(yield_one_flow_then_fail())
+
+    assert store.get_host_profiles("8.8.8.8") == []
+    # the connection is usable again after the rollback
+    store.save_host_identity_from_flow(
+        SimpleNamespace(
+            type_="conn", starttime="100", saddr="8.8.8.8", daddr="1.1.1.1"
+        )
+    )
+    assert len(store.get_host_profiles("8.8.8.8")) == 1
+
+
+def test_store_files_are_private_to_the_slips_user(tmp_path: Path) -> None:
+    """Keep host names and notes unreadable for other users of the machine.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    db_path = tmp_path / "host_profiles" / "hosts.sqlite"
+    _module_factory.create_host_profile_store_obj(db_path)
+
+    assert db_path.parent.stat().st_mode & 0o777 == 0o700
+    assert db_path.stat().st_mode & 0o777 == 0o600
