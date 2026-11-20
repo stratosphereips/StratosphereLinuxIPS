@@ -101,6 +101,7 @@ class DNS(BaseFlow):
     TTLs: str
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
+    mdns_bindings: List[str] = field(default_factory=list)
 
     answers: List[str] = field(default_factory=list)
     type_: str = field(default="dns")
@@ -110,6 +111,11 @@ class DNS(BaseFlow):
         # so convert to a list
         self.answers = (
             [self.answers] if isinstance(self.answers, str) else self.answers
+        )
+        self.mdns_bindings = (
+            [self.mdns_bindings]
+            if isinstance(self.mdns_bindings, str) and self.mdns_bindings
+            else self.mdns_bindings or []
         )
 
 

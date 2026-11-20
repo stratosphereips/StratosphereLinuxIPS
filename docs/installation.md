@@ -476,6 +476,46 @@ The controller is also required for a native systemd service's `MemoryMax`
 setting. Without it, `MemoryMax` cannot protect the Pi, even if the unit
 accepts the setting. A native service can use `CPUQuota` immediately.
 
+### Resource limits and updates
+
+**Limiting CPU and memory**
+
+- Set a hard CPU cap with `--cpus=2`. ✅ This actually limits usage.
+  ❌ `--cpu-shares` does not cap anything — it only changes who wins when the
+  Pi is already busy.
+- Leave some memory for the operating system itself, don't give it all to Slips.
+  - So if you have:
+    - 8 GiB Pi → use ` --memory=6g --memory-swap=6g` (caps Slips at 6 GiB, no swap)
+    - 16 GiB Pi → use a 10 GiB cap instead
+- To confirm the limits are really applied, check these files inside the
+  running container:
+  - `/sys/fs/cgroup/memory.max`
+  - `/sys/fs/cgroup/cpu.max`
+
+This is best practice for any long-running container on limited hardware, not
+just Slips.
+
+**Safely replacing/updating a container**
+
+1. Stop the old container gracefully (don't kill it).
+2. Back up its config and the whole `permanent/` directory first — this holds
+   the whitelist, the peer's private key, the trust database, and
+   authentication files. Losing these means losing the Pi's identity.
+3. Bind mount `permanent/` and `output/` into the new container so it picks
+   up where the old one left off.
+4. Keep every Pi's `permanent/` folder separate — never copy one Pi's peer
+   key into another device. ❌ Sharing keys between devices breaks the trust
+   model.
+5. Keep the old (stopped) container around for a while in case you need to
+   roll back.
+
+**If you're keeping history from a live interface**
+
+Let's say you have a current slips run and want to update Slips, after safely updating the
+container, then, When rerunning slips, use the `--keep-history` parameter and reuse the same interface name
+ and output directory as before, so the old SQLite history is kept instead of started fresh.
+
+
 ## Running Slips' Docker in the Pi
 
 This command

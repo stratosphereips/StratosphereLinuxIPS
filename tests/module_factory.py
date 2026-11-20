@@ -228,6 +228,37 @@ class ModuleFactory:
         assert db.get_used_redis_port() == port
         return db
 
+    def create_host_profile_store_obj(
+        self,
+        db_path,
+        run_name="run",
+        network_state_lookup=None,
+        interfaces=None,
+    ):
+        """Create a real host profile store on a test database file.
+
+        Parameters:
+            db_path: Path of the SQLite file, usually inside tmp_path.
+            run_name: Name that isolates unknown networks of this run.
+            network_state_lookup: Returns the network state of an interface.
+            interfaces: Monitored interface names.
+
+        Returns:
+            Store connected to db_path.
+        """
+        from slips_files.core.database.sqlite_db.host_profiles import (
+            HostProfileStore,
+        )
+
+        return HostProfileStore(
+            self.logger,
+            db_path,
+            os.getpid(),
+            run_name,
+            network_state_lookup or (lambda _: {}),
+            interfaces or [],
+        )
+
     def create_main_obj(self):
         try:
             from slips.main import Main
@@ -592,6 +623,24 @@ class ModuleFactory:
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_host_profile_obj(self, mock_db):
+        from modules.host_profile.host_profile import HostProfile
+
+        host_profile = HostProfile(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        host_profile._setup()
+        host_profile.print = Mock()
+        return host_profile
 
     def create_checker_obj(self):
         from slips_files.core.helpers.checker import Checker
