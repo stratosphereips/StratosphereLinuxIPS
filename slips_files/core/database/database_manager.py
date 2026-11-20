@@ -20,7 +20,10 @@ from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
-from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from slips_files.core.database.sqlite_db.host_profiles import (
+    HOST_PROFILES_DB_SUBPATH,
+    HostProfileStore,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
@@ -75,6 +78,7 @@ class DBManager:
         self.source_module: str = ""
         self.regex_generator_storage = None
         self.t_cell_storage = None
+        self.host_profile_store = None
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -1229,6 +1233,9 @@ class DBManager:
     def get_all_flows(self, *args, **kwargs):
         return self.sqlite.get_all_flows(*args, **kwargs)
 
+    def get_flows_after_rowid(self, *args, **kwargs):
+        return self.sqlite.get_flows_after_rowid(*args, **kwargs)
+
     def get_all_contacted_ips_in_profileid_twid(self, *args, **kwargs):
         """
         Get all the contacted IPs in a given profile and TW
@@ -1460,22 +1467,48 @@ class DBManager:
     def is_a_port_scanner(self, *args, **kwargs):
         return self.rdb.is_a_port_scanner(*args, **kwargs)
 
+    def _get_host_profile_store(self) -> HostProfileStore:
+        if self.host_profile_store is None:
+            self.host_profile_store = HostProfileStore(
+                self.logger,
+                Path(self.conf.permanent_dir()) / HOST_PROFILES_DB_SUBPATH,
+                self.main_pid,
+                f"{self.output_dir}:{self.main_pid}",
+                self.rdb.get_network_state,
+                self.all_interfaces,
+            )
+        return self.host_profile_store
+
     def get_hostname_from_profile(
         self, *args: Any, **kwargs: Any
     ) -> str | None:
-        return HostProfileStore.hostname_for_profile(
+        return self._get_host_profile_store().get_hostname_of_profile(
             *args,
             **kwargs,
-            path=Path(self.conf.permanent_dir())
-            / "host_profiles"
-            / "hosts.sqlite",
             network_states=[
                 self.rdb.get_network_state(interface)
                 for interface in self.all_interfaces
             ],
-            run_name=f"{self.output_dir}:{self.main_pid}",
             current_mac=self.rdb.get_mac_addr_from_profile(*args, **kwargs),
             cached_name=self.rdb.get_hostname_from_profile(*args, **kwargs),
+        )
+
+    def get_cached_hostname_from_profile(self, *args, **kwargs):
+        return self.rdb.get_hostname_from_profile(*args, **kwargs)
+
+    def save_host_identity_from_flows(self, *args, **kwargs):
+        return self._get_host_profile_store().save_host_identity_from_flows(
+            *args, **kwargs
+        )
+
+    def save_host_identity_from_ip_info(self, *args, **kwargs):
+        return self._get_host_profile_store().save_host_identity_from_ip_info(
+            *args, **kwargs
+        )
+
+    def save_hostname_of_profile(self, *args, **kwargs):
+        return self._get_host_profile_store().save_hostname_of_profile(
+            *args, **kwargs
         )
 
     def add_host_name_to_profile(self, *args, **kwargs):
@@ -1651,6 +1684,8 @@ class DBManager:
             self.regex_generator_storage.close()
         if self.t_cell_storage:
             self.t_cell_storage.close()
+        if self.host_profile_store:
+            self.host_profile_store.close()
 
     def close_all_dbs(self):
         self.rdb.r.close()

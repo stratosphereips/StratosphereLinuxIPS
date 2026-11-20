@@ -470,6 +470,44 @@ class SQLiteDB(ISQLite):
                 flow_list.append(json.loads(flow[1]))
         return flow_list
 
+    def get_flows_after_rowid(
+        self, table: str, last_rowid: int, max_flows: int
+    ) -> list[tuple[int, dict]]:
+        """Read the flows stored after a given row, oldest first.
+
+        Lets a module follow a flows table in small steps, by remembering
+        the rowid of the last flow it handled, instead of loading the
+        whole table.
+
+        Parameters:
+            table: "flows" or "altflows".
+            last_rowid: Rowid of the last flow the caller already handled.
+            max_flows: Most flows to return.
+
+        Returns:
+            Rowid and parsed flow pairs. A flow that can't be parsed comes
+            back as an empty dict, so the caller can still move past it.
+        """
+        table = self._validate_table_name(table)
+        cursor = self.execute(
+            f"SELECT rowid, flow FROM {table} WHERE rowid > ? "
+            "ORDER BY rowid LIMIT ?",
+            (last_rowid, max_flows),
+        )
+        if cursor is None:
+            return []
+
+        flows_after_rowid = []
+        for rowid, serialized_flow in self.fetchall(cursor):
+            try:
+                flow = json.loads(serialized_flow)
+            except (TypeError, ValueError):
+                flow = {}
+            if not isinstance(flow, dict):
+                flow = {}
+            flows_after_rowid.append((int(rowid), flow))
+        return flows_after_rowid
+
     def set_flow_label(self, uids: List[str], new_label: str):
         """
         sets the given new_label to each flow in the uids list
