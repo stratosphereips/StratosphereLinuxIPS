@@ -1187,7 +1187,7 @@ anomaly_detection_services:
   detect_new_services: true
   # Maximum local computers whose answering ports are remembered. Bounds memory use;
   # hosts beyond this limit are skipped, rather than judged from incomplete learning.
-  max_hosts: 1024
+  max_hosts: 2048
   # Maximum new-service warnings for one host per UTC hour, using connection start times.
   # Limits warning floods across all its ports; other checks use max_alerts_per_service_hour.
   max_new_services_per_host_hour: 10
@@ -1238,13 +1238,14 @@ anomaly_detection_services:
   # Host activity does not keep every port active: an unused port can expire on an active host.
   retention_days: 90
   # Maximum services with learned clients, and separately the total ports remembered across hosts.
-  # Each list has this cap to limit memory. Extra service records are skipped when full.
+  # Each list has this cap to limit memory. When service models fill it, less useful
+  # remote models are replaced first so local services can continue learning.
   # An incomplete host port list stops new-port warnings, so missing learning cannot cause false alarms.
-  max_services: 4096
+  max_services: 8192
   # Maximum client-to-service records across all services; limits memory.
   # A computer connecting to two services uses two records.
   # An incomplete client list stops unfamiliar-client warnings for the affected service.
-  max_clients: 4096
+  max_clients: 8192
   # Maximum clients remembered for one service; prevents one busy port using all memory.
   # If a client list is incomplete, Slips stops reporting unfamiliar clients for that service.
   max_clients_per_service: 64

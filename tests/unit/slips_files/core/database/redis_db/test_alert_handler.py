@@ -1,9 +1,15 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict
 from types import SimpleNamespace
+import shutil
+import socket
+import subprocess
+import time
 
 import pytest
+import redis
 from unittest.mock import MagicMock, Mock
 import json
 from unittest.mock import ANY
@@ -351,40 +357,140 @@ def test_update_accumulated_threat_level(
     alert_handler.r.zincrby.assert_called_once_with(*expected_call)
 
 
-def test_delete_evidence():
+@pytest.mark.parametrize("removed", [False, True])
+def test_delete_evidence(removed: bool) -> None:
+    """Return whether an evidence ID existed without a separate delete.
+
+    Parameters:
+        removed: Whether Redis deleted the evidence field.
+    """
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
+    alert_handler.r.eval.return_value = int(removed)
 
     profileid = "profile123"
     twid = "twid456"
     evidence_id = "evidence_123"
 
-    alert_handler.delete_evidence(profileid, twid, evidence_id)
+    assert alert_handler.delete_evidence(profileid, twid, evidence_id) is removed
 
-    alert_handler.r.hdel.assert_called_once_with(
-        f"{profileid}_{twid}_evidence", evidence_id
+    assert alert_handler.r.eval.call_args.args[2:] == (
+        f"{profileid}_{twid}_evidence",
+        "number_of_evidence",
+        evidence_id,
     )
+    alert_handler.r.hdel.assert_not_called()
+    alert_handler.r.decr.assert_not_called()
 
 
 @pytest.mark.parametrize(
     "initial_value, expected_value",
     [
-        # Testcase 1: No previous value
         (None, 0),
-        # Testcase 2: Previous value exists
-        ("10", 0),
+        ("10", None),
+        ("-3", 5),
     ],
 )
-def test_init_evidence_number(initial_value, expected_value):
+def test_init_evidence_number(
+    initial_value: str | None, expected_value: int | None
+) -> None:
+    """Keep a live count and repair an older negative one from retained IDs.
+
+    Parameters:
+        initial_value: Counter value before evidence handler starts.
+        expected_value: Repaired value, or None when no repair is needed.
+    """
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
+    alert_handler.r.setnx.return_value = initial_value is None
     alert_handler.r.get.return_value = initial_value
+    alert_handler.r.scan_iter.return_value = [
+        "profile_10.0.0.1_timewindow1_evidence",
+        "profile_10.0.0.2_timewindow1_evidence",
+    ]
+    alert_handler.r.hlen.side_effect = [2, 3]
 
     alert_handler.init_evidence_number()
 
-    alert_handler.r.set.assert_called_once_with(
-        "number_of_evidence", expected_value
+    alert_handler.r.setnx.assert_called_once_with("number_of_evidence", 0)
+    if initial_value == "-3":
+        alert_handler.r.set.assert_called_once_with(
+            "number_of_evidence", expected_value
+        )
+    else:
+        alert_handler.r.set.assert_not_called()
+        alert_handler.r.scan_iter.assert_not_called()
+
+
+def test_evidence_count_survives_duplicate_writes_and_deletes() -> None:
+    """Check the record and counter together against a real Redis server."""
+    handler = ModuleFactory().create_alert_handler_obj()
+    server = shutil.which("redis-server")
+    if not server:
+        pytest.skip("redis-server is unavailable")
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        port = listener.getsockname()[1]
+    process = subprocess.Popen(
+        [server, "--bind", "127.0.0.1", "--port", str(port),
+         "--save", "", "--appendonly", "no", "--loglevel", "warning"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
+    try:
+        client = redis.Redis(host="127.0.0.1", port=port, decode_responses=True)
+        for _ in range(100):
+            try:
+                client.ping()
+                break
+            except redis.ConnectionError:
+                time.sleep(0.05)
+        else:
+            pytest.fail("isolated Redis server did not start")
+
+        handler.r = client
+        handler.add_profile = Mock()
+        handler.set_flow_causing_evidence = Mock()
+        handler._get_more_info_about_evidence = Mock(side_effect=lambda item: item)
+        evidence = Evidence(
+            evidence_type=EvidenceType.SSH_SUCCESSFUL,
+            description="Observed SSH login",
+            attacker=Attacker(Direction.SRC, IoCType.IP, "10.0.0.1"),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID("10.0.0.1"),
+            timewindow=TimeWindow(1),
+            uid=["connection-1"],
+            timestamp="1233242354.3",
+        )
+        evidence_key = "profile_10.0.0.1_timewindow1_evidence"
+        counter = handler.constants.NUMBER_OF_EVIDENCE
+        handler.init_evidence_number()
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            writes = [pool.submit(handler.set_evidence, evidence, False)
+                      for _ in range(40)]
+            assert sum(job.result() for job in writes) == 1
+        assert client.hlen(evidence_key) == int(client.get(counter)) == 1
+
+        handler.init_evidence_number()
+        assert int(client.get(counter)) == 1
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            deletes = [pool.submit(handler.delete_evidence,
+                                   "profile_10.0.0.1", "timewindow1", evidence.id)
+                       for _ in range(40)]
+            assert sum(job.result() for job in deletes) == 1
+        assert client.hlen(evidence_key) == int(client.get(counter)) == 0
+        assert not handler.delete_evidence(
+            "profile_10.0.0.1", "timewindow1", evidence.id
+        )
+        assert int(client.get(counter)) == 0
+
+        client.hset(evidence_key, mapping={"legacy-a": "{}", "legacy-b": "{}"})
+        client.set(counter, -7174)
+        handler.init_evidence_number()
+        assert client.hlen(evidence_key) == int(client.get(counter)) == 2
+    finally:
+        process.terminate()
+        process.wait(timeout=5)
 
 
 @pytest.mark.parametrize(
@@ -425,9 +531,7 @@ def test_set_evidence(
     db.channels.EVIDENCE_ADDED = "evidence_added"
 
     db.r = Mock()
-    db.r.hget = Mock(return_value=evidence_exists)
-    db.r.hset = Mock()
-    db.r.incr = Mock()
+    db.r.eval = Mock(return_value=int(expected))
 
     test_ip = "192.168.1.1"
 
@@ -461,13 +565,11 @@ def test_set_evidence(
     assert evidence.evidence_signal == expected_signal
 
     if expected:
-        db.r.hset.assert_called_once()
-        db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
         if notify:
             db.publish.assert_called_once()
         else:
             db.publish.assert_not_called()
-        stored_evidence = json.loads(db.r.hset.call_args.args[2])
+        stored_evidence = json.loads(db.r.eval.call_args.args[5])
         assert stored_evidence["evidence_signal"] == expected_signal.name
         if notify:
             published_evidence = json.loads(db.publish.call_args.args[1])
@@ -477,8 +579,15 @@ def test_set_evidence(
             published_evidence = json.loads(db.publish.call_args.args[1])
             assert published_evidence == stored_evidence
     else:
-        db.r.hset.assert_not_called()
         db.publish.assert_not_called()
+    assert db.r.eval.call_args.args[2:5] == (
+        "profile_192.168.1.1_timewindow1_evidence",
+        db.constants.NUMBER_OF_EVIDENCE,
+        evidence.id,
+    )
+    db.r.hget.assert_not_called()
+    db.r.hset.assert_not_called()
+    db.r.incr.assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -109,7 +109,7 @@ teach Slips that a new client is normal.
 | Setting | Default | What it does and why |
 | --- | --- | --- |
 | `detect_new_services` | `true` | Report a local TCP or UDP port first seen answering after the host's `training_hours` window. This catches services that had no training connections at all. The module itself must also be enabled. Set this to `false` to keep only the client, hour and connection-length checks. |
-| `max_hosts` | `1024` | Maximum local computers whose answering ports are remembered. This bounds memory; additional hosts are skipped rather than judged from missing learning. |
+| `max_hosts` | `2048` | Maximum local computers whose answering ports are remembered across retained networks. This bounds memory; additional hosts are skipped rather than judged from missing learning. |
 | `max_new_services_per_host_hour` | `10` | Maximum new-service evidence records for one computer per UTC hour of connection timestamps, across all its ports. This prevents a burst of new ports from flooding evidence. The usual per-service limit still applies to client, hour and length findings. |
 
 For example, set `training_hours: 0.0167`, leave Cherry without inbound
@@ -211,14 +211,27 @@ short and long connections.
 | `adapt_known_clients` | `true` | After initial training, keep learning from successful connections by known clients when no unusual behavior was found. This lets normal habits change gradually. `false` stops this automatic learning; `mode: train` still learns. Unfamiliar clients are not added automatically after training. |
 | `history_days` | `56` | Days of past connection times kept to learn usual hours. Older times are forgotten so routines can change and memory stays limited. This setting does not delete the list of known clients or the saved connection lengths. |
 | `retention_days` | `90` | Forget a service, client or host after this many inactive days, measured using connection timestamps. Answered connections keep a port active; successful connections keep a known client active. Observed host traffic keeps its inventory active; the capture computer also has a quiet-host refresh. Inactive ports expire even on an active host. A returning host needs fresh training; a forgotten port or client may be reported as unfamiliar. |
-| `max_services` | `4096` | Maximum service/client baselines, and separately the maximum total ports in the local-host inventory. Each list has this cap. This bounds memory. Full client-model storage skips extra services. A host whose port list is incomplete stops producing new-service findings, rather than misclassifying forgotten ports. |
-| `max_clients` | `4096` | Maximum number of client-to-service records across all services. One computer connecting to two services uses two records. This limits total memory spent remembering clients. |
+| `max_services` | `8192` | Maximum service/client baselines, and separately the maximum total ports in the local-host inventory. Each list has this cap. This bounds memory. When service models fill the cap, Slips replaces an untrained or older remote model before skipping a local service. A host whose port list is incomplete stops producing new-service findings, rather than misclassifying forgotten ports. |
+| `max_clients` | `8192` | Maximum number of client-to-service records across all services. One computer connecting to two services uses two records. When full, Slips reclaims a remote service model with clients before skipping a new local-service client. |
 | `max_clients_per_service` | `64` | Maximum clients remembered for one service. This prevents one busy port from using all the available client records. |
 
 If either client limit prevents Slips from remembering everyone for a service,
 it stops reporting unfamiliar clients for that service. Otherwise, a missing
 entry could falsely make a known client appear new. Checks for unusual hours
-and lengths can still work. Slips logs a warning when these limits are reached.
+and lengths can still work. Slips warns when a local service or host cannot fit;
+new remote service models are skipped at capacity without repeated warnings.
+Remote service models can be replaced under pressure because a fresh model
+restarts training rather than treating a forgotten client as new. Local service
+models are protected from this replacement. Limits remain strict if only local
+models fill them or one service reaches `max_clients_per_service`.
+Once the service cap is full, new remote services are skipped rather than
+continually replacing other remote models. Existing remote models continue to
+work. This keeps busy Internet traffic from consuming detector time and memory
+needed for local services.
+On restart, a previously truncated local client model is safely retrained if
+its per-service limit has room. Its old incomplete client list is discarded;
+Slips does not relabel that list as complete or report forgotten clients as
+new. The separate local answering-port inventory remains intact.
 
 The three minimum observed-day settings must each be between `1` and
 `history_days`. Lower limits let checks start sooner but give Slips fewer

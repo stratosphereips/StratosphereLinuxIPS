@@ -92,6 +92,10 @@ from modules.web_interface.history import (
     initialize_history,
     network_connection_scope,
 )
+from slips_files.core.database.sqlite_db.detection_history import (
+    EVIDENCE_INTERFACE_SQL,
+    EVIDENCE_NETWORK_ID_SQL,
+)
 from modules.p2p_trust.catchup import CatchupStore, network_scope
 from slips_files.core.database.redis_db.redis_auth import (
     ensure_web_password_matches_redis_password,
@@ -296,6 +300,7 @@ class RunDataReader:
             saved_view: Use saved event times instead of the current live clock.
         """
         self.redis_port = redis_port
+        self.cache_redis_port = cache_redis_port
         self.output_dir = Path(output_dir)
         self.sqlite_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = (
@@ -4479,8 +4484,20 @@ class RunDataReader:
                     clauses.append(f"profile_ip IN ({placeholders})")
                     params.extend(profiles)
                 if device_id:
-                    clauses.append("device_key(profile_ip) = ?")
-                    params.append(device_id)
+                    keys = self._device_key_map()
+                    device_ips = [
+                        address
+                        for address, key in keys.items()
+                        if key == device_id
+                    ]
+                    if device_id not in keys:
+                        device_ips.append(device_id)
+                    if device_ips:
+                        marks = ",".join("?" for _ in device_ips)
+                        clauses.append(f"profile_ip IN ({marks})")
+                        params.extend(device_ips)
+                    else:
+                        clauses.append("0 = 1")
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
@@ -6078,6 +6095,7 @@ class RunDataReader:
             query: Selected capture network and view filters.
             live_identity: Optional freshly read profile fields to verify MACs.
         """
+        network_ids = self._annotation_networks(query)
         stored = HostProfileStore.identities_for_ips(
             getattr(
                 self,
@@ -6085,25 +6103,49 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             [host["ip"] for host in hosts],
-            self._annotation_networks(query),
-            {
-                ip: (record.get("fields") or {}).get("MAC", "")
-                for ip, record in (live_identity or {}).items()
-            },
+            network_ids,
+            (
+                {}
+                if network_ids
+                else {
+                    ip: (record.get("fields") or {}).get("MAC", "")
+                    for ip, record in (live_identity or {}).items()
+                }
+            ),
         )
         for host in hosts:
             identity = stored.get(host["ip"], {})
             fields = (live_identity or {}).get(host["ip"], {}).get(
                 "fields"
             ) or {}
+            scoped_local = bool(network_ids) and host.get("scope") == "local"
+            trusted_snapshot = bool(
+                identity.get("mac")
+                and identity["mac"]
+                == HostProfileStore._usable_mac(host.get("mac", ""))
+            )
+            if scoped_local and not trusted_snapshot:
+                host["hostname"] = ""
+                host["hostname_source"] = ""
+                host["dns_name"] = ""
+                host["dns_name_source"] = ""
+                host["mac"] = ""
+                host["mac_vendor"] = ""
             if identity.get("identity_changed") or (
                 identity.get("mac")
                 and host.get("mac")
                 and identity["mac"]
                 != HostProfileStore._usable_mac(host["mac"])
             ):
-                host["hostname"] = fields.get("host_name", "")
+                host["hostname"] = (
+                    fields.get("host_name", "")
+                    if not scoped_local
+                    or HostProfileStore._usable_mac(fields.get("MAC", ""))
+                    == identity.get("mac")
+                    else ""
+                )
                 host["dns_name"] = ""
+                host["mac_vendor"] = ""
                 host["dns_name_source"] = ""
             if identity.get("name"):
                 host["hostname"] = identity["name"]
@@ -6225,6 +6267,7 @@ class RunDataReader:
         ips = list(dict.fromkeys(requested.values()))
         if not ips:
             return {"names": {}}
+        network_ids = self._annotation_networks(query)
         annotations = HostProfileStore.annotations_for_ips(
             getattr(
                 self,
@@ -6232,7 +6275,7 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ips,
-            self._annotation_networks(query),
+            network_ids,
         )
 
         snapshots: Dict[str, Dict[str, Any]] = {}
@@ -6270,23 +6313,37 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ips,
-            self._annotation_networks(query),
-            {
-                ip: live_identity[index * 4 + 3]
-                for index, ip in enumerate(ips)
-                if index * 4 + 3 < len(live_identity)
-            },
+            network_ids,
+            (
+                {}
+                if network_ids
+                else {
+                    ip: live_identity[index * 4 + 3]
+                    for index, ip in enumerate(ips)
+                    if index * 4 + 3 < len(live_identity)
+                }
+            ),
         )
         names: Dict[str, Dict[str, str]] = {}
         for index, ip in enumerate(ips):
             snapshot = snapshots.get(ip, {})
-            identity_changed = bool(
-                stored.get(ip, {}).get("identity_changed")
-            ) or bool(
+            scoped_local = (
+                bool(network_ids) and not ipaddress.ip_address(ip).is_global
+            )
+            trusted_snapshot = bool(
                 stored.get(ip, {}).get("mac")
-                and snapshot.get("mac")
                 and stored[ip]["mac"]
-                != HostProfileStore._usable_mac(snapshot["mac"])
+                == HostProfileStore._usable_mac(snapshot.get("mac", ""))
+            )
+            identity_changed = (
+                bool(stored.get(ip, {}).get("identity_changed"))
+                or bool(
+                    stored.get(ip, {}).get("mac")
+                    and snapshot.get("mac")
+                    and stored[ip]["mac"]
+                    != HostProfileStore._usable_mac(snapshot["mac"])
+                )
+                or (scoped_local and not trusted_snapshot)
             )
             if identity_changed:
                 snapshot = {}
@@ -6350,7 +6407,7 @@ class RunDataReader:
                 }:
                     name = str(asn["org"])
                     source = "ASN organization"
-            if not name:
+            if not name and not identity_changed:
                 vendor = (
                     live_identity[index * 4 + 2]
                     if index * 4 + 2 < len(live_identity)
@@ -6609,7 +6666,6 @@ class RunDataReader:
         scope = getattr(self, "_active_network_scope", None)
         if scope:
             self._attach_run_database(connection)
-            scope.materialize_evidence(connection, "run_db", "scoped_")
         missing = "-1e300"
         flow_bounds = (
             f" AND fi.event_time>={float(scope.connection_start)!r}"
@@ -6871,6 +6927,7 @@ class RunDataReader:
                             connection, start is not None
                         )
                         if table == "evidence"
+                        and not getattr(self, "_active_network_scope", None)
                         else ""
                     )
                     reviews = (
@@ -6900,7 +6957,7 @@ class RunDataReader:
         bounded: bool = False,
         schema: str = "",
     ) -> str:
-        """Choose existing time or covering indexes for host finding aggregates.
+        """Choose an IP-first covering index for host finding aggregates.
 
         Parameters:
             connection: Read-only run database connection.
@@ -6919,12 +6976,10 @@ class RunDataReader:
             )
         }
         preferred = (
-            "evidence_time_cover_idx"
-            if bounded and "evidence_time_cover_idx" in indexes
-            else "evidence_group_cover_idx"
+            "evidence_group_cover_idx"
+            if "evidence_group_cover_idx" in indexes
+            else "evidence_profile_time_idx"
         )
-        if preferred not in indexes and bounded:
-            preferred = "evidence_profile_time_idx"
         return f" INDEXED BY {preferred}" if preferred in indexes else ""
 
     def _host_finding_stats(
@@ -6949,8 +7004,6 @@ class RunDataReader:
         try:
             with self._connect_sqlite() as connection:
                 scope_filter = getattr(self, "_active_network_scope", None)
-                if scope_filter:
-                    scope_filter.materialize_evidence(connection)
                 columns = {
                     str(row[1])
                     for row in connection.execute(
@@ -6970,19 +7023,14 @@ class RunDataReader:
                     {"range": ["all"], **query}, latest
                 )
                 start = self._scoped_start(query, start)
-                evidence_hint = self._host_evidence_index_hint(
-                    connection,
-                    start is not None,
-                    "main" if scope_filter else "",
-                )
-                evidence_source = (
-                    "main.evidence AS evidence" if scope_filter else "evidence"
-                )
-                scope = (
-                    " AND evidence_id IN (SELECT evidence_id FROM scope_evidence_ids)"
+                evidence_hint = (
+                    ""
                     if scope_filter
-                    else ""
+                    else self._host_evidence_index_hint(
+                        connection, start is not None
+                    )
                 )
+                scope = ""
                 values = []
                 if "evidence_time" in columns:
                     if start is not None:
@@ -7008,12 +7056,85 @@ class RunDataReader:
                     if "threat_level" in columns
                     else "-1"
                 )
+                network_index = (
+                    scope_filter
+                    and "evidence_network_time_idx"
+                    in {
+                        str(row[1])
+                        for row in connection.execute(
+                            "PRAGMA main.index_list(evidence)"
+                        )
+                    }
+                )
+
+                def accumulate(row: sqlite3.Row) -> None:
+                    """Add one network-matched record to its host totals.
+
+                    Parameters:
+                        row: Indexed evidence record with score and threat rank.
+                    """
+                    entry = result[str(row["profile_ip"])]
+                    entry["evidence"] += 1
+                    if row["score"] is not None:
+                        value = float(row["score"])
+                        entry["peak"] = max(entry["peak"] or value, value)
+                    entry["threat_rank"] = max(
+                        entry["threat_rank"], int(row["rank"])
+                    )
+
                 for offset in range(0, len(ips), 300):
                     batch = ips[offset : offset + 300]
                     marks = ",".join("?" for _ in batch)
+                    if network_index:
+                        network_id = EVIDENCE_NETWORK_ID_SQL.format(alias="")
+                        interface = EVIDENCE_INTERFACE_SQL.format(alias="")
+                        rows = connection.execute(
+                            "SELECT evidence_id,profile_ip,evidence_time,"
+                            f"{score} AS score,{threat} AS rank,"
+                            f"{network_id} AS network_id,{interface} AS interface "
+                            "FROM main.evidence INDEXED BY evidence_network_time_idx "
+                            f"WHERE profile_ip IN ({marks}){scope}",
+                            (*batch, *values),
+                        )
+                        missing: Dict[str, sqlite3.Row] = {}
+                        for row in rows:
+                            if row["evidence_time"] is None:
+                                continue
+                            if row["interface"]:
+                                if scope_filter.matches(
+                                    float(row["evidence_time"]),
+                                    str(row["network_id"] or ""),
+                                    str(row["interface"]),
+                                ):
+                                    accumulate(row)
+                                continue
+                            missing[str(row["evidence_id"])] = row
+                            if len(missing) < 300:
+                                continue
+                            ids = list(missing)
+                            selected = connection.execute(
+                                "SELECT evidence_id FROM evidence WHERE evidence_id IN ("
+                                + ",".join("?" for _ in ids)
+                                + ")",
+                                ids,
+                            )
+                            for match in selected:
+                                accumulate(missing[str(match[0])])
+                            missing.clear()
+                        if missing:
+                            ids = list(missing)
+                            selected = connection.execute(
+                                "SELECT evidence_id FROM evidence WHERE evidence_id IN ("
+                                + ",".join("?" for _ in ids)
+                                + ")",
+                                ids,
+                            )
+                            for match in selected:
+                                accumulate(missing[str(match[0])])
+                        continue
                     for row in connection.execute(
                         f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
-                        f"FROM {evidence_source}{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
+                        f"FROM evidence{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
                         (*batch, *values),
                     ):
                         result[str(row[0])] = {
@@ -7105,7 +7226,11 @@ class RunDataReader:
         )
         findings_before_page = bool(threat) or self._query_value(
             query, "sort"
-        ) in {"threat", "evidence", "peak_score"}
+        ) in {
+            "threat",
+            "evidence",
+            "peak_score",
+        }
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with self._connect_history() as connection:
             connection.execute("BEGIN")
@@ -7610,15 +7735,36 @@ class RunDataReader:
         keys = self._device_key_map()
         network_start = self._scoped_start(query, None)
         annotation_networks = self._annotation_networks(query)
+        scope = self._query_value(query, "scope")
         with self._connect_history() as connection:
+            inventory = connection.execute(
+                "SELECT ip,json_extract(data,'$.scope') AS scope FROM host_snapshots"
+            ).fetchall()
             full_total = len(
-                {
-                    keys.get(str(row[0]), str(row[0]))
-                    for row in connection.execute(
-                        "SELECT ip FROM host_snapshots"
-                    )
-                }
+                {keys.get(str(row[0]), str(row[0])) for row in inventory}
             )
+            candidate_scope = ""
+            if scope:
+                scope_keys = {
+                    keys.get(str(row["ip"]), str(row["ip"]))
+                    for row in inventory
+                    if row["scope"] == scope
+                }
+                candidate_ips = [
+                    str(row["ip"])
+                    for row in inventory
+                    if keys.get(str(row["ip"]), str(row["ip"])) in scope_keys
+                ]
+                connection.execute(
+                    "CREATE TEMP TABLE scope_device_ips(ip TEXT PRIMARY KEY) WITHOUT ROWID"
+                )
+                connection.executemany(
+                    "INSERT INTO scope_device_ips VALUES (?)",
+                    ((ip,) for ip in candidate_ips),
+                )
+                candidate_scope = (
+                    " AND hs.ip IN (SELECT ip FROM scope_device_ips)"
+                )
             latest = self._host_latest_event(connection)
             start, _, _ = self._time_bounds(query, latest)
             candidate_start = self._scoped_start(query, start)
@@ -7630,17 +7776,17 @@ class RunDataReader:
                 candidates = self._live_host_candidates(connection, scoped)
                 snapshots = connection.execute(
                     f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
-                    f"WHERE hs.ip IN ({candidates}) AND {seen} >= :live_start",
+                    f"WHERE hs.ip IN ({candidates}){candidate_scope} AND {seen} >= :live_start",
                     {"live_start": candidate_start, "live_end": 1e300},
                 ).fetchall()
             else:
                 snapshots = connection.execute(
-                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs"
+                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
+                    f"WHERE 1=1{candidate_scope}"
                 ).fetchall()
 
         ips = [str(row["ip"]) for row in snapshots]
         search = self._query_value(query, "search").lower()
-        scope = self._query_value(query, "scope")
         profile_path = getattr(
             self,
             "host_profiles_path",
@@ -7883,7 +8029,10 @@ class RunDataReader:
             Returns:
                 Comparable text or numeric value.
             """
-            representative = max(group["members"], key=lambda item: item[2])
+            representative = max(
+                group["members"],
+                key=lambda item: (":" not in item[0], item[2]),
+            )
             data = representative[1]
             values = {
                 "ip": representative[0],
@@ -7947,7 +8096,9 @@ class RunDataReader:
         items: List[Dict[str, Any]] = []
         for group in page:
             members = sorted(
-                group["members"], key=lambda item: item[2], reverse=True
+                group["members"],
+                key=lambda item: (":" not in item[0], item[2]),
+                reverse=True,
             )
             ip, snapshot, observed = members[0]
             host = dict(snapshot)
@@ -8501,11 +8652,18 @@ class RunDataReader:
     ) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         network_start = self._scoped_start(query or {}, None)
+        host_ips = self._host_ips(ip, query)
+        if self._query_value(query or {}, "device") == "1":
+            ip = next(
+                (address for address in host_ips if ":" not in address), ip
+            )
+            host_ips.sort(
+                key=lambda address: (":" in address, address != ip, address)
+            )
         host = self._live_host(ip)
         if not host.get("observed_at") and not host.get("live"):
             raise KeyError(ip)
         self._attach_current_host_scores([host])
-        host_ips = self._host_ips(ip, query)
         host["all_ips"] = host_ips
         if self._query_value(query or {}, "device") == "1":
             host["device_id"] = self._device_key_map().get(ip, ip)
@@ -9065,11 +9223,13 @@ class RunDataReader:
         except ValueError:
             max_points = 600
         max_points = max(10, min(max_points, MAX_CHART_POINTS))
-        # Slips accumulators are profile/IP-specific. MAC-derived aliases can
-        # include unrelated public IPs that share a gateway MAC, so combining
-        # their scores would fabricate a value that Slips never calculated.
-        ips = [ip]
-        placeholders = ",".join("?" for _ in ips)
+        # Slips accumulators are profile/IP-specific. Select one scored alias
+        # for a device; never add scores from different profiles together.
+        candidates = (
+            self._host_ips(ip, query)
+            if self._query_value(query, "device") == "1"
+            else [ip]
+        )
         score_column = (
             "accumulated_ratl"
             if getattr(self, "score_mode", "ratl") == "ratl"
@@ -9088,6 +9248,42 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
+            if score_column in columns and len(candidates) > 1:
+                ordered = sorted(
+                    candidates,
+                    key=lambda address: (
+                        ":" in address,
+                        address != ip,
+                        address,
+                    ),
+                )
+                for address in ordered:
+                    source_clauses = [
+                        "profile_ip = ?",
+                        f"{score_column} IS NOT NULL",
+                    ]
+                    source_params: List[Any] = [address]
+                    if (
+                        self._query_value(query, "hide_excluded") == "1"
+                        and "whitelisted" in columns
+                    ):
+                        source_clauses.append("COALESCE(whitelisted,0)=0")
+                    if start is not None:
+                        source_clauses.append("evidence_time >= ?")
+                        source_params.append(start)
+                    if end is not None:
+                        source_clauses.append("evidence_time <= ?")
+                        source_params.append(end)
+                    if connection.execute(
+                        "SELECT 1 FROM evidence WHERE "
+                        + " AND ".join(source_clauses)
+                        + " LIMIT 1",
+                        source_params,
+                    ).fetchone():
+                        ip = address
+                        break
+            ips = [ip]
+            placeholders = ",".join("?" for _ in ips)
             clauses = [f"profile_ip IN ({placeholders})"]
             params: List[Any] = list(ips)
             if (
@@ -9219,6 +9415,7 @@ class RunDataReader:
             "range": range_name,
             "bucket_seconds": bucket,
             "host_ips": ips,
+            "score_profile_ip": ip,
         }
 
     def metrics(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
@@ -9268,8 +9465,34 @@ class RunDataReader:
                 "GROUP BY CAST(bucket_ts / ? AS INTEGER) ORDER BY ts",
                 (older_bucket, older_bucket, start, older_bucket),
             ).fetchall()
+            redis_recent = connection.execute(
+                "SELECT CAST(ts / ? AS INTEGER) * ? AS ts, "
+                "AVG(run_cpu) AS run_redis_cpu, "
+                "AVG(run_memory) AS run_redis_memory, "
+                "AVG(cache_cpu) AS cache_redis_cpu, "
+                "AVG(cache_memory) AS cache_redis_memory "
+                "FROM redis_metrics_1s WHERE ts >= ? "
+                "GROUP BY CAST(ts / ? AS INTEGER) ORDER BY ts",
+                (bucket, bucket, start, bucket),
+            ).fetchall()
+            redis_older = connection.execute(
+                "SELECT CAST(bucket_ts / ? AS INTEGER) * ? AS ts, "
+                "AVG(run_cpu) AS run_redis_cpu, "
+                "AVG(run_memory) AS run_redis_memory, "
+                "AVG(cache_cpu) AS cache_redis_cpu, "
+                "AVG(cache_memory) AS cache_redis_memory "
+                "FROM redis_metrics_1m WHERE bucket_ts >= ? "
+                "GROUP BY CAST(bucket_ts / ? AS INTEGER) ORDER BY ts",
+                (older_bucket, older_bucket, start, older_bucket),
+            ).fetchall()
         merged = {float(row["ts"]): dict(row) for row in older}
         merged.update({float(row["ts"]): dict(row) for row in recent})
+        for row in redis_older:
+            if float(row["ts"]) in merged:
+                merged[float(row["ts"])].update(dict(row))
+        for row in redis_recent:
+            if float(row["ts"]) in merged:
+                merged[float(row["ts"])].update(dict(row))
         points = [merged[key] for key in sorted(merged)][-max_points:]
         return {
             "items": points,
@@ -9277,6 +9500,9 @@ class RunDataReader:
             "range": range_name,
             "max_points": max_points,
             "raw_retention_seconds": 24 * 60 * 60,
+            "redis_run_port": self.redis_port,
+            "redis_cache_port": self.cache_redis_port,
+            "redis_shared": self.redis_port == self.cache_redis_port,
         }
 
     def _module_rows(

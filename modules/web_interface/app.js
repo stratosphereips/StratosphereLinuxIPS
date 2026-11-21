@@ -27,11 +27,14 @@ const state = {
   configurationSort: { key: null, order: "asc" },
   host: null,
   hostHistory: [],
+  hostFiltersInitialized: false,
   hostOpenGeneration: 0,
   hostActivity: "alerts",
   hostActivityPreferred: false,
   hostActivityGroups: { alerts: "", evidence: "", flows: "" },
   hostActivityThreats: { alerts: "", evidence: "", flows: "" },
+  hostEvidence: { origin: "", types: [], selectedType: null, next: null,
+    total: 0, matching: 0, signature: "", loadedAt: 0 },
   alertsWorkspace: {
     severity: "", grouping: "host", host: null, alert: null, items: [], next: null,
     total: 0, listGeneration: 0, detailGeneration: 0,
@@ -245,7 +248,10 @@ function initFilterPopups() {
   ];
   definitions.push(
     ["overview", "Overview", "#overview-status .overview-card-head", "", []],
-    ["host", "Host", "#host-detail-view .compact-toolbar", "", []],
+    ["host", "Host", "#host-detail-view .compact-toolbar", "", [
+      [".excluded-visibility-toggle"], ["#host-range", "Range"],
+      ["#host-from", "From"], ["#host-to", "To"],
+    ]],
     ["firewall", "Firewall", "#firewall .toolbar", "", []],
     ["arp-poisoning", "ARP poisoning", "#arp-poisoning .toolbar", "", []],
     ["p2p", "P2P", ".p2p-network-actions", "", []],
@@ -340,6 +346,12 @@ function saveViewPreferences() {
     evidenceRecordSort: state.evidenceWorkspace.recordSort,
     evidenceRecordOrder: state.evidenceWorkspace.recordOrder,
     evidenceRecordGrouping: state.evidenceWorkspace.recordGrouping,
+    evidenceRecordSearch: state.evidenceWorkspace.recordSearch,
+    evidenceRecordOrigin: state.evidenceWorkspace.recordOrigin,
+    evidenceRecordThreat: state.evidenceWorkspace.recordThreat,
+    networkOnly: state.networkOnly,
+    networkSelection: state.networkSelection,
+    interfaceSelection: state.interfaceSelection,
     hostActivity: state.hostActivity,
     hostActivityPreferred: state.hostActivityPreferred,
     hostActivityGroups: state.hostActivityGroups,
@@ -361,8 +373,8 @@ function saveViewPreferences() {
   }
 }
 
-/** Restore shared layout or filters belonging to a verified run.
- * @param {string} key Browser storage key for layout or one analysis.
+/** Restore the latest browser filters or a previously saved run's view.
+ * @param {string} key Browser storage key for global or run-specific settings.
  */
 function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   let saved;
@@ -372,9 +384,6 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
     return;
   }
   if (!saved || typeof saved !== "object") return;
-  if (key === VIEW_PREFERENCES_KEY) {
-    saved = { columns: saved.columns, paneWidths: saved.paneWidths };
-  }
   const choices = Array.isArray(saved.rangeChoices) ? new Set(saved.rangeChoices) : null;
   Object.entries(saved.controls || {}).forEach(([id, value]) => {
     if (!VIEW_CONTROL_IDS.includes(id)) return;
@@ -405,6 +414,8 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
       }
     });
   });
+  if (typeof saved.networkOnly === "boolean") state.networkOnly = saved.networkOnly;
+  byId("network-filter").checked = state.networkOnly;
   state.hideExcluded = saved.hideExcluded !== false;
   syncExcludedVisibility();
   state.alertsWorkspace.severity = String(saved.alertSeverity || "");
@@ -414,7 +425,16 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
   ["alerts-host-sort", "alerts-item-sort"].forEach((id) => { if (!byId(id).value) byId(id).value = "time"; });
   state.evidenceWorkspace.typeFilter = String(saved.evidenceType || "");
-  state.evidenceWorkspace.recordGrouping = saved.evidenceRecordGrouping === "type" ? "type" : "";
+  state.evidenceWorkspace.recordGrouping = ["type", "threat", "module", "handling"].includes(saved.evidenceRecordGrouping)
+    ? saved.evidenceRecordGrouping : "";
+  state.evidenceWorkspace.recordSearch = String(saved.evidenceRecordSearch || "");
+  state.evidenceWorkspace.recordOrigin = ["local", "p2p"].includes(saved.evidenceRecordOrigin)
+    ? saved.evidenceRecordOrigin : "";
+  state.evidenceWorkspace.recordThreat = ["critical", "high", "medium", "low", "info",
+    "critical_or_more", "high_or_more", "medium_or_more", "low_or_more", "info_or_more"].includes(saved.evidenceRecordThreat)
+    ? saved.evidenceRecordThreat : "";
+  if (typeof saved.networkSelection === "string") state.networkSelection = saved.networkSelection;
+  if (typeof saved.interfaceSelection === "string") state.interfaceSelection = saved.interfaceSelection;
   if (["time", "type", "threat", "score", "confidence", "flows", "alert", "description"].includes(saved.evidenceRecordSort)) {
     state.evidenceWorkspace.recordSort = saved.evidenceRecordSort;
     state.evidenceWorkspace.recordOrder = saved.evidenceRecordOrder === "asc" ? "asc" : "desc";
@@ -464,6 +484,11 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   });
 }
 
+try {
+  state.networkOnly = window.localStorage.getItem("slips-network-only") !== "0";
+} catch (_) {
+  state.networkOnly = true;
+}
 restoreViewPreferences();
 /**
  * Apply the selected interface theme and optionally remember it in this browser.
@@ -492,11 +517,6 @@ try {
   // Private browsing may disable storage; keep the light default.
 }
 setTheme(storedTheme);
-try {
-  state.networkOnly = window.localStorage.getItem("slips-network-only") !== "0";
-} catch (_) {
-  state.networkOnly = true;
-}
 byId("network-filter").checked = state.networkOnly;
 byId("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light", true);
@@ -699,6 +719,11 @@ function rememberHostRecord(record) {
   else if (record.hostname) rememberHostName(record.ip, record.hostname, record.hostname_source || "Hostname");
   else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
   else if (record.mac_vendor) rememberHostName(record.ip, `${record.mac_vendor} device`, "MAC vendor");
+  const preferredIp = preferredHostIp(record);
+  if (preferredIp !== record.ip) {
+    const identity = state.hostNames.get(record.ip);
+    if (identity?.name) rememberHostName(preferredIp, identity.name, identity.source);
+  }
 }
 
 /** Fetch names for visible addresses in bounded batches. */
@@ -766,6 +791,17 @@ function hostIdentity(ip) {
   return element;
 }
 
+/** Use an IPv4 address as the representative of a grouped host when present.
+ * @param {object} row Host or device record with known addresses.
+ * @returns {string} Preferred profile address.
+ */
+function preferredHostIp(row) {
+  const ip = String(row?.ip || "");
+  if (!state.deviceView || (ip && !ip.includes(":"))) return ip;
+  return row?.device_ips?.find((address) => typeof address === "string"
+    && address.includes(".") && !address.includes(":")) || ip;
+}
+
 /** Show the representative host and the addresses merged into a device. */
 function deviceIdentity(row, field = "ip") {
   const element = document.createElement("span");
@@ -794,8 +830,13 @@ function readableEvidenceDescription(record) {
   return `Unusual HTTPS connection from ${source} to ${server}. Server ${server} was not previously seen for this host.`;
 }
 
-/** Add host names and compact MAC markers to detection descriptions. */
-function hostDescription(record, className = "") {
+/** Add host names and compact MAC markers to detection descriptions.
+ * @param {object} record Evidence whose description is displayed.
+ * @param {string} className Optional styling class.
+ * @param {boolean} linkHosts Whether addresses open their host workspaces.
+ * @returns {HTMLElement} Description with named indicators.
+ */
+function hostDescription(record, className = "", linkHosts = false) {
   const description = readableEvidenceDescription(record) || "—";
   const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
   const macs = new Set(description.match(/(?<![\w:])(?:[0-9a-f]{1,2}:){5}[0-9a-f]{1,2}(?![\w:])/gi) || []);
@@ -814,7 +855,7 @@ function hostDescription(record, className = "") {
   const matcher = new RegExp(`(${escaped.join("|")})`, "g");
   description.split(matcher).forEach((part) => {
     if (macs.has(part)) element.append(macIdentity(part));
-    else if (addresses.has(part)) element.append(hostIdentity(part));
+    else if (addresses.has(part)) element.append(linkHosts ? hostLink(part) : hostIdentity(part));
     else element.append(part);
   });
   return element;
@@ -1336,10 +1377,12 @@ function applyRunIdentity(identity) {
   if (!identity || !identity.output_dir || !identity.server_pid) return;
   const token = `${identity.output_dir}:${identity.server_pid}`;
   if (state.runIdentity && state.runIdentity !== token) {
+    saveViewPreferences();
     closeEvidenceDetail(false, true);
     closeDrawer();
     closeHost();
     resetHostActivityFilters();
+    state.hostFiltersInitialized = false;
     Object.keys(state.pages).forEach((name) => resetPage(name));
     Object.assign(state.evidenceWorkspace, {
       group: null, record: null, records: [], next: null, total: 0,
@@ -1376,7 +1419,7 @@ function applyRunIdentity(identity) {
     state.interfaceSelection = "";
     state.networkInventoryInitialized = false;
     state.networkSignature = "";
-    toast("A new Slips run is now active. Investigation state was cleared.");
+    toast("A new Slips run is active. Saved filters will be restored.");
   }
   const preferencesKey = `slips-run-view-v2:${JSON.stringify([identity.output_dir, identity.analysis_start || ""])}`;
   if (state.viewPreferencesKey !== preferencesKey) {
@@ -1393,6 +1436,7 @@ function applyRunIdentity(identity) {
     state.viewPreferencesKey = preferencesKey;
     restoreViewPreferences();
     restoreViewPreferences(preferencesKey);
+    if (!state.hostFiltersInitialized) resetHostActivityFilters();
   }
   state.runIdentity = token;
 }
@@ -1747,7 +1791,7 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
 /** Render a chart with numeric axes and optional shared time bounds.
  * @param {string} id - Target SVG ID.
  * @param {Array<object>} points - Timestamped metric values.
- * @param {Array<object>} series - Metric keys, colors and labels.
+ * @param {Array<object>} series - Metric keys, colors, labels and optional gap limits.
  * @param {Function} formatValue - Numeric axis and tooltip formatter.
  * @param {number} minimumValue - Lower numeric axis bound.
  * @param {number} maximumValue - Minimum upper numeric axis bound.
@@ -1840,10 +1884,12 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     const seriesPoints = points.filter((point) => hasValue(point, item.key));
     if (!seriesPoints.length) continue;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const gapLimit = numeric(item.maxGapSeconds);
     const d = seriesPoints.map((point, index) => {
       const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
       const y = height - bottom - ((numeric(point[item.key]) - minimumValue) / valueSpan) * plotHeight;
-      return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+      const gap = index ? numeric(point.ts) - numeric(seriesPoints[index - 1].ts) : 0;
+      return `${index && (!gapLimit || gap <= gapLimit) ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
@@ -2611,14 +2657,33 @@ async function loadMetrics() {
   state.metrics = payload.items;
   byId("throughput-range").textContent = byId("metrics-range").selectedOptions[0].textContent;
   byId("throughput-range").title = "Time range follows Slips performance";
+  const sharedRedis = Boolean(payload.redis_shared);
+  const runRedisLabel = sharedRedis
+    ? `Run + cache Redis :${payload.redis_run_port}`
+    : `Run Redis :${payload.redis_run_port}`;
+  const cacheRedisLabel = `Cache Redis :${payload.redis_cache_port}`;
+  const hasRedisSamples = (key) => state.metrics.some((point) => point[key] !== null
+    && point[key] !== undefined && Number.isFinite(Number(point[key])));
+  const runLegend = byId("redis-run-legend");
+  const cacheLegend = byId("redis-cache-legend");
+  runLegend.hidden = !hasRedisSamples("run_redis_memory");
+  runLegend.textContent = runRedisLabel;
+  cacheLegend.hidden = sharedRedis || !hasRedisSamples("cache_redis_memory");
+  cacheLegend.textContent = cacheRedisLabel;
+  const redisCpuSeries = [{ key: "run_redis_cpu", className: "redis-run-line", label: runRedisLabel }];
+  const redisMemorySeries = [{ key: "run_redis_memory", className: "redis-run-line", label: runRedisLabel }];
+  if (!sharedRedis) {
+    redisCpuSeries.push({ key: "cache_redis_cpu", className: "redis-cache-line", label: cacheRedisLabel });
+    redisMemorySeries.push({ key: "cache_redis_memory", className: "redis-cache-line", label: cacheRedisLabel });
+  }
   renderLineChart(
     "cpu-chart", state.metrics,
-    [{ key: "cpu" }, { key: "cpu_max", className: "secondary-line" }],
+    [{ key: "cpu", label: "Slips total" }, { key: "cpu_max", className: "secondary-line" }, ...redisCpuSeries],
     formatCpuChartValue,
   );
   renderLineChart(
     "memory-chart", state.metrics,
-    [{ key: "memory" }, { key: "memory_max", className: "secondary-line" }],
+    [{ key: "memory", label: "Slips total" }, { key: "memory_max", className: "secondary-line" }, ...redisMemorySeries],
     formatMemoryChartValue,
   );
   renderLineChart("fps-chart", state.metrics, [{ key: "fps" }, { key: "fps_max", className: "secondary-line" }]);
@@ -3706,9 +3771,6 @@ function selectEvidenceGroup(group) {
   workspace.records = [];
   workspace.next = null;
   workspace.total = 0;
-  workspace.recordSearch = "";
-  workspace.recordOrigin = "";
-  workspace.recordThreat = "";
   workspace.recordType = null;
   workspace.recordTypes = [];
   workspace.recordTypesSignature = "";
@@ -3853,6 +3915,14 @@ function renderEvidenceGroup() {
   const records = individual ? state.pages.evidence.items : workspace.records;
   const total = individual ? state.pages.evidence.total : workspace.total;
   const loaded = individual || workspace.recordsLoaded;
+  const pageGrouping = ["threat", "module", "handling"].includes(workspace.recordGrouping)
+    ? workspace.recordGrouping : "";
+  const displayedRecords = pageGrouping
+    ? records.map((record, index) => ({ record, index })).sort((left, right) =>
+      hostActivityGroupValue("evidence", left.record, pageGrouping)
+        .localeCompare(hostActivityGroupValue("evidence", right.record, pageGrouping))
+        || left.index - right.index).map(({ record }) => record)
+    : records;
   const right = byId("evidence-right");
   const listScroll = right.querySelector(".evidence-record-list")?.scrollTop || 0;
   const tableScroll = right.querySelector(".evidence-record-table-scroll");
@@ -3880,10 +3950,10 @@ function renderEvidenceGroup() {
     summary.append(head);
     const p2pReports = isPeerReport(group) || group.module === "p2p_trust";
     const host = text("h3", "", "evidence-group-host");
-    host.append(group.profile_ip ? deviceIdentity(group, "profile_ip") : text("span", "All hosts"));
+    host.append(group.profile_ip ? hostLink(group.profile_ip, deviceIdentity(group, "profile_ip")) : text("span", "All hosts"));
     summary.append(host);
     if (p2pReports) summary.append(text("p", "These detections were reported by other Slips. Select a record to see what the peer detected and who sent it. Received reports do not increase the local host score."));
-    else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
+    else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description", true));
     summary.append(investigationStats([
       ["Threat", threat(group.threat_level)],
       ["Local score", slipsScore(group)],
@@ -3898,7 +3968,9 @@ function renderEvidenceGroup() {
   listHead.append(text("h3", workspace.recordGrouping === "type"
     ? `Records in this group · ${compact(workspace.recordTypesSignature ? workspace.recordTypesMatching : group.evidence_count)}`
     : `Records · ${compact(loaded ? total : group.evidence_count)}`),
-    text("small", individual ? "Current page · use the filters above" : "Filters and sorting cover this group", "muted"));
+    text("small", individual ? "Current page · use the filters above"
+      : pageGrouping ? "Groups cover loaded records · filters and sorting cover this group"
+        : "Filters and sorting cover this group", "muted"));
   list.append(listHead);
   if (!individual) list.append(evidenceRecordFilters());
   let typeSections = null;
@@ -3989,7 +4061,7 @@ function renderEvidenceGroup() {
     else { tableWrap.hidden = true;list.append(tableWrap); }
   } else list.append(tableWrap);
   right.append(list);
-  renderTable(table.id, records, [
+  renderTable(table.id, displayedRecords, [
     (record) => { return timeValue(record.timestamp, evidenceClock); },
     (record) => {
       const label = document.createElement("div");
@@ -4005,12 +4077,12 @@ function renderEvidenceGroup() {
     (record) => compact(record.flow_count),
     (record) => compact(record.alert_ids?.length),
     (record) => peerDetections(record)[0]?.description || record.description || "Description not supplied",
-  ], (record) => selectEvidenceRecord(record).catch(() => {}));
+  ], (record) => selectEvidenceRecord(record, displayedRecords).catch(() => {}));
   table.querySelectorAll("tbody tr[data-clickable]").forEach((row, index) => {
     row.classList.add("evidence-record-row");
-    row.id = `evidence-record-${records[index].id}`;
-    row.dataset.evidenceId = records[index].id;
-    row.classList.toggle("selected", records[index].id === workspace.record?.id);
+    row.id = `evidence-record-${displayedRecords[index].id}`;
+    row.dataset.evidenceId = displayedRecords[index].id;
+    row.classList.toggle("selected", displayedRecords[index].id === workspace.record?.id);
     row.addEventListener("keydown", (event) => {
       if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
       event.preventDefault();
@@ -4018,6 +4090,27 @@ function renderEvidenceGroup() {
       rows[Math.max(0, Math.min(rows.length - 1, index + (event.key === "ArrowDown" ? 1 : -1)))]?.focus();
     });
   });
+  if (pageGrouping) {
+    const rows = [...table.querySelectorAll("tbody tr[data-clickable]")];
+    const counts = new Map();
+    displayedRecords.forEach((record) => {
+      const label = hostActivityGroupValue("evidence", record, pageGrouping);
+      counts.set(label, (counts.get(label) || 0) + 1);
+    });
+    let previous = null;
+    displayedRecords.forEach((record, index) => {
+      const label = hostActivityGroupValue("evidence", record, pageGrouping);
+      if (label === previous) return;
+      previous = label;
+      const heading = document.createElement("tr");
+      heading.className = "evidence-record-group-row";
+      const cell = text("th", `${label} · ${compact(counts.get(label))} loaded`);
+      cell.colSpan = headRow.children.length;
+      cell.scope = "rowgroup";
+      heading.append(cell);
+      rows[index].before(heading);
+    });
+  }
   if (!records.length && !loaded) table.querySelector(".empty").textContent = "Loading records…";
   if (!individual && workspace.next) {
     const actions = document.createElement("div");
@@ -4065,7 +4158,11 @@ function evidenceRecordFilters() {
   search.setAttribute("aria-label", "Search records in selected evidence group");
   search.value = workspace.recordSearch;
   let timer;
-  const run = () => { window.clearTimeout(timer); loadEvidenceGroupRecords(true).catch(() => {}); };
+  const run = () => {
+    window.clearTimeout(timer);
+    saveViewPreferences();
+    loadEvidenceGroupRecords(true).catch(() => {});
+  };
   search.addEventListener("input", () => {
     workspace.recordSearch = search.value.trim();
     window.clearTimeout(timer);
@@ -4082,19 +4179,32 @@ function evidenceRecordFilters() {
     const option = text("option", label); option.value = value; origin.append(option);
   });
   origin.value = workspace.recordOrigin;
-  origin.addEventListener("change", () => { workspace.recordOrigin = origin.value; run(); });
+  origin.addEventListener("change", () => {
+    workspace.recordOrigin = origin.value;
+    run();
+  });
   const level = document.createElement("select");
   level.id = "evidence-record-threat";
   level.setAttribute("aria-label", "Evidence record threat");
-  [["All threats in group", ""], ...["critical", "high", "medium", "low", "info"].map(value => [value, value])].forEach(([label, value]) => {
+  [["All threats in group", ""], ...["critical", "high", "medium", "low", "info"]
+    .map(value => [value[0].toUpperCase() + value.slice(1), value]),
+    ...["critical", "high", "medium", "low", "info"]
+      .map(value => [`${value[0].toUpperCase()}${value.slice(1)}+`, `${value}_or_more`])]
+    .forEach(([label, value]) => {
     const option = text("option", label); option.value = value; level.append(option);
   });
   level.value = workspace.recordThreat;
-  level.addEventListener("change", () => { workspace.recordThreat = level.value; run(); });
+  level.addEventListener("change", () => {
+    workspace.recordThreat = level.value;
+    run();
+  });
   const grouping = document.createElement("select");
   grouping.id = "evidence-record-grouping";
   grouping.setAttribute("aria-label", "Group records within this evidence group");
-  grouping.append(new Option("None", ""), new Option("Type", "type"));
+  [["None", ""], ["Type · all matching records", "type"],
+    ["Threat · loaded records", "threat"], ["Module · loaded records", "module"],
+    ["Score handling · loaded records", "handling"]]
+    .forEach(([label, value]) => grouping.append(new Option(label, value)));
   grouping.value = workspace.recordGrouping;
   grouping.addEventListener("change", () => {
     workspace.recordGrouping = grouping.value;workspace.recordType = null;
@@ -4123,7 +4233,9 @@ function evidenceRecordFilters() {
   popup.append(heading, text("p", "These controls affect only records inside the selected evidence group.", "muted"));
   const fields = text("div", "", "filter-popup-fields");
   [["Group by", grouping], ["Source", origin], ["Threat", level]].forEach(([label, control]) => {
-    const field = text("label", label);field.append(control);fields.append(field);
+    const field = text("label", label);
+    field.append(control);
+    fields.append(field);
   });
   const reset = text("button", "Reset group filters", "secondary");reset.type = "button";
   reset.id = "evidence-record-reset";
@@ -4142,11 +4254,12 @@ function evidenceRecordFilters() {
 
 /** Open one evidence record in the right investigation pane.
  * @param {object} record Individual durable evidence record.
+ * @param {object[]|null} contextRecords Records in their displayed order.
  * @returns {Promise<void>} Completes after the triggering flows load.
  */
-async function selectEvidenceRecord(record) {
+async function selectEvidenceRecord(record, contextRecords = null) {
   state.evidenceWorkspace.record = record;
-  await openEvidence(record);
+  await openEvidence(record, contextRecords);
 }
 
 /** Copy an evidence identifier in secure and local HTTP browser contexts.
@@ -6565,7 +6678,7 @@ async function loadHosts() {
       rows.forEach(rememberHostRecord);
       refreshHostLabels();
       applyPage("hosts", payload);
-      renderHostFilterChips(payload);
+      renderHostFilterChips();
       renderHostsPage();
       document.querySelector(".hosts-list-table").scrollTop = scroll;
     };
@@ -6627,7 +6740,7 @@ function maybeLoadMoreHosts() {
 function renderHostsPage() {
   const page = state.pages.hosts;
   renderTable("hosts-table", page.items, [
-    (row) => hostIdentity(row.ip),
+    (row) => hostIdentity(preferredHostIp(row)),
     (row) => {
       const value = document.createElement("span");
       value.className = "hosts-mac-vendor";
@@ -6651,7 +6764,7 @@ function renderHostsPage() {
     (row) => slipsScore(row),
     (row) => HOST_REVIEW_LABELS[row.user_status] || "Unmarked",
     (row) => (row.user_labels || []).join(", ") || "—",
-  ], (row) => openHost(row.ip, row));
+  ], (row) => openHost(preferredHostIp(row), row));
   document.querySelectorAll("#hosts-table tbody tr").forEach((row) => {
     ["hostname", "ti", "score"].forEach((key, index) => {
       const td = row.cells[9 + index];
@@ -6695,29 +6808,17 @@ function hostPeakScoreCell(row) {
 }
 
 /** Keep threat and scope chips synchronized with the server filters. */
-function renderHostFilterChips(payload) {
-  const ranks = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+function renderHostFilterChips() {
   const groups = [
-    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
-    ["hosts-scope-chips", "hosts-scope", [["", "All"], ["local", "Local"], ["public", "Public"]], "scope"],
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]],
+    ["hosts-scope-chips", "hosts-scope", [["", "All"], ["local", "Local"], ["public", "Public"]]],
   ];
-  groups.forEach(([targetId, selectId, options, field]) => {
+  groups.forEach(([targetId, selectId, options]) => {
     const target = byId(targetId);
     const select = byId(selectId);
     target.replaceChildren();
     options.forEach(([value, label]) => {
-      const completePage = payload.items.length === payload.total;
-      const minimum = value.replace("_or_more", "");
-      const count = !value || select.value === value ? payload.total
-        : payload.items.filter((row) => {
-          if (field === "max_threat_level" && row.has_findings === false) return false;
-          const rowValue = String(row[field] || "info").toLowerCase();
-          return field === "max_threat_level" && value.endsWith("_or_more")
-            ? (ranks[rowValue] ?? 0) >= ranks[minimum] : rowValue === value;
-        }).length;
-      const showCount = Boolean(value) && (select.value === value
-        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value));
-      const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
+      const button = text("button", label, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
       button.type = "button";
       button.addEventListener("click", () => {
         select.value = value;
@@ -6816,6 +6917,7 @@ function captureHostInvestigation() {
     preferred: state.hostActivityPreferred,
     groups: { ...state.hostActivityGroups },
     threats: { ...state.hostActivityThreats },
+    evidenceFilters: { origin: state.hostEvidence.origin, selectedType: state.hostEvidence.selectedType },
     controls: Object.fromEntries(["host-range", "host-from", "host-to", "host-alert-search",
       "host-evidence-search", "host-flow-search"].map((id) => [id, byId(id).value])),
     pages: Object.fromEntries(["hostAlerts", "hostFlows", "host-evidence"].map((name) =>
@@ -6883,12 +6985,16 @@ async function inspectHost(ip) {
   }
 }
 
-/** Render an IP as a host-workspace navigation control. */
-function hostLink(ip) {
+/** Render an IP as a host-workspace navigation control.
+ * @param {string} ip Address to inspect.
+ * @param {HTMLElement|null} label Optional existing host identity.
+ * @returns {HTMLButtonElement} Navigation button.
+ */
+function hostLink(ip, label = null) {
   const button = document.createElement("button");
   button.className = "ip-link";
   button.type = "button";
-  button.append(hostIdentity(ip));
+  button.append(label || hostIdentity(ip));
   button.title = ip ? `Open host workspace for ${ip}` : "No host address available";
   button.disabled = !ip;
   button.addEventListener("click", (event) => {
@@ -8726,7 +8832,7 @@ function renderHostScope(host) {
 const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
 
 function renderHostCards(host) {
-  byId("host-title").replaceChildren(deviceIdentity(host));
+  byId("host-title").replaceChildren(deviceIdentity({ ...host, ip: preferredHostIp(host) }));
   renderHostScope(host);
   const scopedProfiles = hostVisibleProfiles(host);
   const networkScoped = usesNetworkScope("host");
@@ -8800,9 +8906,117 @@ function renderHostCards(host) {
 /** Start a host investigation without another host's narrowing filters. */
 function resetHostActivityFilters() {
   state.hostActivityThreats = { alerts: "", evidence: "", flows: "" };
+  state.hostEvidence = { origin: "", types: [], selectedType: null, next: null,
+    total: 0, matching: 0, signature: "", loadedAt: 0 };
   ["host-alert-search", "host-evidence-search", "host-flow-search", "host-activity-threat"]
     .forEach((id) => { byId(id).value = ""; });
   byId("host-activity-filter-notice").hidden = true;
+}
+
+/** Update the badge for filters that affect this host's evidence only. */
+function syncHostEvidenceFilterButton() {
+  const active = [byId("host-evidence-search").value.trim(), state.hostEvidence.origin,
+    state.hostActivityThreats.evidence, state.hostActivityGroups.evidence].filter(Boolean).length;
+  const button = byId("host-evidence-filter-button");
+  button.dataset.active = String(active > 0);
+  button.querySelector(".filter-count").textContent = String(active);
+  button.querySelector(".filter-count").hidden = !active;
+}
+
+/** Install local grouping and source filters beside the host evidence search. */
+function initHostEvidenceFilters() {
+  const search = byId("host-evidence-search");
+  const button = text("button", "", "filter-popup-trigger secondary");
+  button.id = "host-evidence-filter-button";
+  button.type = "button";
+  button.hidden = true;
+  button.setAttribute("aria-label", "Filters for this host's evidence");
+  button.setAttribute("popovertarget", "host-evidence-filter-popup");
+  button.setAttribute("aria-expanded", "false");
+  button.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span>Filters for this host</span><span class="filter-count" hidden></span>';
+  const popup = text("div", "", "filter-popup");
+  popup.id = "host-evidence-filter-popup";
+  popup.dataset.filterTab = "host-evidence";
+  popup.dataset.recordFilters = "true";
+  popup.setAttribute("popover", "auto");
+  popup.setAttribute("role", "dialog");
+  popup.setAttribute("aria-label", "Filters for this host's evidence");
+  const heading = text("div", "", "filter-popup-heading");
+  const close = text("button", "×", "text-button");
+  close.type = "button";
+  close.setAttribute("aria-label", "Close host evidence filters");
+  close.addEventListener("click", () => popup.hidePopover());
+  heading.append(text("h3", "Evidence for this host"), close);
+  popup.append(heading, text("p", "These controls affect only this host's evidence records.", "muted"));
+  const fields = text("div", "", "filter-popup-fields");
+  const grouping = document.createElement("select");
+  grouping.id = "host-evidence-grouping";
+  grouping.setAttribute("aria-label", "Group this host's evidence");
+  [["None", ""], ["Type · all matching records", "type"],
+    ["Threat · current page", "threat"], ["Module · current page", "module"],
+    ["Score handling · current page", "handling"]].forEach(([label, value]) => grouping.append(new Option(label, value)));
+  const origin = document.createElement("select");
+  origin.id = "host-evidence-origin";
+  origin.setAttribute("aria-label", "Host evidence source");
+  [["All sources", ""], ["Detected locally", "local"], ["From P2P", "p2p"]]
+    .forEach(([label, value]) => origin.append(new Option(label, value)));
+  const level = document.createElement("select");
+  level.id = "host-evidence-threat";
+  level.setAttribute("aria-label", "Host evidence threat");
+  [["All threats", ""], ...["critical", "high", "medium", "low", "info"]
+    .map(value => [value[0].toUpperCase() + value.slice(1), value]),
+    ...["critical", "high", "medium", "low", "info"]
+      .map(value => [`${value[0].toUpperCase()}${value.slice(1)}+`, `${value}_or_more`])]
+    .forEach(([label, value]) => level.append(new Option(label, value)));
+  [["Group by", grouping], ["Source", origin], ["Threat", level]].forEach(([label, control]) => {
+    const field = text("label", label);field.append(control);fields.append(field);
+  });
+  const run = () => {
+    state.hostEvidence.selectedType = null;
+    resetPage("host-evidence");
+    syncHostEvidenceFilterButton();
+    loadHostEvidence().catch(() => {});
+  };
+  grouping.addEventListener("change", () => {
+    state.hostActivityGroups.evidence = grouping.value;
+    saveViewPreferences();
+    run();
+  });
+  origin.addEventListener("change", () => {
+    state.hostEvidence.origin = origin.value;
+    run();
+  });
+  level.addEventListener("change", () => {
+    state.hostActivityThreats.evidence = level.value;
+    run();
+  });
+  const reset = text("button", "Reset host evidence filters", "secondary");
+  reset.type = "button";
+  reset.addEventListener("click", () => {
+    search.value = "";
+    grouping.value = "";
+    origin.value = "";
+    level.value = "";
+    state.hostActivityGroups.evidence = "";
+    state.hostEvidence.origin = "";
+    state.hostActivityThreats.evidence = "";
+    saveViewPreferences();
+    run();
+  });
+  popup.append(fields, reset);
+  popup.addEventListener("toggle", () => {
+    const open = popup.matches(":popover-open");
+    button.setAttribute("aria-expanded", String(open));
+    if (open) positionFilterPopup(popup);
+  });
+  search.after(button, popup);
+  const panel = byId("host-evidence-panel");
+  const sections = text("div", "", "host-evidence-type-sections");
+  sections.id = "host-evidence-type-sections";
+  sections.hidden = true;
+  sections.tableWrap = panel.querySelector(".host-evidence-wrap");
+  sections.tableFoot = byId("host-evidence-count").parentElement;
+  panel.prepend(sections);
 }
 
 /** Show the selected host's alerts, evidence, or flows and load that page. */
@@ -8828,13 +9042,24 @@ function showHostActivity(name) {
       .map(([value, label]) => new Option(value === "label" ? "Input label" : label, value)));
   grouping.value = state.hostActivityGroups[name];
   byId("host-activity-threat").value = state.hostActivityThreats[name];
+  byId("host-activity-group").closest("label").hidden = name === "evidence";
+  byId("host-activity-threat").closest("label").hidden = name === "evidence";
+  byId("host-evidence-filter-button").hidden = name !== "evidence";
+  if (name === "evidence") {
+    byId("host-evidence-grouping").value = state.hostActivityGroups.evidence;
+    byId("host-evidence-origin").value = state.hostEvidence.origin;
+    byId("host-evidence-threat").value = state.hostActivityThreats.evidence;
+    syncHostEvidenceFilterButton();
+  } else if (byId("host-evidence-filter-popup").matches(":popover-open")) {
+    byId("host-evidence-filter-popup").hidePopover();
+  }
   byId("host-activity-threat-label").firstChild.textContent = name === "flows" ? "Linked threat " : "Threat ";
   byId("host-alert-search").hidden = name !== "alerts";
   byId("host-evidence-search").hidden = name !== "evidence";
   byId("host-flow-search").hidden = name !== "flows";
   const note = byId("host-activity-group-note");
-  note.hidden = !grouping.value;
-  note.textContent = grouping.value ? "Groups in this page; filters cover the selected range" : "";
+  note.hidden = name === "evidence" || !grouping.value;
+  note.textContent = note.hidden ? "" : "Groups in this page; filters cover the selected range";
   if (!state.host) return Promise.resolve();
   return ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[name]().catch(() => {});
 }
@@ -8848,7 +9073,9 @@ function renderHostActivityFilterNotice(kind, total) {
   const notice = byId("host-activity-filter-notice");
   const search = byId(`host-${kind === "alerts" ? "alert" : "evidence"}-search`);
   const filters = [];
-  if (state.hostActivityThreats[kind]) filters.push(`Threat: ${byId("host-activity-threat").selectedOptions[0]?.textContent}`);
+  if (state.hostActivityThreats[kind]) filters.push(`Threat: ${(kind === "evidence"
+    ? byId("host-evidence-threat") : byId("host-activity-threat")).selectedOptions[0]?.textContent}`);
+  if (kind === "evidence" && state.hostEvidence.origin) filters.push(`Source: ${byId("host-evidence-origin").selectedOptions[0]?.textContent}`);
   if (search.value.trim()) filters.push(`Search: ${search.value.trim()}`);
   notice.hidden = filters.length === 0;
   notice.replaceChildren();
@@ -8860,6 +9087,13 @@ function renderHostActivityFilterNotice(kind, total) {
   clear.addEventListener("click", () => {
     search.value = "";
     state.hostActivityThreats[kind] = "";
+    if (kind === "evidence") {
+      state.hostEvidence.origin = "";
+      byId("host-evidence-origin").value = "";
+      byId("host-evidence-threat").value = "";
+      state.hostEvidence.selectedType = null;
+      syncHostEvidenceFilterButton();
+    }
     resetPage(kind === "alerts" ? "hostAlerts" : "host-evidence");
     scheduleViewPreferencesSave();
     showHostActivity(kind);
@@ -8870,10 +9104,10 @@ function renderHostActivityFilterNotice(kind, total) {
 /** Return the label used to group one host activity record on the current page.
  * @param {string} kind Alerts, evidence, or flows.
  * @param {object} row One activity record.
+ * @param {string} group Grouping choice when another evidence pane uses this label.
  * @returns {string} Visible group label.
  */
-function hostActivityGroupValue(kind, row) {
-  const group = state.hostActivityGroups[kind];
+function hostActivityGroupValue(kind, row, group = state.hostActivityGroups[kind]) {
   if (group === "threat") return row.threat_level || row.linked_threat_level || "No linked evidence";
   if (group === "type") {
     const types = alertEvidenceTypes(row);
@@ -9047,25 +9281,144 @@ async function loadHostAlerts() {
   pager("hostAlerts", "host-alerts-pager", loadHostAlerts);
 }
 
+/** Build the exact query shared by host evidence records and type counts.
+ * @returns {URLSearchParams} Current host, range, and record filters.
+ */
+function hostEvidenceQuery() {
+  const params = hostRangeParams();
+  params.set("include_full_total", "0");
+  params.set("limit", "100");
+  params.set("sort", state.pages["host-evidence"].sort);
+  params.set("order", state.pages["host-evidence"].order);
+  const search = byId("host-evidence-search").value.trim();
+  if (search) params.set("search", search);
+  if (state.hostActivityThreats.evidence) params.set("threat", state.hostActivityThreats.evidence);
+  if (state.hostEvidence.origin) params.set("origin", state.hostEvidence.origin);
+  if (state.deviceView && state.host.device_id) params.set("device_id", state.host.device_id);
+  else params.set("profile", state.host.ip);
+  params.set("details", "false");
+  if (state.hostActivityGroups.evidence === "type" && state.hostEvidence.selectedType) {
+    params.set("record_type", state.hostEvidence.selectedType);
+  }
+  return params;
+}
+
+/** Load counts for every matching evidence type, independently of the current record page.
+ * @param {boolean} reset Whether to replace the current type list.
+ * @returns {Promise<boolean>} Whether the counts still match the current host filters.
+ */
+async function loadHostEvidenceTypes(reset = true) {
+  const snapshot = state.hostEvidence;
+  const params = hostEvidenceQuery();
+  params.delete("record_type");
+  params.set("record_group", "type");
+  params.set("sort", "type");
+  params.set("order", "asc");
+  const signature = params.toString();
+  if (signature !== snapshot.signature) reset = true;
+  if (reset && signature === snapshot.signature && Date.now() - snapshot.loadedAt < 15000) return true;
+  if (!reset && snapshot.next) params.set("cursor", snapshot.next);
+  const payload = await api("hostEvidenceTypes", `/api/evidence?${params}`);
+  if (!payload || snapshot !== state.hostEvidence || state.hostActivityGroups.evidence !== "type") return false;
+  const current = hostEvidenceQuery();
+  current.delete("record_type");
+  current.set("record_group", "type");
+  current.set("sort", "type");
+  current.set("order", "asc");
+  if (current.toString() !== signature) return false;
+  snapshot.types = reset ? payload.items : [...snapshot.types, ...payload.items];
+  snapshot.next = payload.next_cursor;
+  snapshot.total = payload.total;
+  snapshot.matching = payload.matching_total;
+  snapshot.signature = signature;
+  snapshot.loadedAt = Date.now();
+  if (snapshot.selectedType === null || (snapshot.selectedType
+      && !snapshot.types.some((item) => item.evidence_type === snapshot.selectedType))) {
+    snapshot.selectedType = snapshot.types[0]?.evidence_type || "";
+  }
+  return true;
+}
+
+/** Place the host evidence table below the expanded type, or back in its normal panel.
+ * @returns {void} The existing table and pager keep their event handlers.
+ */
+function renderHostEvidenceTypes() {
+  const panel = byId("host-evidence-panel");
+  const list = byId("host-evidence-type-sections");
+  const table = list.tableWrap;
+  const foot = list.tableFoot;
+  const grouped = state.hostActivityGroups.evidence === "type";
+  if (!grouped) {
+    list.hidden = true;
+    list.replaceChildren();
+    panel.insertBefore(table, byId("host-evidence-title"));
+    panel.insertBefore(foot, byId("host-evidence-title"));
+    table.hidden = false;
+    foot.hidden = false;
+    return;
+  }
+  list.hidden = false;
+  list.replaceChildren(text("small", `${compact(state.hostEvidence.total)} types · ${compact(state.hostEvidence.matching)} matching records for this host`, "muted"));
+  let selected = null;
+  state.hostEvidence.types.forEach((item) => {
+    const section = text("section", "", "host-evidence-type-section");
+    const expanded = state.hostEvidence.selectedType === item.evidence_type;
+    section.classList.toggle("expanded", expanded);
+    const toggle = text("button", "", "evidence-record-type-toggle");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.append(text("span", expanded ? "▾" : "▸", "muted"),
+      evidenceTypeCell(item), text("span", `${compact(item.evidence_count)} records`, "count-chip"));
+    toggle.addEventListener("click", () => {
+      state.hostEvidence.selectedType = expanded ? "" : item.evidence_type;
+      resetPage("host-evidence");
+      renderHostEvidenceTypes();
+      if (state.hostEvidence.selectedType) loadHostEvidence().catch(() => {});
+    });
+    section.append(toggle);
+    list.append(section);
+    if (expanded) selected = section;
+  });
+  if (!state.hostEvidence.types.length) list.append(text("p", state.hostEvidence.signature
+    ? "No matching evidence records for this host." : "Loading evidence types…", "muted"));
+  if (state.hostEvidence.next) {
+    const more = text("button", "Load more types", "secondary");
+    more.type = "button";
+    more.addEventListener("click", async () => {
+      if (await loadHostEvidenceTypes(false)) renderHostEvidenceTypes();
+    });
+    list.append(more);
+  }
+  if (selected) {
+    selected.append(table, foot);
+    table.hidden = false;
+    foot.hidden = false;
+  } else {
+    panel.insertBefore(table, byId("host-evidence-title"));
+    panel.insertBefore(foot, byId("host-evidence-title"));
+    table.hidden = true;
+    foot.hidden = true;
+  }
+}
+
+/** Load the selected host's evidence with filters scoped to its records. */
 async function loadHostEvidence() {
   if (!state.host) return;
   const ip = state.host.ip;
   const page = state.pages["host-evidence"];
-  const params = hostRangeParams();
-  params.set("limit", "100");
-  params.set("sort", page.sort);
-  params.set("order", page.order);
+  syncHostEvidenceFilterButton();
+  if (state.hostActivityGroups.evidence === "type") {
+    if (!await loadHostEvidenceTypes(true) || state.host?.ip !== ip) return;
+    renderHostEvidenceTypes();
+    if (!state.hostEvidence.selectedType) return;
+  } else renderHostEvidenceTypes();
+  const params = hostEvidenceQuery();
+  const signature = params.toString();
   const search = byId("host-evidence-search").value.trim();
-  if (search) params.set("search", search);
-  if (state.hostActivityThreats.evidence) params.set("threat", state.hostActivityThreats.evidence);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  if (state.deviceView && state.host.device_id) params.set("device_id", state.host.device_id);
-  else params.set("profile", ip);
-  params.set("details", "false");
-  if (state.hideExcluded) params.set("hide_excluded", "1");
   const path = "/api/evidence?" + params;
   const payload = await api("hostEvidence", path);
-  if (!payload || state.host?.ip !== ip) return;
+  if (!payload || state.host?.ip !== ip || signature !== hostEvidenceQuery().toString()) return;
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
@@ -9074,7 +9427,8 @@ async function loadHostEvidence() {
   byId("host-evidence-count").textContent =
     payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
     (search ? " matching search" : "");
-  const groupedRows = groupHostPageRows("evidence", payload.items);
+  const groupedRows = state.hostActivityGroups.evidence === "type"
+    ? payload.items : groupHostPageRows("evidence", payload.items);
   renderTable("host-evidence-table", groupedRows, [
     (row) => timeValue(row.timestamp, formatTime),
     (row) => threat(row.threat_level),
@@ -9095,7 +9449,9 @@ async function loadHostEvidence() {
       return description;
     },
   ], (record) => openEvidence(record, groupedRows));
-  addHostTableGroups("evidence", "host-evidence-table", groupedRows);
+  if (state.hostActivityGroups.evidence !== "type") {
+    addHostTableGroups("evidence", "host-evidence-table", groupedRows);
+  }
   applySortIndicators("host-evidence");
   pager("host-evidence", "host-evidence-pager", loadHostEvidence);
 }
@@ -9279,13 +9635,17 @@ async function loadHostSummary() {
 
 /** Render score history and explain how much evidence has a persisted score. */
 function renderHostScoreHistory(payload) {
+  byId("host-score-source").textContent = payload.score_profile_ip || state.host?.ip || "";
   let points = Array.isArray(payload.timeline) ? payload.timeline : [];
   if (points.length === 1 && !points[0].current) {
     points = [{ ...points[0], ts: numeric(points[0].ts) - 1 }, points[0]];
   }
+  const gapLimit = Math.max(900, numeric(payload.bucket_seconds) * 3);
+  const gaps = points.slice(1).map((point, index) =>
+    numeric(point.ts) - numeric(points[index].ts)).filter((gap) => gap > gapLimit);
   renderLineChart("host-score-chart", points, [
-    { key: "score" },
-    { key: "peak_score", className: "secondary-line" },
+    { key: "score", maxGapSeconds: gapLimit },
+    { key: "peak_score", className: "secondary-line", maxGapSeconds: gapLimit },
     { key: "threshold", className: "threshold-line" },
   ]);
   const total = numeric(payload.evidence_total);
@@ -9310,6 +9670,9 @@ function renderHostScoreHistory(payload) {
     status.textContent = `${compact(scored)} of ${compact(total)} evidence records have real ${payload.mode} samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
   } else {
     status.textContent = `${compact(scored)} processed score samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
+  }
+  if (gaps.length) {
+    status.textContent += ` ${compact(gaps.length)} period${gaps.length === 1 ? "" : "s"} without saved score samples (longest ${formatDuration(Math.max(...gaps))}); score lines stop across these gaps.`;
   }
 }
 
@@ -9366,6 +9729,7 @@ async function loadLegacyScoreHistory(params) {
   timeline.forEach((point) => { point.threshold = threshold; });
   return {
     timeline,
+    score_profile_ip: state.host.ip,
     threshold,
     mode: state.host.alert_score_mode || "Slips",
     peak_score: Math.max(...timeline.map((point) => point.score), 0),
@@ -9385,6 +9749,7 @@ async function loadHostScoreHistory() {
   const generation = state.hostOpenGeneration;
   const params = hostRangeParams();
   params.set("max_points", "600");
+  if (state.deviceView) params.set("device", "1");
   if (state.archiveSource) params.set("archive", state.archiveSource);
   const path = `/api/hosts/${escapePath(ip)}/score-history?${params}`;
   try {
@@ -9453,20 +9818,31 @@ async function showUnprofiledHost(ip, generation = state.hostOpenGeneration) {
  */
 async function openHost(ip, summary = null, previous = null) {
   const generation = ++state.hostOpenGeneration;
+  if (summary) ip = preferredHostIp(summary) || ip;
   if (summary) state.hostHistory = [];
+  if (!previous && !state.hostFiltersInitialized) resetHostActivityFilters();
+  state.hostFiltersInitialized = true;
   if (previous) {
     state.hostActivity = previous.activity;
     state.hostActivityPreferred = previous.preferred;
     state.hostActivityGroups = { ...previous.groups };
     state.hostActivityThreats = { ...previous.threats };
+    state.hostEvidence = { origin: previous.evidenceFilters?.origin || "",
+      selectedType: previous.evidenceFilters?.selectedType ?? null,
+      types: [], next: null, total: 0, matching: 0, signature: "", loadedAt: 0 };
     Object.entries(previous.controls).forEach(([id, value]) => { byId(id).value = value; });
     byId("host-from").hidden = byId("host-to").hidden = byId("host-range").value !== "custom";
-  } else resetHostActivityFilters();
+  } else {
+    state.hostEvidence = { origin: state.hostEvidence.origin,
+      selectedType: state.hostEvidence.selectedType, types: [], next: null,
+      total: 0, matching: 0, signature: "", loadedAt: 0 };
+    byId("host-activity-filter-notice").hidden = true;
+  }
   updateHostBackButton();
-  ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary", "hostScore"].forEach((key) =>
+  ["hostAlerts", "hostEvidence", "hostEvidenceTypes", "hostFlows", "hostSummary", "hostScore"].forEach((key) =>
     state.requests.get(key)?.abort());
   if (state.evidenceDetail.inHostPane && state.host?.ip !== ip) closeEvidenceDetail(false, true);
-  if (summary) {
+  if (summary && !state.rangeChoices.has("host-range")) {
     ["range", "from", "to"].forEach((name) => {
       byId(`host-${name}`).value = byId(`hosts-${name}`).value;
     });
@@ -9477,12 +9853,20 @@ async function openHost(ip, summary = null, previous = null) {
   const detailParams = hostRangeParams();
   applyNetworkSelection(detailParams);
   if (state.deviceView) detailParams.set("device", "1");
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
+  let detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
   if (!detail || generation !== state.hostOpenGeneration) return;
   if (detail.not_found) {
     await showUnprofiledHost(ip, generation);
     return;
   }
+  const preferred = preferredHostIp(detail);
+  if (preferred && preferred !== detail.ip) {
+    rememberHostRecord(detail);
+    const candidate = await api("host", `/api/hosts/${escapePath(preferred)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
+    if (generation !== state.hostOpenGeneration) return;
+    if (candidate && !candidate.not_found) detail = candidate;
+  }
+  ip = detail.ip || ip;
   const detailHasScore = detail.alert_score !== null
     && detail.alert_score !== undefined
     && Number.isFinite(Number(detail.alert_score))
@@ -9513,12 +9897,13 @@ async function openHost(ip, summary = null, previous = null) {
   host.exact_aggregates = state.deviceView || staleAliases.length === 0;
   host.ignored_aliases = state.deviceView ? [] : staleAliases;
   host.all_ips = state.deviceView ? detail.all_ips : [ip];
-  ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary"].forEach((key) => {
+  ["hostAlerts", "hostEvidence", "hostEvidenceTypes", "hostFlows", "hostSummary"].forEach((key) => {
     state.requests.get(key)?.abort();
   });
   state.host = host;
   rememberHostRecord(host);
   refreshHostLabels();
+  renderHostEvidenceTypes();
   ["hostAlerts", "hostFlows", "host-evidence"].forEach((name) => {
     if (previous) Object.assign(state.pages[name], previous.pages[name]);
     else resetPage(name);
@@ -9608,6 +9993,7 @@ function closeHost() {
   state.requests.get("hostFlows")?.abort();
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
+  state.requests.get("hostEvidenceTypes")?.abort();
   byId("host-detail-view").hidden = true;
   byId("host-filter-popup")?.hidePopover();
   syncFilterPopups();
@@ -9839,8 +10225,8 @@ function renderNetworkSelections(networks) {
     select.replaceChildren(...entries.map(([value, label]) => new Option(label, value)));
     select.dataset.options = signature;
   });
-  if (!choices.some(([value]) => value === state.networkSelection)) state.networkSelection = "current";
-  if (!interfaceChoices.some(([value]) => value === state.interfaceSelection)) state.interfaceSelection = "";
+  if (networks.length && !choices.some(([value]) => value === state.networkSelection)) state.networkSelection = "current";
+  if (networks.length && !interfaceChoices.some(([value]) => value === state.interfaceSelection)) state.interfaceSelection = "";
   network.value = state.networkOnly ? state.networkSelection : "all";
   iface.value = state.interfaceSelection;
   network.disabled = iface.disabled = Boolean(state.archiveSource);
@@ -9850,11 +10236,18 @@ byId("network-selection").addEventListener("change", (event) => {
   state.networkSelection = event.currentTarget.value;
   state.networkOnly = state.networkSelection !== "all";
   byId("network-filter").checked = state.networkOnly;
+  try {
+    window.localStorage.setItem("slips-network-only", state.networkOnly ? "1" : "0");
+  } catch (_) {
+    // Filtering still works when browser storage is unavailable.
+  }
+  scheduleViewPreferencesSave();
   state.hostNames.clear();
   refreshNetworkScopedViews();
 });
 byId("interface-selection").addEventListener("change", (event) => {
   state.interfaceSelection = event.currentTarget.value;
+  scheduleViewPreferencesSave();
   state.hostNames.clear();
   refreshNetworkScopedViews();
 });
@@ -9872,11 +10265,6 @@ function updateNetworkFilterAvailability(identity) {
   state.networkScopeVersion = identity.network_scope_version || 2;
   const networks = identity.current_networks || identity.current_network?.networks || [];
   const signature = JSON.stringify(networks.map((item) => [item.interface, item.network_id, item.connected, item.connection_start, item.changed_at]));
-  if (!state.networkInventoryInitialized && networks.length > 1) {
-    state.networkOnly = true;
-    state.networkSelection = "current";
-    byId("network-filter").checked = true;
-  }
   if (networks.length) state.networkInventoryInitialized = true;
   state.networks = networks;
   const changed = signature !== state.networkSignature || supported !== state.networkFilterSupported
@@ -9936,6 +10324,7 @@ byId("network-filter").addEventListener("change", (event) => {
   } catch (_) {
     // The filter still works when browser storage is unavailable.
   }
+  scheduleViewPreferencesSave();
   refreshNetworkScopedViews();
 });
 
@@ -10412,6 +10801,7 @@ window.addEventListener("beforeunload", () => {
   state.requests.forEach((controller) => controller.abort());
 });
 
+initHostEvidenceFilters();
 initFilterPopups();
 initDrawerResize();
 initAlertPaneResize();

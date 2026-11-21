@@ -23,7 +23,7 @@ class Settings:
     timezone: str = "UTC"
     training_hours: float = 168.0
     detect_new_services: bool = True
-    max_hosts: int = 1024
+    max_hosts: int = 2048
     max_new_services_per_host_hour: int = 10
     min_training_connections: int = 30
     min_training_days: int = 3
@@ -39,8 +39,8 @@ class Settings:
     adapt_known_clients: bool = True
     history_days: int = 56
     retention_days: int = 90
-    max_services: int = 4096
-    max_clients: int = 4096
+    max_services: int = 8192
+    max_clients: int = 8192
     max_clients_per_service: int = 64
     alert_cooldown_seconds: float = 3600.0
     max_alerts_per_service_hour: int = 10

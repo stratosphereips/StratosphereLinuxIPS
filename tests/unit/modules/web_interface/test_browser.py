@@ -393,6 +393,119 @@ def test_legacy_https_new_server_text_is_readable_without_rewriting_evidence(
             browser.close()
 
 
+def test_host_evidence_type_groups_cover_all_matching_records() -> None:
+    """Group host evidence using full matching counts and scoped filters."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    queries: list[dict[str, list[str]]] = []
+    errors: list[str] = []
+    host = {"ip": "192.0.2.10", "scope": "local", "all_ips": ["192.0.2.10"],
+            "alert_count": 0, "evidence_count": 120, "alert_score": 0,
+            "alert_threshold": 0.25, "load": {"flows": 0}}
+
+    def route_request(route: Any) -> None:
+        """Serve host evidence counts that exceed the bounded record page.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/api/evidence":
+            query = parse_qs(url.query)
+            queries.append(query)
+            assert query.get("profile") == [host["ip"]]
+            p2p = query.get("origin") == ["p2p"]
+            groups = ([{"evidence_type": "PRIVATE_IP_CONNECTION", "evidence_count": 4}]
+                      if p2p else [{"evidence_type": "PRIVATE_IP_CONNECTION", "evidence_count": 83},
+                                   {"evidence_type": "UNKNOWN_PORT", "evidence_count": 37}])
+            if query.get("record_group") == ["type"]:
+                route.fulfill(json={"items": groups, "total": len(groups),
+                                    "matching_total": sum(item["evidence_count"] for item in groups),
+                                    "next_cursor": None})
+            else:
+                evidence_type = query.get("record_type", ["PRIVATE_IP_CONNECTION"])[0]
+                item = {"id": f"record-{evidence_type}", "profile_ip": host["ip"],
+                        "evidence_type": evidence_type, "threat_level": "low",
+                        "description": (f"Periodic ack packets for {evidence_type}: "
+                                        "192.0.2.10:52000 → 172.64.155.209:443/TCP; "
+                                        "12 packets in one connection over 165.5 seconds; "
+                                        "the observed packet gaps were consistently near 15 seconds."),
+                        "confidence": 1,
+                        "timestamp": 1792830000, "module": Modules.CONN_ANALYZER.value,
+                        "flow_count": 0, "alert_ids": [], "twid": "timewindow1"}
+                count = next((group["evidence_count"] for group in groups
+                              if group["evidence_type"] == evidence_type), 0)
+                route.fulfill(json={"items": [item] if count else [], "total": count,
+                                    "page_size": int(bool(count)), "next_cursor": None})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        try:
+            page = browser.new_page()
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", route_request)
+            page.goto("http://slips.test/")
+            page.wait_for_function("() => state.requests.size === 0")
+            page.evaluate("""async host => {
+              clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+              state.activeTab='hosts'; state.host=host; state.hostActivity='evidence';
+              document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id==='hosts'));
+              byId('hosts-list-view').hidden=true;byId('host-detail-view').hidden=false;
+              await showHostActivity('evidence');
+            }""", host)
+            assert page.locator("#host-evidence-filter-button").is_visible()
+            page.locator("#host-evidence-filter-button").click()
+            page.locator("#host-evidence-grouping").select_option("type")
+            page.locator("#host-evidence-type-sections").get_by_text("83 records").wait_for()
+            assert "120 matching records" in page.locator("#host-evidence-type-sections").inner_text()
+            assert page.locator("#host-evidence-table tbody tr[data-clickable]").count() == 1
+            bounds = page.locator(".host-evidence-type-section.expanded .host-evidence-wrap").evaluate("""wrap => {
+                wrap.scrollLeft = wrap.scrollWidth;
+                const cell = wrap.querySelector('#host-evidence-table tbody tr td:last-child');
+                const description = cell.querySelector('.host-evidence-description');
+                return {scrollWidth:wrap.scrollWidth, viewportWidth:wrap.clientWidth,
+                    textWidth:description.clientWidth, textScrollWidth:description.scrollWidth,
+                    textHeight:description.getBoundingClientRect().height,
+                    textRight:description.getBoundingClientRect().right,
+                    cellRight:cell.getBoundingClientRect().right,
+                    viewportRight:wrap.getBoundingClientRect().right};
+            }""")
+            assert bounds["scrollWidth"] > bounds["viewportWidth"]
+            assert bounds["textScrollWidth"] <= bounds["textWidth"] + 1
+            assert bounds["textHeight"] > 25
+            assert bounds["textRight"] <= bounds["cellRight"] + 1
+            assert bounds["cellRight"] <= bounds["viewportRight"] + 1
+            page.locator(".host-evidence-type-section").nth(1).locator("button").click()
+            page.wait_for_function("() => state.hostEvidence.selectedType === 'UNKNOWN_PORT' && !state.requests.has('hostEvidence')")
+            assert queries[-1].get("record_type") == ["UNKNOWN_PORT"]
+            page.locator("#host-evidence-filter-button").click()
+            page.locator("#host-evidence-origin").select_option("p2p")
+            page.locator("#host-evidence-type-sections").get_by_text("4 records").wait_for()
+            assert "4 matching records" in page.locator("#host-evidence-type-sections").inner_text()
+            page.locator("#host-evidence-threat").select_option("high_or_more")
+            page.wait_for_function("() => !state.requests.has('hostEvidenceTypes') && !state.requests.has('hostEvidence')")
+            assert any(query.get("record_group") == ["type"] and query.get("origin") == ["p2p"]
+                       and query.get("threat") == ["high_or_more"] for query in queries)
+            page.locator(".host-evidence-type-section button").first.click()
+            assert not page.locator("#host-evidence-table").is_visible()
+            page.locator(".host-evidence-type-section button").first.click()
+            page.locator("#host-evidence-table").wait_for(state="visible")
+            page.locator("#host-evidence-filter-button").click()
+            page.locator("#host-evidence-grouping").select_option("")
+            page.locator("#host-evidence-table").wait_for(state="visible")
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
     """Keep the metadata disclosure and keyboard focus across automatic refreshes.
@@ -585,8 +698,12 @@ def test_overview_resources_and_separate_throughput(theme: str, width: int, meas
             route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
         elif parsed.path == "/api/metrics":
             queries.append(parse_qs(parsed.query))
-            route.fulfill(json={"items": [{"ts": 1793800000, "cpu": 12.5, "memory": 768, "fps": 20},
-                                         {"ts": 1793800060, "cpu": 15, "memory": 800, "fps": 30}]})
+            route.fulfill(json={"redis_shared": True, "redis_run_port": 6379,
+                                "redis_cache_port": 6379,
+                                "items": [{"ts": 1793800000, "cpu": 12.5, "memory": 768, "fps": 20,
+                                           "run_redis_cpu": 2, "run_redis_memory": 256},
+                                          {"ts": 1793800060, "cpu": 15, "memory": 800, "fps": 30,
+                                           "run_redis_cpu": 3, "run_redis_memory": 260}]})
         else:
             route.fulfill(status=503, json={"error": "Isolated resource fixture"})
 
@@ -637,7 +754,10 @@ def test_overview_resources_and_separate_throughput(theme: str, width: int, meas
             assert page.locator(".overview-throughput #fps-chart").is_visible()
             assert page.locator("#memory-chart").locator("..").locator("figcaption").inner_text() == "Memory ⓘ"
             assert page.locator(".overview-performance .resource-info").count() == 2
-            assert page.locator("#cpu-chart .chart-line").count() == 1
+            assert page.locator("#cpu-chart .chart-line").count() == 2
+            assert page.locator("#memory-chart .redis-run-line").count() == 1
+            assert page.locator("#redis-run-legend").inner_text() == "Run + cache Redis :6379"
+            assert page.locator("#redis-cache-legend").is_hidden()
             assert "MiB" in page.locator("#memory-chart").text_content()
             with page.expect_response(lambda response: urlparse(response.url).path == "/api/metrics"):
                 page.locator("#metrics-range").select_option("1h")
@@ -730,7 +850,7 @@ def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, wid
                 if tab == "alerts":
                     popup.get_by_role("button", name="All alerts", exact=True).click()
                 elif tab == "hosts":
-                    page.locator("#hosts-scope-chips").get_by_role("button", name="Local", exact=False).click()
+                    page.locator("#hosts-scope-chips").get_by_role("button", name="Local", exact=True).click()
                 else:
                     page.locator("#evidence-group-controls").get_by_role("button", name="None", exact=True).click()
             page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
@@ -1415,8 +1535,8 @@ def test_review_keeps_investigation_open(workspace: str, decision: str) -> None:
 
 
 @pytest.mark.parametrize("input_type", ["zeek_folder", "interface"])
-def test_saved_filters_belong_to_analysis(input_type: str) -> None:
-    """Prevent live-run filters from hiding evidence in a different saved run.
+def test_saved_filters_follow_new_analysis(input_type: str) -> None:
+    """Keep selected evidence filters after page reloads and Slips restarts.
 
     Parameters:
         input_type: Original saved input, including a completed live capture.
@@ -1450,7 +1570,9 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
             page.goto("http://slips.test/")
             page.evaluate("""() => localStorage.setItem('slips-view-preferences-v1', JSON.stringify({
               controls: {'device-view': false, 'evidence-range':'24h', 'evidence-search':'live host',
-                'evidence-threat':'high', 'evidence-review':'true_positive'}, hideExcluded:false
+                'evidence-threat':'high', 'evidence-review':'true_positive', 'evidence-view':'host',
+                'evidence-scored-only':true, 'evidence-link':'linked'}, hideExcluded:false,
+                evidenceRecordGrouping:'handling', evidenceRecordOrigin:'p2p', evidenceRecordThreat:'high_or_more'
             }))""")
             page.add_script_tag(content=script)
             page.evaluate("""() => {
@@ -1466,12 +1588,16 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
               applyRunIdentity({output_dir:'output/pcap',analysis_start:'capture-start',server_pid:2});
               initializeRanges({input_type:inputType}, true);
             }""", input_type)
-            assert page.locator("#evidence-range").input_value() == "all"
-            assert page.locator("#evidence-search").input_value() == ""
-            assert page.locator("#evidence-threat").input_value() == ""
-            assert page.locator("#evidence-review").input_value() == "all"
+            assert page.locator("#evidence-range").input_value() == "24h"
+            assert page.locator("#evidence-search").input_value() == "live host"
+            assert page.locator("#evidence-threat").input_value() == "high_or_more"
+            assert page.locator("#evidence-review").input_value() == "true_positive"
+            assert page.locator("#evidence-view").input_value() == "host"
+            assert page.locator("#evidence-scored-only").is_checked()
+            assert page.locator("#evidence-link").input_value() == "linked"
+            assert page.evaluate("[state.evidenceWorkspace.recordGrouping, state.evidenceWorkspace.recordOrigin, state.evidenceWorkspace.recordThreat]") == ["handling", "p2p", "high_or_more"]
             assert page.locator("#device-view").count() == 0
-            assert page.evaluate("state.hideExcluded") is True
+            assert page.evaluate("state.hideExcluded") is False
             page.evaluate("""() => {
               byId('evidence-search').value='pcap host'; byId('evidence-range').value='7d';
               state.rangeChoices.add('evidence-range');
@@ -1489,8 +1615,8 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
               applyRunIdentity({output_dir:'output/pcap',analysis_start:'new-start',server_pid:4});
               initializeRanges({input_type:inputType}, true);
             }""", input_type)
-            assert page.locator("#evidence-search").input_value() == ""
-            assert page.locator("#evidence-range").input_value() == "all"
+            assert page.locator("#evidence-search").input_value() == "pcap host"
+            assert page.locator("#evidence-range").input_value() == "7d"
             assert not errors, errors
         finally:
             browser.close()
@@ -1603,6 +1729,37 @@ def test_group_records_by_type_keeps_parent_filters_and_full_pagination(
             page.wait_for_function("state.evidenceWorkspace.total === 97 && !state.requests.has('evidenceGroupPane')")
             assert page.locator("#evidence-threat").input_value() == "low_or_more"
             assert page.locator("#evidence-record-origin").input_value() == ""
+            page.locator("#evidence-record-grouping").select_option("threat")
+            page.wait_for_function("state.evidenceWorkspace.recordGrouping === 'threat' && state.evidenceWorkspace.recordsLoaded && !state.requests.has('evidenceGroupPane')")
+            assert page.locator(".evidence-record-group-row").count() == 4
+            assert page.locator("#evidence-records-table tbody tr[data-clickable]").count() == 50
+            assert sum(int(row.inner_text().split(" · ")[1].split()[0])
+                       for row in page.locator(".evidence-record-group-row").all()) == 50
+            page.locator("#evidence-record-threat").select_option("high_or_more")
+            page.wait_for_function("state.evidenceWorkspace.total === 48 && !state.requests.has('evidenceGroupPane')")
+            assert queries[-1]["record_threat"] == ["high_or_more"]
+            assert page.locator(".evidence-record-group-row").count() == 2
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            page.locator("#evidence-record-threat").select_option("")
+            page.wait_for_function("state.evidenceWorkspace.total === 97 && !state.requests.has('evidenceGroupPane')")
+            page.locator("#evidence-record-grouping").select_option("module")
+            page.wait_for_function("state.evidenceWorkspace.recordGrouping === 'module' && state.evidenceWorkspace.recordsLoaded && !state.requests.has('evidenceGroupPane')")
+            assert page.locator(".evidence-record-group-row").count() == 2
+            page.locator("#evidence-record-grouping").select_option("handling")
+            page.wait_for_function("state.evidenceWorkspace.recordGrouping === 'handling' && state.evidenceWorkspace.recordsLoaded && !state.requests.has('evidenceGroupPane')")
+            assert page.locator(".evidence-record-group-row").count() == 2
+            assert page.locator(".evidence-record-group-row").all_inner_texts() == ["EXCLUDED · 1 LOADED", "SCORED · 49 LOADED"]
+            page.get_by_role("button", name="Load more · 50 of 97", exact=True).click()
+            page.wait_for_function("state.evidenceWorkspace.records.length === 97")
+            assert sum(int(row.inner_text().split(" · ")[1].split()[0])
+                       for row in page.locator(".evidence-record-group-row").all()) == 97
+            assert page.evaluate("state.evidenceWorkspace.recordSort") == "time"
+            first_record = page.locator("#evidence-records-table tbody tr[data-clickable]").first.get_attribute("data-evidence-id")
+            page.locator("#evidence-records-table tbody tr[data-clickable] td").first.click()
+            page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+            assert page.evaluate("state.evidenceDetail.records[0].id") == first_record
+            page.evaluate("closeEvidenceDetail(false, true)")
+            page.get_by_role("button", name="Filters for records in this evidence group", exact=True).click()
             page.locator("#evidence-record-grouping").select_option("type")
             page.wait_for_function("state.evidenceWorkspace.recordTypesMatching === 97 && !state.requests.has('evidenceGroupPane')")
             artifacts = Path("output/evidence-record-types-check")
@@ -1610,6 +1767,15 @@ def test_group_records_by_type_keeps_parent_filters_and_full_pagination(
             page.screenshot(path=str(artifacts / f"types-{theme}.png"))
             popup.get_by_role("button", name="Close group record filters").click()
             page.screenshot(path=str(artifacts / f"groups-{theme}.png"))
+            page.evaluate("""() => {
+                const filters=state.evidenceWorkspace;
+                filters.recordSearch='same search';filters.recordOrigin='p2p';filters.recordThreat='high';
+                selectEvidenceGroup({id:'host:192.0.2.21',profile_ip:'192.0.2.21',
+                    evidence_count:1,module:'conn_analyzer',threat_level:'high'});
+            }""")
+            assert page.locator("#evidence-record-search").input_value() == "same search"
+            assert page.locator("#evidence-record-origin").input_value() == "p2p"
+            assert page.locator("#evidence-record-threat").input_value() == "high"
             assert not errors, errors
         finally:
             browser.close()
@@ -3224,6 +3390,7 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         "alert_count": 0, "evidence_count": 0, "permanent_profiles": [],
         "capture_network": {"name": "Home-Wifi6"}, "seen_on_current_network": True}
     errors: list[str] = []
+    score_requests: list[str] = []
 
     def route_request(route: Any) -> None:
         """Serve host refreshes and assets without accessing a running capture.
@@ -3240,9 +3407,16 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
             elif path.endswith("/traffic-summary"):
                 route.fulfill(json={"timeline": [], "protocols": [], "peers": []})
             elif path.endswith("/score-history"):
-                route.fulfill(json={"timeline": []})
+                score_ip = unquote(path.removeprefix("/api/hosts/").removesuffix("/score-history"))
+                score_requests.append(score_ip)
+                route.fulfill(json={"timeline": [
+                    {"ts": 100, "score": 0.5, "peak_score": 0.5, "threshold": 5},
+                    {"ts": 101, "score": 1.2, "peak_score": 1.2, "threshold": 5},
+                ] if score_ip == addresses[1] else [], "score_profile_ip": score_ip,
+                    "evidence_total": 2, "scored_evidence": 2, "peak_score": 1.2,
+                    "threshold": 5, "reset_count": 0})
             else:
-                route.fulfill(json=host)
+                route.fulfill(json={**host, "ip": unquote(path.removeprefix("/api/hosts/"))})
         elif path == "/api/host-names":
             route.fulfill(json={"names": {}})
         else:
@@ -3273,6 +3447,7 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         address_list = heading.locator(".device-addresses")
         assert address_list.text_content() == f"{len(addresses)} addresses · " + " · ".join(addresses)
         assert "android_aehweocc.local" in heading.inner_text()
+        assert heading.locator(".host-label code").first.inner_text() == addresses[1]
         assert "Home-Wifi6" in heading.inner_text()
         assert "Example device manufacturer" in heading.inner_text()
         assert "b8:7b:d4:97:ce:be" in heading.inner_text()
@@ -3297,7 +3472,8 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
                     identity:[...header.querySelectorAll('.host-label,.host-name,#host-subtitle,#host-score-pill')]
                         .every(node => fits(node.getBoundingClientRect())),
                     controls:[...header.querySelectorAll('button,select,input')]
-                        .filter(node => !node.hidden).every(node => fits(node.getBoundingClientRect()))};
+                        .filter(node => !node.hidden && node.getClientRects().length)
+                        .every(node => fits(node.getBoundingClientRect()))};
             }""", addresses)
             assert all(geometry.values()), (width, geometry)
             assert address_list.bounding_box()["width"] > 400
@@ -3328,6 +3504,16 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         assert heading.locator(".device-addresses").count() == 0
         assert addresses[0] in heading.inner_text()
         assert "android_aehweocc.local" in heading.inner_text()
+        page.evaluate("""async ip => {
+            state.deviceView=true; state.pages.hosts.items=[{...state.host}];
+            state.pages.hosts.total=1; renderHostsPage(); await openHost(ip);
+        }""", addresses[0])
+        assert page.locator("#hosts-table tbody .host-label code").first.inner_text() == addresses[1]
+        assert page.evaluate("state.host.ip") == addresses[1]
+        assert heading.locator(".host-label code").first.inner_text() == addresses[1]
+        assert page.locator("#host-score-source").inner_text() == addresses[1]
+        assert page.locator("#host-score-chart .chart-line").count() == 3
+        assert score_requests[-1] == addresses[1]
         assert errors == []
         browser.close()
 
@@ -4138,14 +4324,14 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         assert "medium" in row.inner_text()
         row.click()
         page.wait_for_function("state.host?.ip === '192.168.1.249' && state.pages['host-evidence'].total === 1")
-        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.locator("#host-evidence-threat").input_value() == ""
         assert page.locator("#host-evidence-search").input_value() == ""
         assert page.locator("#host-range").input_value() == "all"
         assert page.evaluate("state.host.evidence_count") == 1
         assert "Peak 0.49" in page.locator("#host-score-pill").inner_text()
         notice = page.locator("#host-activity-filter-notice")
         assert not notice.is_visible()
-        page.locator("#host-activity-threat").select_option("high_or_more")
+        page.locator("#host-evidence-threat").evaluate("node => { node.value='high_or_more'; node.dispatchEvent(new Event('change')); }")
         page.wait_for_function("state.pages['host-evidence'].total === 0")
         assert page.locator("#host-evidence-tab-count").count() == 0
         assert "0 matching evidence · 1 in this range" in notice.inner_text()
@@ -4153,14 +4339,16 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         notice.get_by_role("button", name="Clear activity filters", exact=True).click()
         page.wait_for_function("state.pages['host-evidence'].total === 1")
         assert "Device Changing IP" in page.locator("#host-evidence-table tbody").inner_text()
-        assert page.locator("#host-activity-group").input_value() == "module"
+        assert page.locator("#host-evidence-grouping").input_value() == "module"
         assert page.evaluate("state.pages['host-evidence'].sort") == "type"
         assert page.locator("#host-evidence-search").input_value() == ""
-        page.locator("#host-range").select_option("live")
+        page.locator("#host-filter-button").click()
+        page.locator("#host-filter-popup #host-range").select_option("live")
         page.wait_for_function("state.host.evidence_count === 0 && state.pages['host-evidence'].total === 0")
         assert page.evaluate("state.host.peak_alert_score") is None
-        page.locator("#host-range").select_option("all")
+        page.locator("#host-filter-popup #host-range").select_option("all")
         page.wait_for_function("state.host.evidence_count === 1 && state.pages['host-evidence'].total === 1")
+        page.keyboard.press("Escape")
         page.locator('[data-host-activity="alerts"]').click()
         page.wait_for_function("document.querySelector('#host-alert-count').textContent.includes('0 alerts')")
         assert page.evaluate("state.host.alert_count") == 0
@@ -4702,10 +4890,10 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_pcap_host_evidence_does_not_inherit_other_host_filters(
+def test_host_filters_follow_next_host_without_old_run_filters(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, theme: str,
 ) -> None:
-    """Show all 93 low ARP findings despite saved or previously selected filters.
+    """Clear stale filters once, then carry chosen filters across hosts.
 
     Parameters:
         tmp_path: Isolated evidence and history databases.
@@ -4801,26 +4989,37 @@ def test_pcap_host_evidence_does_not_inherit_other_host_filters(
         assert page.evaluate("state.pages['host-evidence'].total") == 93
         assert page.locator("#host-evidence-table tbody tr").count() == 93
         assert page.locator("#host-evidence-tab-count").count() == 0
-        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.locator("#host-evidence-threat").input_value() == ""
         assert page.locator("#host-evidence-search").input_value() == ""
         assert all(not query.get("threat") and not query.get("search") for query in requests if query.get("profile") == [first])
-        page.locator("#host-activity-threat").select_option("medium")
+        page.locator("#host-evidence-threat").evaluate("node => { node.value='medium'; node.dispatchEvent(new Event('change')); }")
         page.wait_for_function("state.pages['host-evidence'].total === 0")
         assert page.locator("#host-evidence-tab-count").count() == 0
         assert "0 matching evidence · 93 in this range" in page.locator("#host-activity-filter-notice").inner_text()
         page.evaluate("async () => { await refreshHostWorkspace(); await showHostActivity('flows'); await showHostActivity('evidence'); }")
-        assert page.locator("#host-activity-threat").input_value() == "medium"
+        assert page.locator("#host-evidence-threat").input_value() == "medium"
         assert page.locator("#host-evidence-tab-count").count() == 0
         page.evaluate("async ip => await openHost(ip)", first)
-        assert page.locator("#host-activity-threat").input_value() == ""
-        assert page.evaluate("state.pages['host-evidence'].total") == 93
-        page.locator("#host-activity-threat").select_option("medium")
-        page.wait_for_function("state.pages['host-evidence'].total === 0")
-        page.locator("#host-evidence-search").fill("not in the next host")
-        page.evaluate("async ip => await openHost(ip)", second)
-        assert page.locator("#host-activity-threat").input_value() == ""
-        assert page.locator("#host-evidence-search").input_value() == ""
+        assert page.locator("#host-evidence-threat").input_value() == "medium"
+        assert page.evaluate("state.pages['host-evidence'].total") == 0
+        page.locator("#host-evidence-filter-button").click()
+        page.locator("#host-evidence-threat").select_option("low")
+        page.wait_for_function("state.pages['host-evidence'].total === 93")
+        page.keyboard.press("Escape")
+        page.locator("#host-evidence-search").fill("ARP scan")
+        page.wait_for_function("!state.requests.has('hostEvidence')")
+        page.locator("#host-filter-button").click()
+        page.locator("#host-filter-popup #host-range").select_option("7d")
+        page.wait_for_function("!state.requests.has('hostEvidence')")
+        page.keyboard.press("Escape")
+        page.evaluate("async ip => { closeHost(); await openHost(ip, {ip}); }", second)
+        assert page.locator("#host-range").input_value() == "7d"
+        assert page.locator("#host-evidence-threat").input_value() == "low"
+        assert page.locator("#host-evidence-search").input_value() == "ARP scan"
         assert page.evaluate("state.pages['host-evidence'].total") == 1
+        assert any(query.get("range") == ["7d"] and query.get("profile") == [second]
+                   and query.get("threat") == ["low"] and query.get("search") == ["ARP scan"]
+                   for query in requests)
         page.evaluate("async ip => await openHost(ip)", first)
         assert page.evaluate("state.pages['host-evidence'].total") == 93
         page.evaluate("""async () => {
@@ -4882,9 +5081,27 @@ def test_score_missing_zero_and_historical_crossing_are_distinct(theme: str) -> 
         assert all('Missing does not mean zero' in v['title'] for v in values[:4])
         page.evaluate("""() => renderHostScoreHistory({timeline:[
             {ts:100,score:1.28,peak_score:1.28,threshold:1.2},
-            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
+            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true,
+                reset_reason:'score decreased (possible reset)'}],
             evidence_total:82,scored_evidence:82,mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
         assert 'peak 1.280 / 1.200' in page.locator('#host-score-history-status').inner_text()
+        legend = page.locator('.score-chart-legend')
+        assert 'new time window or score drop' in legend.text_content()
+        assert legend.locator('.chart-key.reset').evaluate(
+            'node => getComputedStyle(node).borderLeftStyle') == 'dotted'
+        assert page.locator('#host-score-chart .chart-reset-line').count() == 1
+        assert 'possible reset' in page.locator('#host-score-chart .chart-reset-line title').text_content()
+        page.evaluate("""() => renderHostScoreHistory({timeline:[
+            {ts:1794700000,score:1.28,peak_score:1.28,threshold:1.2},
+            {ts:1794700060,score:.32,peak_score:.32,threshold:1.2},
+            {ts:1794772060,score:.56,peak_score:.56,threshold:1.2}],
+            bucket_seconds:60,evidence_total:82,scored_evidence:82,
+            mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
+        score_lines = page.locator('#host-score-chart .chart-line')
+        assert score_lines.nth(0).get_attribute('d').count('M') == 2
+        assert score_lines.nth(1).get_attribute('d').count('M') == 2
+        assert score_lines.nth(2).get_attribute('d').count('M') == 1
+        assert 'longest 20:00:00' in page.locator('#host-score-history-status').inner_text()
         page.evaluate("""() => renderHostScoreHistory({timeline:[
             {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
             evidence_total:82,scored_evidence:0,mode:'ATL',peak_score:0,threshold:1.2,reset_count:0})""")
@@ -6462,7 +6679,16 @@ def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, wid
                 byId('hosts-list-view').hidden=true; syncFilterPopups();
             }""")
             page.locator("#host-filter-button").click()
-            assert page.locator("#host-filter-popup #network-filter").is_visible()
+            host_filters = page.locator("#host-filter-popup")
+            assert host_filters.locator("#network-filter").is_visible()
+            assert host_filters.locator("#host-range").is_visible()
+            assert host_filters.locator(".excluded-visibility-toggle").is_visible()
+            assert page.locator("#host-detail-view .compact-toolbar > #host-range").count() == 0
+            assert page.locator("#host-detail-view .compact-toolbar > .excluded-visibility-toggle").count() == 0
+            host_filters.locator("#host-range").select_option("7d")
+            assert page.locator("#host-filter-summary").inner_text().startswith("7 days")
+            host_filters.locator(".excluded-visibility-toggle").click()
+            assert page.evaluate("state.hideExcluded") is False
             page.keyboard.press("Escape")
             page.evaluate("() => {closeHost(); switchTab('overview');}")
             page.locator("#overview-filter-button").click()
@@ -6486,6 +6712,27 @@ def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, wid
             page.screenshot(path=str(artifact / f"{theme}-{width}-filters.png"))
             page.keyboard.press("Escape")
             page.screenshot(path=str(artifact / f"{theme}-{width}.png"))
+            page.evaluate("""() => {
+                byId('evidence-scored-only').checked=true;
+                byId('evidence-link').value='linked';
+                state.rangeChoices.add('evidence-range');
+                state.hideExcluded=false;
+                saveViewPreferences();
+            }""")
+            page.reload()
+            page.wait_for_function("() => state.requests.size === 0")
+            page.evaluate("""() => updateNetworkFilterAvailability({input_type:'interface',
+                network_filter_supported:true, current_network_start:100, current_networks:[
+                {interface:'eth0',network_id:'uplink',name:'Stratoguest',connected:true,host_ip:'192.168.1.170'},
+                {interface:'wlan0',network_id:'ap',name:'slips_wifi',connected:true,host_ip:'192.168.12.1'}]})""")
+            assert page.locator("#evidence-range").input_value() == "7d"
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            assert page.locator("#evidence-view").input_value() == "host"
+            assert page.locator("#evidence-scored-only").is_checked()
+            assert page.locator("#evidence-link").input_value() == "linked"
+            assert page.evaluate("state.hideExcluded") is False
+            assert page.locator("#network-selection").input_value() == "ap"
+            assert page.locator("#interface-selection").input_value() == "wlan0"
             assert not errors, errors
         finally:
             browser.close()
