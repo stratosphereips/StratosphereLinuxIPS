@@ -523,7 +523,8 @@ class IoCHandler:
                         # make it a list and extend
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
-                        domain_data[key] = prev_info.extend(data_to_store)
+                        prev_info.extend(data_to_store)
+                        domain_data[key] = prev_info
                     elif prev_info is None:
                         # no previous info about this domain
                         domain_data[key] = data_to_store
