@@ -28,6 +28,19 @@ def test_service_anomaly_feature_flag_controls_module_start(enabled: bool) -> No
     assert (Modules.ANOMALY_DETECTION_SERVICES in manager._get_feature_toggled_disabled_modules()) is (not enabled)
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+def test_t_cell_feature_flag_controls_module_start(enabled: bool) -> None:
+    """Include T cell only when its config flag is enabled.
+
+    Parameters:
+        enabled: Configured T cell flag.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.main.conf.t_cell_enabled.return_value = enabled
+    disabled = manager._get_feature_toggled_disabled_modules()
+    assert (Modules.T_CELL in disabled) is (not enabled)
+
+
 @pytest.mark.parametrize(
     "module_name, modules_to_ignore, expected",
     [
@@ -84,6 +97,7 @@ def test_get_user_disabled_modules(
     process_manager.main.conf.llm_enabled.return_value = True
     process_manager.main.conf.alert_summary_enabled.return_value = True
     process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.t_cell_enabled.return_value = True
     process_manager.main.conf.read_configuration.reset_mock()
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = configured_modules
@@ -156,6 +170,7 @@ def test_get_disabled_modules(
     process_manager.main.conf.llm_enabled.return_value = True
     process_manager.main.conf.alert_summary_enabled.return_value = True
     process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.t_cell_enabled.return_value = True
     process_manager.main.input_type = input_type
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -209,6 +224,7 @@ def test_get_user_disabled_modules_includes_feature_toggled_modules(
     process_manager.main.conf.regex_generator_enabled.return_value = (
         regex_generator_enabled
     )
+    process_manager.main.conf.t_cell_enabled.return_value = True
 
     assert process_manager.get_user_disabled_modules() == expected
 
