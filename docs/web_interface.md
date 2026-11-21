@@ -763,6 +763,14 @@ values for the measured lower bound. Historical charts keep their recorded
 samples, including data collected by earlier Slips versions. Flow throughput
 has its own panel and uses the selected performance-history time range.
 
+The Overview CPU and memory plots also show the Redis server used by the run
+and the shared cache Redis server. These lines are process CPU and resident RAM,
+included in the Slips total. If both logical databases use the same Redis
+server, one **Run + cache Redis** line is shown because process resources cannot
+be attributed to individual Redis databases. The legend identifies the ports;
+hover over a plot for exact values. Older history without Redis-specific
+samples continues to show only the total.
+
 ## Long-running behavior
 
 For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Under size pressure, evidence-linked flows remain protected for at least the configured ordinary-flow age after their newest linked evidence; the size target is allowed to be exceeded when durable evidence alone is larger than the target. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires. The evidence drawer first reads SQLite and then recovers missing linked flows from bounded current or saved Zeek JSON logs when available. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. On older databases, deleted rows may not reduce the file's physical size until Slips is stopped and SQLite `VACUUM` is run; allow temporary free disk space for that operation.

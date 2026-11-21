@@ -871,6 +871,13 @@ def test_metric_rollup_waits_for_complete_minutes_and_is_idempotent(
                 (complete_cutoff + 10, 20, 200, 3, 11),
             ],
         )
+        connection.executemany(
+            "INSERT INTO redis_metrics_1s VALUES (?, ?, ?, ?, ?)",
+            [
+                (complete_cutoff - 1, 2, 20, 3, 30),
+                (complete_cutoff + 10, 4, 40, 5, 50),
+            ],
+        )
 
     with patch("modules.web_interface.history.time.time", return_value=now):
         assert collector.rollup_metrics() == 1
@@ -883,10 +890,19 @@ def test_metric_rollup_waits_for_complete_minutes_and_is_idempotent(
         rolled = connection.execute(
             "SELECT flow_total, samples FROM runtime_metrics_1m"
         ).fetchone()
+        redis_raw = connection.execute(
+            "SELECT ts FROM redis_metrics_1s"
+        ).fetchall()
+        redis_rolled = connection.execute(
+            "SELECT run_cpu, cache_memory FROM redis_metrics_1m"
+        ).fetchone()
 
     assert [row["ts"] for row in raw] == [complete_cutoff + 10]
     assert rolled["flow_total"] == 7
     assert rolled["samples"] == 1
+    assert [row["ts"] for row in redis_raw] == [complete_cutoff + 10]
+    assert redis_rolled["run_cpu"] == 2
+    assert redis_rolled["cache_memory"] == 30
 
 
 def test_snapshot_hosts_keeps_profile_ip_exact(tmp_path) -> None:
@@ -1056,6 +1072,57 @@ def test_metric_sample_preserves_exact_profiler_delta(tmp_path) -> None:
 
     assert sample["flows_per_second"] == 3.5
     assert sample["flow_delta"] == 7
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_metric_sample_tracks_run_and_cache_redis_processes(
+    tmp_path, shared: bool,
+) -> None:
+    """Record Redis process resources once when both databases share a server.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        shared: Whether the run and cache clients use one Redis process.
+    """
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    redis_client = Mock()
+    redis_client.get.return_value = 0
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999,
+        cache_redis_client=Mock(),
+    )
+    run_process = MagicMock()
+    run_process.pid = 123
+    run_process.cpu_percent.return_value = 40.0
+    run_process.memory_info.return_value = SimpleNamespace(rss=100 * 1024 * 1024)
+    cache_process = run_process if shared else MagicMock()
+    if not shared:
+        cache_process.pid = 456
+        cache_process.cpu_percent.return_value = 20.0
+        cache_process.memory_info.return_value = SimpleNamespace(rss=50 * 1024 * 1024)
+    collector._redis_process = run_process
+    collector._cache_redis_process = cache_process
+    collector._live_processes = Mock(
+        return_value=[run_process] if shared else [run_process, cache_process]
+    )
+
+    with patch("modules.web_interface.history.psutil.cpu_count", return_value=4):
+        collector.sample_metrics()
+
+    with connect_history(history_path, read_only=True) as connection:
+        redis_row = connection.execute("SELECT * FROM redis_metrics_1s").fetchone()
+        total_row = connection.execute(
+            "SELECT cpu_percent, memory_mb FROM runtime_metrics_1s"
+        ).fetchone()
+
+    assert redis_row["run_cpu"] == 10.0
+    assert redis_row["run_memory"] == 100.0
+    assert redis_row["cache_cpu"] == (10.0 if shared else 5.0)
+    assert redis_row["cache_memory"] == (100.0 if shared else 50.0)
+    assert total_row["cpu_percent"] == (10.0 if shared else 15.0)
+    assert total_row["memory_mb"] == (100.0 if shared else 150.0)
 
 
 def test_collector_records_heartbeat_and_clean_disconnect(tmp_path) -> None:

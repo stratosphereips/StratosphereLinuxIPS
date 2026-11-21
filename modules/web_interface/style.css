@@ -1304,6 +1304,14 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 :is(.overview-performance, .overview-throughput) .chart-grid .chart-time-label { display: none; }
 :is(.overview-performance, .overview-throughput) .chart-grid .chart-line { stroke: #3d91ff; stroke-width: 2.4; }
 :is(.overview-performance, .overview-throughput) .chart-grid .chart-line.secondary-line { display: none; }
+.performance-legend { display: flex; flex-wrap: wrap; gap: .25rem .75rem; margin: .2rem 0 .35rem; color: var(--muted); font-size: .68rem; }
+.performance-legend span { display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+.performance-legend span[hidden] { display: none; }
+.performance-legend span::before { width: 12px; height: 2px; background: #3d91ff; content: ""; }
+.performance-legend .performance-redis-run::before { background: #e2a044; }
+.performance-legend .performance-redis-cache::before { background: #b885e4; }
+.overview-performance .chart-grid .chart-line.redis-run-line { stroke: #e2a044; }
+.overview-performance .chart-grid .chart-line.redis-cache-line { stroke: #b885e4; }
 .overview-detail-actions { display: flex; justify-content: flex-end; gap: .45rem; margin-top: -.15rem; }
 .overview-detail-actions button { padding: .16rem .45rem; border: 0; background: transparent; color: var(--muted); font-size: .7rem; }
 #overview-details[hidden] { display: none; }
@@ -1415,6 +1423,10 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 [data-theme="light"] .module-cpu-fill, [data-theme="light"] .evidence-bar-track > span { background: var(--blue); }
 [data-theme="light"] .evidence-score-track { background: linear-gradient(90deg, #d9e5ed 0 49.6%, #7f99aa 49.6% 50.4%, #d9e5ed 50.4%); }
 [data-theme="light"] :is(.overview-performance, .overview-throughput) .chart-grid .chart-line { stroke: var(--blue); }
+[data-theme="light"] .overview-performance .chart-grid .chart-line.redis-run-line { stroke: #9b5a05; }
+[data-theme="light"] .overview-performance .chart-grid .chart-line.redis-cache-line { stroke: #8154aa; }
+[data-theme="light"] .performance-legend .performance-redis-run::before { background: #9b5a05; }
+[data-theme="light"] .performance-legend .performance-redis-cache::before { background: #8154aa; }
 [data-theme="light"] .chart-grid .chart-line.peer-trust-line-0, [data-theme="light"] .peer-trust-key.peer-trust-line-0 { stroke: #087d70; background: #087d70; }
 [data-theme="light"] .chart-grid .chart-line.peer-trust-line-1, [data-theme="light"] .peer-trust-key.peer-trust-line-1 { stroke: #1b66c9; background: #1b66c9; }
 [data-theme="light"] .chart-grid .chart-line.peer-trust-line-2, [data-theme="light"] .peer-trust-key.peer-trust-line-2 { stroke: #996000; background: #996000; }

@@ -2657,14 +2657,33 @@ async function loadMetrics() {
   state.metrics = payload.items;
   byId("throughput-range").textContent = byId("metrics-range").selectedOptions[0].textContent;
   byId("throughput-range").title = "Time range follows Slips performance";
+  const sharedRedis = Boolean(payload.redis_shared);
+  const runRedisLabel = sharedRedis
+    ? `Run + cache Redis :${payload.redis_run_port}`
+    : `Run Redis :${payload.redis_run_port}`;
+  const cacheRedisLabel = `Cache Redis :${payload.redis_cache_port}`;
+  const hasRedisSamples = (key) => state.metrics.some((point) => point[key] !== null
+    && point[key] !== undefined && Number.isFinite(Number(point[key])));
+  const runLegend = byId("redis-run-legend");
+  const cacheLegend = byId("redis-cache-legend");
+  runLegend.hidden = !hasRedisSamples("run_redis_memory");
+  runLegend.textContent = runRedisLabel;
+  cacheLegend.hidden = sharedRedis || !hasRedisSamples("cache_redis_memory");
+  cacheLegend.textContent = cacheRedisLabel;
+  const redisCpuSeries = [{ key: "run_redis_cpu", className: "redis-run-line", label: runRedisLabel }];
+  const redisMemorySeries = [{ key: "run_redis_memory", className: "redis-run-line", label: runRedisLabel }];
+  if (!sharedRedis) {
+    redisCpuSeries.push({ key: "cache_redis_cpu", className: "redis-cache-line", label: cacheRedisLabel });
+    redisMemorySeries.push({ key: "cache_redis_memory", className: "redis-cache-line", label: cacheRedisLabel });
+  }
   renderLineChart(
     "cpu-chart", state.metrics,
-    [{ key: "cpu" }, { key: "cpu_max", className: "secondary-line" }],
+    [{ key: "cpu", label: "Slips total" }, { key: "cpu_max", className: "secondary-line" }, ...redisCpuSeries],
     formatCpuChartValue,
   );
   renderLineChart(
     "memory-chart", state.metrics,
-    [{ key: "memory" }, { key: "memory_max", className: "secondary-line" }],
+    [{ key: "memory", label: "Slips total" }, { key: "memory_max", className: "secondary-line" }, ...redisMemorySeries],
     formatMemoryChartValue,
   );
   renderLineChart("fps-chart", state.metrics, [{ key: "fps" }, { key: "fps_max", className: "secondary-line" }]);

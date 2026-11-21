@@ -367,6 +367,7 @@ class WebInterface(IModule):
             host_profiles_path=Path(self.conf.permanent_dir())
             / "host_profiles"
             / "hosts.sqlite",
+            cache_redis_client=self.db.rdb.rcache,
         )
         # Publish live hosts before the HTTP server accepts requests. Detection
         # backfill runs separately so it cannot delay live host refreshes.

@@ -300,6 +300,7 @@ class RunDataReader:
             saved_view: Use saved event times instead of the current live clock.
         """
         self.redis_port = redis_port
+        self.cache_redis_port = cache_redis_port
         self.output_dir = Path(output_dir)
         self.sqlite_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = (
@@ -9459,8 +9460,34 @@ class RunDataReader:
                 "GROUP BY CAST(bucket_ts / ? AS INTEGER) ORDER BY ts",
                 (older_bucket, older_bucket, start, older_bucket),
             ).fetchall()
+            redis_recent = connection.execute(
+                "SELECT CAST(ts / ? AS INTEGER) * ? AS ts, "
+                "AVG(run_cpu) AS run_redis_cpu, "
+                "AVG(run_memory) AS run_redis_memory, "
+                "AVG(cache_cpu) AS cache_redis_cpu, "
+                "AVG(cache_memory) AS cache_redis_memory "
+                "FROM redis_metrics_1s WHERE ts >= ? "
+                "GROUP BY CAST(ts / ? AS INTEGER) ORDER BY ts",
+                (bucket, bucket, start, bucket),
+            ).fetchall()
+            redis_older = connection.execute(
+                "SELECT CAST(bucket_ts / ? AS INTEGER) * ? AS ts, "
+                "AVG(run_cpu) AS run_redis_cpu, "
+                "AVG(run_memory) AS run_redis_memory, "
+                "AVG(cache_cpu) AS cache_redis_cpu, "
+                "AVG(cache_memory) AS cache_redis_memory "
+                "FROM redis_metrics_1m WHERE bucket_ts >= ? "
+                "GROUP BY CAST(bucket_ts / ? AS INTEGER) ORDER BY ts",
+                (older_bucket, older_bucket, start, older_bucket),
+            ).fetchall()
         merged = {float(row["ts"]): dict(row) for row in older}
         merged.update({float(row["ts"]): dict(row) for row in recent})
+        for row in redis_older:
+            if float(row["ts"]) in merged:
+                merged[float(row["ts"])].update(dict(row))
+        for row in redis_recent:
+            if float(row["ts"]) in merged:
+                merged[float(row["ts"])].update(dict(row))
         points = [merged[key] for key in sorted(merged)][-max_points:]
         return {
             "items": points,
@@ -9468,6 +9495,9 @@ class RunDataReader:
             "range": range_name,
             "max_points": max_points,
             "raw_retention_seconds": 24 * 60 * 60,
+            "redis_run_port": self.redis_port,
+            "redis_cache_port": self.cache_redis_port,
+            "redis_shared": self.redis_port == self.cache_redis_port,
         }
 
     def _module_rows(

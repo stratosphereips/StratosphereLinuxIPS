@@ -5736,6 +5736,8 @@ def test_host_flows_exclude_mac_alias_addresses(tmp_path) -> None:
 def test_metrics_response_never_exceeds_requested_points(tmp_path) -> None:
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
+    reader.redis_port = 6381
+    reader.cache_redis_port = 6379
     reader.history_path = tmp_path / "history.sqlite"
     initialize_history(reader.history_path)
     now = time.time()
@@ -5758,6 +5760,42 @@ def test_metrics_response_never_exceeds_requested_points(tmp_path) -> None:
 
     assert result["page_size"] <= 100
     assert result["max_points"] == 100
+
+
+@pytest.mark.parametrize("cache_port", [6379, 6381])
+def test_metrics_response_includes_redis_server_history(
+    tmp_path, cache_port: int,
+) -> None:
+    """Expose Redis series and identify when two databases share a process.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        cache_port: Port of the shared cache Redis server.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis_port = 6381
+    reader.cache_redis_port = cache_port
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    sampled_at = time.time() - 5
+    with connect_history(reader.history_path) as connection:
+        connection.execute(
+            "INSERT INTO runtime_metrics_1s VALUES (?, ?, ?, ?, ?)",
+            (sampled_at, 15, 150, 1, 1),
+        )
+        connection.execute(
+            "INSERT INTO redis_metrics_1s VALUES (?, ?, ?, ?, ?)",
+            (sampled_at, 10, 100, 5, 50),
+        )
+
+    result = reader.metrics({"range": ["15m"]})
+
+    assert result["redis_shared"] is (cache_port == 6381)
+    assert result["redis_run_port"] == 6381
+    assert result["redis_cache_port"] == cache_port
+    assert result["items"][0]["run_redis_cpu"] == 10
+    assert result["items"][0]["cache_redis_memory"] == 50
 
 
 def test_durable_module_counts_survive_redis_window_expiry(tmp_path) -> None:

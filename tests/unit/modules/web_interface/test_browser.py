@@ -698,8 +698,12 @@ def test_overview_resources_and_separate_throughput(theme: str, width: int, meas
             route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
         elif parsed.path == "/api/metrics":
             queries.append(parse_qs(parsed.query))
-            route.fulfill(json={"items": [{"ts": 1793800000, "cpu": 12.5, "memory": 768, "fps": 20},
-                                         {"ts": 1793800060, "cpu": 15, "memory": 800, "fps": 30}]})
+            route.fulfill(json={"redis_shared": True, "redis_run_port": 6379,
+                                "redis_cache_port": 6379,
+                                "items": [{"ts": 1793800000, "cpu": 12.5, "memory": 768, "fps": 20,
+                                           "run_redis_cpu": 2, "run_redis_memory": 256},
+                                          {"ts": 1793800060, "cpu": 15, "memory": 800, "fps": 30,
+                                           "run_redis_cpu": 3, "run_redis_memory": 260}]})
         else:
             route.fulfill(status=503, json={"error": "Isolated resource fixture"})
 
@@ -750,7 +754,10 @@ def test_overview_resources_and_separate_throughput(theme: str, width: int, meas
             assert page.locator(".overview-throughput #fps-chart").is_visible()
             assert page.locator("#memory-chart").locator("..").locator("figcaption").inner_text() == "Memory ⓘ"
             assert page.locator(".overview-performance .resource-info").count() == 2
-            assert page.locator("#cpu-chart .chart-line").count() == 1
+            assert page.locator("#cpu-chart .chart-line").count() == 2
+            assert page.locator("#memory-chart .redis-run-line").count() == 1
+            assert page.locator("#redis-run-legend").inner_text() == "Run + cache Redis :6379"
+            assert page.locator("#redis-cache-legend").is_hidden()
             assert "MiB" in page.locator("#memory-chart").text_content()
             with page.expect_response(lambda response: urlparse(response.url).path == "/api/metrics"):
                 page.locator("#metrics-range").select_option("1h")
