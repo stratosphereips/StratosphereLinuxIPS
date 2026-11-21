@@ -22,6 +22,8 @@ import asyncio
 import multiprocessing
 import time
 from concurrent.futures import ThreadPoolExecutor
+import dns.exception
+import dns.resolver
 from functools import lru_cache, partial
 
 
@@ -209,8 +211,11 @@ class IPInfo(IAsyncModule):
         if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
             return False
         try:
-            # works with both ipv4 and ipv6
-            reverse_dns: str = socket.gethostbyaddr(ip)[0]
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = 2.0
+            resolver.lifetime = 2.0
+            answers = resolver.resolve_address(ip, lifetime=2.0)
+            reverse_dns: str = str(answers[0].target).rstrip(".")
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
                 # check if the reverse_dns value is a valid IP address
@@ -223,7 +228,7 @@ class IPInfo(IAsyncModule):
                 data["reverse_dns"] = reverse_dns
                 self.failed_rdns_lookups.pop(ip, None)
                 self.db.set_ip_info(ip, data)
-        except (socket.gaierror, socket.herror, OSError):
+        except (dns.exception.DNSException, ValueError, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
             self._store_negative_cache(self.failed_rdns_lookups, ip)
             return False
@@ -420,7 +425,10 @@ class IPInfo(IAsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
-    async def shutdown_gracefully(self):
+    async def shutdown_gracefully(self) -> None:
+        """
+        Clean up open databases, queues, and thread pool on shutdown.
+        """
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
@@ -429,7 +437,7 @@ class IPInfo(IAsyncModule):
             self.pending_mac_queries.close()
             self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
-            self.lookup_executor.shutdown(wait=True, cancel_futures=True)
+            self.lookup_executor.shutdown(wait=False, cancel_futures=True)
         if hasattr(self, "domain_validity_cache"):
             self.domain_validity_cache.clear()
         self._get_ip_family_cached.cache_clear()
