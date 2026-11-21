@@ -79,6 +79,19 @@ class AnomalyDetectionServices(IModule):
         )
         self.detector.restore(self.store.load())
         self.host_inventory.restore(self.store.load_hosts())
+        for key in self.detector.services:
+            scope, server, _, _ = json.loads(key)
+            host_key = json.dumps([scope, server], separators=(",", ":"))
+            if host_key in self.host_inventory.hosts or (
+                server.startswith("ip:")
+                and (scope, server[3:]) in self.host_inventory.aliases
+            ):
+                self.detector.local_services.add(key)
+        retraining = (
+            self.detector.retrain_incomplete_local_services()
+            if self.settings.mode != "detect"
+            else 0
+        )
         self._refresh_local_hosts()
         self.print(
             f"Service anomaly mode={self.settings.mode}; "
@@ -86,7 +99,11 @@ class AnomalyDetectionServices(IModule):
             f"{self.detector.client_count} clients; timezone={self.settings.timezone}; "
             f"new services={self.settings.detect_new_services}; "
             f"host training={self.settings.training_hours:g} hours; "
-            f"restored {len(self.host_inventory.hosts)} local hosts",
+            f"restored {len(self.host_inventory.hosts)} local hosts; "
+            f"retraining {retraining} incomplete local services; "
+            f"limits={self.settings.max_services} services, "
+            f"{self.settings.max_clients} clients, "
+            f"{self.settings.max_hosts} hosts",
             1,
             0,
         )
@@ -384,6 +401,9 @@ class AnomalyDetectionServices(IModule):
                 key,
                 client,
                 allow_learning=allow_learning and not unexpected_service,
+                local_service=self._is_local_host(
+                    observation.server_ip, state
+                ),
             )
         )
         if reasons:
@@ -489,11 +509,18 @@ class AnomalyDetectionServices(IModule):
             self.detector.capacity_skips or self.host_inventory.capacity_skips
         ) and now >= self._next_warning:
             self.print(
-                "Service baseline capacity reached; incomplete client or port lists "
-                "do not produce new-client or new-service findings. Review configured limits.",
+                "Service baseline limits reached: "
+                f"{self.detector.capacity_skips} service/client observations and "
+                f"{self.host_inventory.capacity_skips} host/port observations skipped. "
+                f"Limits: {self.settings.max_services} services/ports, "
+                f"{self.settings.max_clients} clients, "
+                f"{self.settings.max_hosts} hosts. Incomplete baselines suppress "
+                "new-client or new-service findings.",
                 0,
                 1,
             )
+            self.detector.capacity_skips = 0
+            self.host_inventory.capacity_skips = 0
             self._next_warning = now + 60
 
     def main(self) -> None:

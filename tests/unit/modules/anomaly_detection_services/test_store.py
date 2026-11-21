@@ -211,6 +211,38 @@ def test_live_and_offline_baselines_are_isolated(tmp_path: Path) -> None:
         module.shutdown_gracefully()
 
 
+def test_restart_retrains_incomplete_local_model_without_losing_ports(
+    tmp_path: Path,
+) -> None:
+    """Recover a truncated local client list from the saved baseline safely.
+
+    Parameters:
+        tmp_path: Isolated live baseline directory.
+    """
+    module = ModuleFactory().create_service_anomaly_obj(str(tmp_path))
+    module.handle_flow({
+        "twid": "timewindow1",
+        "flow": flow(uid="local-training"),
+    })
+    key = next(iter(module.detector.services))
+    module.detector.services[key].clients_complete = False
+    path = tmp_path / "permanent" / module.name / "baseline.sqlite"
+    with closing(BaselineStore(path, module.settings)) as store:
+        store.save(module.detector, module.host_inventory)
+
+    restored = ModuleFactory().create_service_anomaly_obj(str(tmp_path))
+    with patch(
+        "modules.anomaly_detection_services.anomaly_detection_services.utils.drop_root_privs_permanently"
+    ):
+        restored.pre_main()
+        assert key not in restored.detector.services
+        assert key in restored.detector.deleted
+        assert any(host.ports for host in restored.host_inventory.hosts.values())
+        restored._checkpoint(force=True)
+        assert key not in restored.store.load()
+        restored.shutdown_gracefully()
+
+
 def test_corrupt_saved_state_is_reported_without_resetting_it(
     tmp_path: Path,
 ) -> None:

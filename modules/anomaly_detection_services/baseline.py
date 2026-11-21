@@ -341,6 +341,7 @@ class ServiceDetector:
         """
         self.settings = settings
         self.services: dict[str, ServiceBaseline] = {}
+        self.local_services: set[str] = set()
         self.client_count = 0
         self.seen: OrderedDict[str, None] = OrderedDict()
         self.dirty: set[str] = set()
@@ -365,6 +366,30 @@ class ServiceDetector:
             self.watermark = max(self.watermark, service.last_seen)
             self.dirty.add(key)
 
+    def retrain_incomplete_local_services(self) -> int:
+        """Drop truncated local client models so they relearn without false alerts.
+
+        Returns:
+            Number of local services queued for safe retraining.
+        """
+        reset = 0
+        for key in tuple(self.local_services):
+            service = self.services.get(key)
+            if (
+                service is None
+                or service.clients_complete
+                or len(service.clients)
+                >= self.settings.max_clients_per_service
+            ):
+                continue
+            self.client_count -= len(service.clients)
+            del self.services[key]
+            self.local_services.discard(key)
+            self.dirty.discard(key)
+            self.deleted.add(key)
+            reset += 1
+        return reset
+
     def prune(self, timestamp: float) -> None:
         """Expire inactive models at most once per traffic hour.
 
@@ -380,6 +405,7 @@ class ServiceDetector:
             if service.last_seen < cutoff:
                 self.client_count -= len(service.clients)
                 del self.services[key]
+                self.local_services.discard(key)
                 self.dirty.discard(key)
                 self.deleted.add(key)
             else:
@@ -394,12 +420,50 @@ class ServiceDetector:
                 if stale:
                     self.dirty.add(key)
 
+    def _evict_remote_service(
+        self, exclude: str, require_client: bool = False
+    ) -> bool:
+        """Reclaim an untrained or old remote model before skipping learning.
+
+        Parameters:
+            exclude: Service currently being observed.
+            require_client: Reclaim at least one client record.
+
+        Returns:
+            Whether a remote model was removed.
+        """
+        candidates = (
+            (key, service)
+            for key, service in self.services.items()
+            if key != exclude
+            and key not in self.local_services
+            and (not require_client or service.clients)
+        )
+        selected = min(
+            candidates,
+            key=lambda item: (
+                item[1].summary.count
+                >= self.settings.min_training_connections,
+                item[1].last_seen,
+            ),
+            default=None,
+        )
+        if selected is None:
+            return False
+        key, service = selected
+        self.client_count -= len(service.clients)
+        del self.services[key]
+        self.dirty.discard(key)
+        self.deleted.add(key)
+        return True
+
     def process(
         self,
         observation: Observation,
         key: str,
         client_id: str,
         allow_learning: bool = True,
+        local_service: bool = False,
     ) -> list[dict]:
         """Score before fitting; unusual/new clients cannot teach normality.
 
@@ -408,6 +472,7 @@ class ServiceDetector:
             key: Network, server identity, transport and port key.
             client_id: Verified local device identity or scoped IP identity.
             allow_learning: Whether this record is eligible to teach normality.
+            local_service: Whether the server is on a monitored local network.
 
         Returns:
             Explained anomaly reasons, subject to bounded alert suppression.
@@ -423,8 +488,11 @@ class ServiceDetector:
             if not observation.service_reply or self.settings.mode == "detect":
                 return []
             if len(self.services) >= self.settings.max_services:
-                self.capacity_skips += 1
-                return []
+                if not local_service:
+                    return []
+                if not self._evict_remote_service(key):
+                    self.capacity_skips += 1
+                    return []
             service = ServiceBaseline(
                 observation.timestamp,
                 observation.timestamp,
@@ -433,6 +501,8 @@ class ServiceDetector:
             self.services[key] = service
             self.dirty.add(key)
             self.deleted.discard(key)
+        if local_service:
+            self.local_services.add(key)
         ready = service.ready(observation.timestamp, self.settings)
         training = self.settings.mode == "train" or not ready
         client = service.clients.get(client_id)
@@ -502,6 +572,13 @@ class ServiceDetector:
         if learn:
             if client is None:
                 if (
+                    local_service
+                    and len(service.clients)
+                    < self.settings.max_clients_per_service
+                    and self.client_count >= self.settings.max_clients
+                ):
+                    self._evict_remote_service(key, require_client=True)
+                if (
                     len(service.clients)
                     < self.settings.max_clients_per_service
                     and self.client_count < self.settings.max_clients
@@ -510,8 +587,9 @@ class ServiceDetector:
                     service.clients[client_id] = client
                     self.client_count += 1
                 else:
+                    if service.clients_complete and local_service:
+                        self.capacity_skips += 1
                     service.clients_complete = False
-                    self.capacity_skips += 1
             service.summary.observe(observation, self.settings)
             if client:
                 client.observe(observation, self.settings)
