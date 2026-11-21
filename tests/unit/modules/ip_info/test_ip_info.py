@@ -3,29 +3,30 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 import asyncio
-
-
-from tests.module_factory import ModuleFactory
-from modules.ip_info.ip_info import DaemonThreadPoolExecutor
-import maxminddb
-import pytest
+import json
+import socket
 from unittest.mock import (
     AsyncMock,
     Mock,
     patch,
 )
-import json
+
+import dns.exception
+import dns.resolver
+import maxminddb
+import pytest
 import requests
-import socket
+
 from slips_files.core.flows.zeek import DNS
 from slips_files.core.structures.evidence import (
-    ThreatLevel,
+    Direction,
     Evidence,
-    Proto,
     EvidenceType,
     IoCType,
-    Direction,
+    Proto,
+    ThreatLevel,
 )
+from tests.module_factory import ModuleFactory
 
 
 def test_start_mac_db_reader_returns_without_running_loop() -> None:
@@ -223,17 +224,18 @@ def test_get_rdns_valid_ip():
     ip_address = "8.8.8.8"
     expected_rdns = {"reverse_dns": "dns.google"}
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+    mock_answer = Mock()
+    mock_answer.target = "dns.google."
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve, patch(
         "socket.inet_pton"
     ) as mock_inet_pton:
-
-        mock_gethostbyaddr.return_value = ("dns.google", [], ["8.8.8.8"])
+        mock_resolve.return_value = [mock_answer]
         mock_inet_pton.side_effect = socket.error
 
         result = ip_info.get_rdns(ip_address)
         assert result == expected_rdns
 
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_resolve.assert_called_once_with(ip_address, lifetime=2.0)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
             ip_address, expected_rdns
@@ -244,43 +246,44 @@ def test_get_rdns_invalid_ip():
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_address = "invalid_ip"
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
-        mock_gethostbyaddr.side_effect = socket.gaierror
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve:
+        mock_resolve.side_effect = ValueError("invalid ip")
 
         result = ip_info.get_rdns(ip_address)
         assert result is False
 
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_resolve.assert_called_once_with(ip_address, lifetime=2.0)
 
 
 def test_get_rdns_negative_cache_skips_second_lookup():
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_address = "invalid_ip"
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
-        mock_gethostbyaddr.side_effect = socket.gaierror
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve:
+        mock_resolve.side_effect = ValueError("invalid ip")
 
         assert ip_info.get_rdns(ip_address) is False
         assert ip_info.get_rdns(ip_address) is False
 
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_resolve.assert_called_once_with(ip_address, lifetime=2.0)
 
 
 def test_get_rdns_no_reverse_dns():
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_address = "1.1.1.1"
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+    mock_answer = Mock()
+    mock_answer.target = "1.1.1.1."
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve, patch(
         "socket.inet_pton"
     ) as mock_inet_pton:
-
-        mock_gethostbyaddr.return_value = ("1.1.1.1", [], ["1.1.1.1"])
+        mock_resolve.return_value = [mock_answer]
         mock_inet_pton.return_value = b"\x01\x01\x01\x01"
 
         result = ip_info.get_rdns(ip_address)
         assert result is False
 
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_resolve.assert_called_once_with(ip_address, lifetime=2.0)
         mock_inet_pton.assert_called_once()
 
 
@@ -289,21 +292,18 @@ def test_get_rdns_localhost():
     ip_address = "127.0.0.1"
     expected_rdns = {"reverse_dns": "localhost.localdomain"}
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
+    mock_answer = Mock()
+    mock_answer.target = "localhost.localdomain."
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve, patch(
         "socket.inet_pton"
     ) as mock_inet_pton:
-
-        mock_gethostbyaddr.return_value = (
-            "localhost.localdomain",
-            [],
-            ["127.0.0.1"],
-        )
+        mock_resolve.return_value = [mock_answer]
         mock_inet_pton.side_effect = socket.error
 
         result = ip_info.get_rdns(ip_address)
         assert result == expected_rdns
 
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
+        mock_resolve.assert_called_once_with(ip_address, lifetime=2.0)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
             ip_address, expected_rdns
@@ -464,30 +464,81 @@ async def test_shutdown_gracefully(
 
 
 @pytest.mark.parametrize(
-    "max_workers, num_tasks",
+    "ip, resolver_side_effect, expected_result",
     [
-        (2, 3),
-        (4, 5),
+        (
+            "8.8.8.8",
+            [Mock(target="dns.google.")],
+            {"reverse_dns": "dns.google"},
+        ),
+        (
+            "192.0.2.1",
+            dns.resolver.NXDOMAIN(),
+            False,
+        ),
+        (
+            "192.0.2.2",
+            dns.resolver.Timeout(),
+            False,
+        ),
     ],
 )
-def test_daemon_thread_pool_executor_lifecycle(
-    max_workers: int, num_tasks: int
+def test_get_rdns_bounded_lookup_outcomes(
+    ip: str, resolver_side_effect, expected_result
 ) -> None:
     """
-    Worker threads are daemonized and detached from atexit queue on shutdown.
+    Reverse-DNS passes bounded lifetime and handles success, NXDOMAIN, and Timeout.
     """
     ip_info = ModuleFactory().create_ip_info_obj()
-    executor = DaemonThreadPoolExecutor(
-        max_workers=max_workers, thread_name_prefix="test-daemon"
-    )
-    futures = [executor.submit(lambda: 42) for _ in range(num_tasks)]
-    assert all(f.result() == 42 for f in futures)
-    assert all(t.daemon is True for t in executor._threads)
+    with patch("dns.resolver.Resolver.resolve_address") as mock_resolve, patch(
+        "socket.inet_pton", side_effect=socket.error
+    ):
+        if isinstance(resolver_side_effect, Exception):
+            mock_resolve.side_effect = resolver_side_effect
+        else:
+            mock_resolve.return_value = resolver_side_effect
 
-    from concurrent.futures import thread as _cf_thread
+        result = ip_info.get_rdns(ip)
+        assert result == expected_result
+        mock_resolve.assert_called_once_with(ip, lifetime=2.0)
 
-    executor.shutdown(wait=False, cancel_futures=True)
-    assert not any(t in _cf_thread._threads_queues for t in executor._threads)
+
+@pytest.mark.parametrize("in_flight_tasks", [1, 2])
+async def test_shutdown_gracefully_non_blocking_with_in_flight_lookup(
+    in_flight_tasks: int,
+) -> None:
+    """
+    shutdown_gracefully returns promptly while slow lookups are in flight.
+    """
+    import threading
+    import time
+
+    ip_info = ModuleFactory().create_ip_info_obj()
+    started_events = [threading.Event() for _ in range(in_flight_tasks)]
+    release_event = threading.Event()
+
+    def slow_blocking_worker(idx: int) -> str:
+        started_events[idx].set()
+        release_event.wait(timeout=5.0)
+        return "done"
+
+    try:
+        futures = [
+            ip_info.lookup_executor.submit(slow_blocking_worker, i)
+            for i in range(in_flight_tasks)
+        ]
+        for evt in started_events:
+            assert evt.wait(timeout=2.0)
+
+        start_time = time.monotonic()
+        await ip_info.shutdown_gracefully()
+        elapsed = time.monotonic() - start_time
+
+        assert elapsed < 0.5
+    finally:
+        release_event.set()
+        for f in futures:
+            f.result(timeout=1.0)
 
 
 @pytest.mark.parametrize(

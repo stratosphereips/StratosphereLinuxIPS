@@ -21,8 +21,9 @@ import netifaces
 import asyncio
 import multiprocessing
 import time
-from concurrent.futures import ThreadPoolExecutor, thread as _cf_thread
-import threading
+from concurrent.futures import ThreadPoolExecutor
+import dns.exception
+import dns.resolver
 from functools import lru_cache, partial
 
 
@@ -47,41 +48,6 @@ from slips_files.core.structures.evidence import (
 )
 
 
-class DaemonThreadPoolExecutor(ThreadPoolExecutor):
-    """
-    Bounded thread pool executor whose worker threads are daemonized and
-    detached from interpreter exit tracking on shutdown to prevent hangs.
-    """
-
-    def _adjust_thread_count(self) -> None:
-        """
-        Start worker threads with daemon=True so they do not block interpreter
-        exit.
-        """
-        orig_thread = threading.Thread
-
-        def daemon_thread(*args, **kwargs):
-            kwargs["daemon"] = True
-            return orig_thread(*args, **kwargs)
-
-        try:
-            threading.Thread = daemon_thread
-            super()._adjust_thread_count()
-        finally:
-            threading.Thread = orig_thread
-
-    def shutdown(self, wait: bool = False, cancel_futures: bool = True) -> None:
-        """
-        Cancel pending futures and deregister worker threads from atexit.
-
-        :param wait: Whether to wait for worker threads to finish.
-        :param cancel_futures: Whether to cancel pending futures.
-        """
-        super().shutdown(wait=wait, cancel_futures=cancel_futures)
-        for thread in list(self._threads):
-            _cf_thread._threads_queues.pop(thread, None)
-
-
 class IPInfo(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "ip_info"
@@ -92,7 +58,7 @@ class IPInfo(IAsyncModule):
         """This will be called when initializing this module"""
         # 30MBs max size of this queue to avoid growing forever in mem
         self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
-        self.lookup_executor = DaemonThreadPoolExecutor(
+        self.lookup_executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
         self.lookup_semaphore = asyncio.Semaphore(4)
@@ -245,8 +211,11 @@ class IPInfo(IAsyncModule):
         if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
             return False
         try:
-            # works with both ipv4 and ipv6
-            reverse_dns: str = socket.gethostbyaddr(ip)[0]
+            resolver = dns.resolver.Resolver()
+            resolver.timeout = 2.0
+            resolver.lifetime = 2.0
+            answers = resolver.resolve_address(ip, lifetime=2.0)
+            reverse_dns: str = str(answers[0].target).rstrip(".")
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
                 # check if the reverse_dns value is a valid IP address
@@ -259,7 +228,7 @@ class IPInfo(IAsyncModule):
                 data["reverse_dns"] = reverse_dns
                 self.failed_rdns_lookups.pop(ip, None)
                 self.db.set_ip_info(ip, data)
-        except (socket.gaierror, socket.herror, OSError):
+        except (dns.exception.DNSException, ValueError, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
             self._store_negative_cache(self.failed_rdns_lookups, ip)
             return False
