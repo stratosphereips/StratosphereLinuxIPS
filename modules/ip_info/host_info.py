@@ -14,7 +14,7 @@ from slips_files.core.database.database_manager import DBManager
 FlowRow = tuple[int, dict[str, Any]]
 
 
-class HostIdentityArchiver:
+class HostInfo:
     """Persist a bounded number of host observations each batch.
 
     Reading and saving them blocks on SQLite and Redis, so the ip_info

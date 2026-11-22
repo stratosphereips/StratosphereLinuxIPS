@@ -201,7 +201,7 @@ async def test_shutdown_gracefully(
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.reading_mac_db_task = tmp_function()
-    ip_info.host_identity_archiver.flush_async = AsyncMock()
+    ip_info.host_info.flush_async = AsyncMock()
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
@@ -213,7 +213,7 @@ async def test_shutdown_gracefully(
 
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
-    ip_info.host_identity_archiver.flush_async.assert_awaited_once_with(
+    ip_info.host_info.flush_async.assert_awaited_once_with(
         ip_info.run_host_archive_step
     )
 
@@ -221,7 +221,7 @@ async def test_shutdown_gracefully(
 async def test_shutdown_frees_resources_even_when_the_flush_fails() -> None:
     """A broken host store must not leave threads and databases open."""
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.host_identity_archiver.flush_async = AsyncMock(
+    ip_info.host_info.flush_async = AsyncMock(
         side_effect=RuntimeError
     )
     ip_info.country_db = Mock()
@@ -263,20 +263,20 @@ async def test_main_starts_a_host_archive_batch_only_when_due(
     """Pace host archiving from main() without sleeping in it.
 
     Parameters:
-        is_batch_due: Whether the archiver rested enough for a new batch.
+        is_batch_due: Whether the helper rested enough for a new batch.
         expected_batches: Batches main() should start.
     """
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.get_msg = Mock(return_value=None)
     ip_info.create_task = Mock()
-    ip_info.host_identity_archiver.claim_due_batch = Mock(
+    ip_info.host_info.claim_due_batch = Mock(
         return_value=is_batch_due
     )
 
     await ip_info.main()
 
     start_batch = call(
-        ip_info.host_identity_archiver.archive_batch_async,
+        ip_info.host_info.archive_batch_async,
         ip_info.run_host_archive_step,
     )
     assert ip_info.create_task.call_args_list == (

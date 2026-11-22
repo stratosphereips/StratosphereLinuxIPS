@@ -13,7 +13,7 @@ import maxminddb
 from modules.ip_info.asn_info import ASN
 from modules.ip_info.domain_info import DomainInfo
 from modules.ip_info.gateway_info import GatewayInfo
-from modules.ip_info.host_info import HostIdentityArchiver
+from modules.ip_info.host_info import HostInfo
 from modules.ip_info.jarm import JARM
 from modules.ip_info.mac_vendor_info import MACVendor
 from modules.ip_info.rdns_info import RDNS
@@ -66,7 +66,7 @@ class IPInfo(IAsyncModule):
         self.gateway = GatewayInfo(
             self.db, self.args, self.db.is_running_non_stop()
         )
-        self.host_identity_archiver = HostIdentityArchiver(self.db)
+        self.host_info = HostInfo(self.db)
         self.is_running_in_ap_mode: bool = (
             True if self.args.access_point else False
         )
@@ -164,9 +164,7 @@ class IPInfo(IAsyncModule):
 
     async def shutdown_gracefully(self):
         try:
-            await self.host_identity_archiver.flush_async(
-                self.run_host_archive_step
-            )
+            await self.host_info.flush_async(self.run_host_archive_step)
         finally:
             self.host_archive_executor.shutdown(wait=True)
             if hasattr(self, "asn_db"):
@@ -455,8 +453,8 @@ class IPInfo(IAsyncModule):
                 if self.db.is_blacklisted_jarm(jarm_hash):
                     self.set_evidence_malicious_jarm_hash(flow, msg["twid"])
 
-        if self.host_identity_archiver.claim_due_batch():
+        if self.host_info.claim_due_batch():
             self.create_task(
-                self.host_identity_archiver.archive_batch_async,
+                self.host_info.archive_batch_async,
                 self.run_host_archive_step,
             )
