@@ -224,6 +224,14 @@ def test_failed_redis_read_keeps_ips_queued() -> None:
     host_info.db.set_new_ip.assert_not_called()
 
 
+def test_new_ip_is_queued_on_a_freshly_booted_machine() -> None:
+    """Queue a never enriched address even when the monotonic clock is low."""
+    host_info = ModuleFactory().create_ip_info_obj().host_info
+    with patch(f"{HOST_INFO}.time.monotonic", return_value=10.0):
+        host_info._queue_ips_for_enrichment([(1, {"daddr": "8.8.8.8"})])
+    assert host_info._ips_awaiting_enrichment == {"8.8.8.8"}
+
+
 def test_enrichment_history_stays_bounded() -> None:
     """Forget the enrichment history once it tracks too many addresses."""
     host_info = ModuleFactory().create_ip_info_obj().host_info

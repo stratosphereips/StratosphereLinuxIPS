@@ -97,9 +97,12 @@ class HostInfo:
         Returns:
             Whether the address was enriched in the last few minutes.
         """
-        seconds_since_enrichment = now - self._last_enrichment_time_of_ip.get(
-            ip, 0
-        )
+        last_enrichment_time = self._last_enrichment_time_of_ip.get(ip)
+        if last_enrichment_time is None:
+            # never enriched. the monotonic clock starts near zero at boot,
+            # so a default of 0 would look recent on a fresh machine
+            return False
+        seconds_since_enrichment = now - last_enrichment_time
         return seconds_since_enrichment < self.ENRICHMENT_INTERVAL_SECONDS
 
     def _get_ips_of_flow(self, flow: dict[str, Any]) -> list[str]:

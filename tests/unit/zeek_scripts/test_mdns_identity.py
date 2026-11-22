@@ -81,9 +81,7 @@ def test_mdns_names_follow_address_record_owners(
         )
     )
     packet.time = 1792132244.61987
-    with tempfile.TemporaryDirectory(
-        dir="output", prefix="mdns-identity-"
-    ) as directory:
+    with tempfile.TemporaryDirectory(prefix="mdns-identity-") as directory:
         root = Path(directory)
         scapy.wrpcap(str(root / "input.pcap"), [packet])
         result = subprocess.run(
@@ -135,7 +133,9 @@ def test_mdns_names_follow_address_record_owners(
             "gateway_mac": "aa:bb:cc:dd:ee:01",
             "local_network": "192.168.1.0/24",
         }
-        store = module_factory.create_host_profile_store_obj(path, "old-run", lambda _: network, ["en0"])
+        store = module_factory.create_host_profile_store_obj(
+            path, "old-run", lambda _: network, ["en0"]
+        )
         store.save_host_identity_from_flow(
             SimpleNamespace(
                 type_="conn",
@@ -162,14 +162,18 @@ def test_mdns_names_follow_address_record_owners(
                 {"type": "dns.log", "interface": "en0", "data": row}
             )
             assert not error
-            flow = FlowClassifier().convert_to_flow_obj(json.loads(json.dumps(asdict(flow))))
+            flow = FlowClassifier().convert_to_flow_obj(
+                json.loads(json.dumps(asdict(flow)))
+            )
             store.save_host_identity_from_flow(flow)
         # A new network must establish ownership before inheriting the old name.
         network = {
             "gateway_mac": "aa:bb:cc:dd:ee:02",
             "local_network": "192.168.1.0/24",
         }
-        current = module_factory.create_host_profile_store_obj(path, "new-run", lambda _: network, ["en0"])
+        current = module_factory.create_host_profile_store_obj(
+            path, "new-run", lambda _: network, ["en0"]
+        )
         for row in rows:
             flow, error = parser.process_line(
                 {"type": "dns.log", "interface": "en0", "data": row}
