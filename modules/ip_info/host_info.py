@@ -4,22 +4,23 @@
 import ipaddress
 import time
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import redis
 
-from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.database.database_manager import DBManager
 
 # rowid of a stored flow, and the flow itself
 FlowRow = tuple[int, dict[str, Any]]
 
 
-class HostProfile(IModule):
-    """Persist a bounded number of host observations each iteration."""
+class HostIdentityArchiver:
+    """Persist a bounded number of host observations each batch.
 
-    name = "host_profile"
-    description = "Archives host names and identity clues across runs"
-    authors = ["Sebastian Garcia"]
+    Reading and saving them blocks on SQLite and Redis, so the ip_info
+    module runs each batch in a thread, never on its event loop.
+    """
+
     FLOW_TABLES = ("flows", "altflows")
     MAX_FLOWS_PER_TABLE_PER_BATCH = 64
     ENRICHMENT_BATCH_SIZE = 16
@@ -33,25 +34,28 @@ class HostProfile(IModule):
         "threatintelligence",
         "reverse_dns_lookup",
     )
-    # how long main() rests between batches
+    # how long to rest between batches
     IDLE_PAUSE_SECONDS = 1.0
     MIN_PAUSE_SECONDS = 0.25
     REST_TO_WORK_RATIO = 4
-    STOP_CHECK_INTERVAL_SECONDS = 0.25
+    FAILED_BATCH_PAUSE_SECONDS = 60.0
     SHUTDOWN_FLUSH_SECONDS = 2.0
 
-    def init(self) -> None:
-        """Initialize only inexpensive counters before modules start."""
+    def __init__(self, db: DBManager) -> None:
+        """Start from the first stored flow, with nothing queued.
+
+        Parameters:
+            db: Database manager of the ip_info module.
+        """
+        self.db = db
         self.last_processed_rowid_of_table: dict[str, int] = {
             table: 0 for table in self.FLOW_TABLES
         }
         self._ips_awaiting_enrichment: set[str] = set()
         self._last_enrichment_time_of_ip: dict[str, float] = {}
         self._last_enrichment_signature_of_ip: dict[str, int] = {}
-
-    def subscribe_to_channels(self) -> None:
-        """Read completed SQLite rows instead of subscribing to every flow."""
-        self.channels = {}
+        self._is_batch_claimed = False
+        self._next_batch_time = 0.0
 
     def _read_new_flows(self) -> dict[str, list[FlowRow]]:
         """Read a bounded batch of unprocessed flows from each flow table.
@@ -246,20 +250,6 @@ class HostProfile(IModule):
             self._last_enrichment_time_of_ip.clear()
             self._last_enrichment_signature_of_ip.clear()
 
-    def _enrich_queued_ips(self) -> None:
-        """Save names and threat context of a small group of queued IPs."""
-        ips_to_enrich = self._pop_ips_to_enrich()
-        for position, ip in enumerate(ips_to_enrich):
-            try:
-                cached_hostname, ip_info = self._read_cached_identity_of_ip(ip)
-            except redis.exceptions.RedisError:
-                # put the unread addresses back, to retry in the next batch
-                self._ips_awaiting_enrichment.update(ips_to_enrich[position:])
-                return
-            self._request_missing_hostname_lookup(ip, ip_info)
-            self._save_cached_identity_of_ip(ip, cached_hostname, ip_info)
-            self._last_enrichment_time_of_ip[ip] = time.monotonic()
-
     def _request_missing_hostname_lookup(
         self, ip: str, ip_info: dict[str, Any]
     ) -> None:
@@ -286,11 +276,25 @@ class HostProfile(IModule):
             return
         self.db.set_new_ip(ip)
 
+    def _enrich_queued_ips(self) -> None:
+        """Save names and threat context of a small group of queued IPs."""
+        ips_to_enrich = self._pop_ips_to_enrich()
+        for position, ip in enumerate(ips_to_enrich):
+            try:
+                cached_hostname, ip_info = self._read_cached_identity_of_ip(ip)
+            except redis.exceptions.RedisError:
+                # put the unread addresses back, to retry in the next batch
+                self._ips_awaiting_enrichment.update(ips_to_enrich[position:])
+                return
+            self._request_missing_hostname_lookup(ip, ip_info)
+            self._save_cached_identity_of_ip(ip, cached_hostname, ip_info)
+            self._last_enrichment_time_of_ip[ip] = time.monotonic()
+
     def _archive_new_flows(self) -> int:
         """Persist and checkpoint one bounded flow batch outside the profiler.
 
         Returns:
-            Number of flow rows archived in this iteration.
+            Number of flow rows archived in this batch.
         """
         new_flows_of_table = self._read_new_flows()
         new_flow_rows = [
@@ -306,69 +310,98 @@ class HostProfile(IModule):
             self._mark_flows_as_processed(new_flows_of_table)
         return len(new_flow_rows)
 
+    def archive_batch(self) -> int:
+        """Run every step of one batch, in order.
+
+        Each step blocks on SQLite or Redis, so call this from a thread,
+        not from the event loop.
+
+        Returns:
+            Number of flow rows archived by this batch.
+        """
+        archived_flows_count = self._archive_new_flows()
+        self._requeue_ips_due_for_refresh()
+        self._enrich_queued_ips()
+        self._forget_enrichment_history_if_too_big()
+        return archived_flows_count
+
     def _get_pause_after_batch(
-        self, processed_flows_count: int, batch_duration: float
+        self, archived_flows_count: int, batch_duration: float
     ) -> float:
-        """Decide how long to rest before reading the next batch.
+        """Decide how long to rest before starting the next batch.
 
         With no new flows, wait a full second for some to arrive.
         Otherwise rest four times as long as the batch took. That keeps
-        this module at about a fifth of one CPU core even with a long
-        backlog, so the modules that detect attacks aren't slowed down.
+        archiving at about a fifth of one CPU core even with a long
+        backlog, so the lookups and the detection modules aren't slowed
+        down.
 
         Parameters:
-            processed_flows_count: Flows handled by the batch that just ended.
+            archived_flows_count: Flows handled by the batch that just ended.
             batch_duration: Seconds that batch took.
 
         Returns:
             Seconds to rest.
         """
-        if not processed_flows_count:
+        if not archived_flows_count:
             return self.IDLE_PAUSE_SECONDS
         return max(
             self.MIN_PAUSE_SECONDS, batch_duration * self.REST_TO_WORK_RATIO
         )
 
-    def _sleep_unless_stopping(self, pause_seconds: float) -> None:
-        """Rest in short steps, so a stop request is noticed quickly.
+    def claim_due_batch(self) -> bool:
+        """Reserve the next batch, if it's time for one.
 
-        Event.wait() can lose its condition lock after a worker is
-        force-stopped on macOS, so the stop flag is checked between short
-        sleeps instead.
-
-        Parameters:
-            pause_seconds: Total time to rest.
-        """
-        remaining_seconds = pause_seconds
-        while remaining_seconds > 0 and not self.termination_event.is_set():
-            sleep_step = min(
-                remaining_seconds, self.STOP_CHECK_INTERVAL_SECONDS
-            )
-            time.sleep(sleep_step)
-            remaining_seconds -= sleep_step
-
-    def main(self) -> bool:
-        """Process one batch, then rest so the backlog never hogs the CPU.
+        The module's main loop asks this on every iteration. Claiming the
+        batch right away keeps the loop from starting a second one before
+        the first had a chance to run.
 
         Returns:
-            False to keep the background module running.
+            Whether the caller should start a batch now.
+        """
+        if self._is_batch_claimed or time.monotonic() < self._next_batch_time:
+            return False
+        self._is_batch_claimed = True
+        return True
+
+    async def archive_batch_async(
+        self, run_in_executor: Callable[..., Awaitable[Any]]
+    ) -> None:
+        """Archive one claimed batch off the event loop, then plan the next.
+
+        An async module can't sleep between batches, so the rest is kept
+        by setting the earliest time the next batch may be claimed. A
+        failed batch rests longer, so a broken store doesn't flood the
+        log with the same error.
+
+        Parameters:
+            run_in_executor: Async helper that runs a blocking callable
+                in a thread.
         """
         batch_started_at = time.monotonic()
-        archived_flows_count = self._archive_new_flows()
-        self._requeue_ips_due_for_refresh()
-        self._enrich_queued_ips()
-        self._forget_enrichment_history_if_too_big()
-        batch_duration = time.monotonic() - batch_started_at
-        self._sleep_unless_stopping(
-            self._get_pause_after_batch(archived_flows_count, batch_duration)
-        )
-        return False
+        pause_seconds = self.FAILED_BATCH_PAUSE_SECONDS
+        try:
+            archived_flows_count = await run_in_executor(self.archive_batch)
+            pause_seconds = self._get_pause_after_batch(
+                archived_flows_count, time.monotonic() - batch_started_at
+            )
+        finally:
+            self._next_batch_time = time.monotonic() + pause_seconds
+            self._is_batch_claimed = False
 
-    def shutdown_gracefully(self) -> None:
-        """Give pending observations a short bounded chance to persist."""
+    async def flush_async(
+        self, run_in_executor: Callable[..., Awaitable[Any]]
+    ) -> None:
+        """Give pending observations a short bounded chance to persist.
+
+        Called when Slips stops, so the flows that arrived since the last
+        batch aren't lost.
+
+        Parameters:
+            run_in_executor: Async helper that runs a blocking callable
+                in a thread.
+        """
         flush_deadline = time.monotonic() + self.SHUTDOWN_FLUSH_SECONDS
         while time.monotonic() < flush_deadline:
-            archived_flows_count = self._archive_new_flows()
-            self._enrich_queued_ips()
-            if not archived_flows_count:
+            if not await run_in_executor(self.archive_batch):
                 break
