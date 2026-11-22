@@ -223,6 +223,24 @@ class AlertSummary(IModule):
 
         self._start_next_alert_job(backend)
 
+    def should_stop(self) -> bool:
+        """Drain alerts after the evidence handler finishes publishing them.
+
+        Returns:
+            True when shutdown was requested and all summary work is done.
+        """
+        if not self.termination_event.is_set():
+            return False
+        pid = self.db.get_pid_of("evidence_handler")
+        if isinstance(pid, int) and pid > 0 and self._is_process_alive(pid):
+            return False
+        if self.pending_alerts or self.active_job or self.pending_request:
+            return False
+        pending = self.db.get_pending_llm_request_count(self.name)
+        if isinstance(pending, (int, float)) and pending > 0:
+            return False
+        return super().should_stop()
+
     def _init_operation_log_file(self):
         """Create or clear the per-run alert summary operation log file."""
         os.makedirs(os.path.dirname(self.operation_log_path), exist_ok=True)
@@ -1417,6 +1435,9 @@ class AlertSummary(IModule):
                 return
 
             self._finalize_request(response)
+            self.channel_tracker[self.db.channels.LLM_RESPONSE][
+                "msg_received"
+            ] = False
             return
 
         if not self._is_response_timed_out():

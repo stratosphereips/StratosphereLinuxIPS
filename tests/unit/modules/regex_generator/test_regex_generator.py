@@ -235,6 +235,21 @@ def test_main_waits_when_no_runtime_ready_backend(tmp_path, mocker):
     regex_generator.shutdown_gracefully()
 
 
+def test_shutdown_finishes_pending_request_without_starting_another() -> None:
+    """Stop generation after an in-flight LLM response is handled."""
+    generator = ModuleFactory().create_regex_generator_obj()
+    generator.termination_event.is_set.return_value = True
+    generator.channel_tracker = generator.init_channel_tracker()
+    generator.pending_request = {"request_id": "pending"}
+    assert generator.should_stop() is False
+
+    generator.pending_request = None
+    generator.next_generation_at = 0
+    generator.main()
+    generator.db.get_available_llm_backends.assert_not_called()
+    assert generator.should_stop() is True
+
+
 def test_create_log_file_writes_progress_log(tmp_path, mocker):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
@@ -467,6 +482,28 @@ def test_handle_pending_response_matches_by_request_id(tmp_path, mocker):
 
     regex_generator._finalize_request.assert_not_called()
     assert regex_generator.pending_request["request_id"] == "req-1"
+
+
+def test_final_response_clears_channel_activity() -> None:
+    """A consumed response must not keep shutdown waiting forever."""
+    generator = ModuleFactory().create_regex_generator_obj()
+    generator.channel_tracker = generator.init_channel_tracker()
+    generator.channel_tracker["llm_response"]["msg_received"] = True
+    generator.pending_request = {
+        "request_id": "req-1",
+        "regex_type": "dns_domain",
+        "backend": "local_qwen",
+        "sent_at": time.time(),
+    }
+    generator._finalize_request = Mock()
+    generator.get_msg = Mock(
+        return_value={"data": json.dumps({"request_id": "req-1"})}
+    )
+
+    generator._handle_pending_response(time.time())
+
+    assert generator.pending_request is None
+    assert not generator.channel_tracker["llm_response"]["msg_received"]
 
 
 def test_handle_pending_response_keeps_waiting_after_soft_timeout(

@@ -198,12 +198,25 @@ class RegexGenerator(IModule):
             self.storage.close()
         return True
 
+    def should_stop(self) -> bool:
+        """Finish an in-flight generation request before shutdown.
+
+        Returns:
+            True when shutdown was requested and no request remains.
+        """
+        if self.termination_event.is_set() and self.pending_request:
+            return False
+        return super().should_stop()
+
     def main(self):
         self._handle_one_tw_closed_message()
 
         now = time.time()
         if self.pending_request:
             self._handle_pending_response(now)
+            return
+
+        if self.termination_event.is_set():
             return
 
         if now < self.next_generation_at:
@@ -496,6 +509,9 @@ class RegexGenerator(IModule):
         )
         self._finalize_request(response)
         self.pending_request = None
+        self.channel_tracker[self.db.channels.LLM_RESPONSE][
+            "msg_received"
+        ] = False
         self.next_generation_at = (
             time.time() + self.generation_interval_seconds
         )

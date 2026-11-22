@@ -12,6 +12,7 @@ from typing import Any, Dict, List
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from modules.supported_module_names import Modules
 
 from modules.llm_proxy.anthropic_backend_mixin import MixinAnthropicBackend
 from modules.llm_proxy.llm_backend import LLMBackend
@@ -195,6 +196,30 @@ class LLMProxy(IModule):
             2,
             0,
         )
+
+    def should_stop(self) -> bool:
+        """Keep the backend available until its callers and requests finish.
+
+        Returns:
+            True when shutdown was requested and the shared LLM is idle.
+        """
+        if not self.termination_event.is_set():
+            return False
+        for requester in (Modules.REGEX_GENERATOR, Modules.ALERT_SUMMARY):
+            pid = self.db.get_pid_of(requester)
+            if not isinstance(pid, int) or pid <= 0:
+                continue
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                return False
+            else:
+                return False
+        if self.request_queue.unfinished_tasks:
+            return False
+        return super().should_stop()
 
     def main(self):
         if msg := self.get_msg(self.db.channels.LLM_REQUEST):

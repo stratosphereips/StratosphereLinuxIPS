@@ -225,15 +225,13 @@ def test_warn_about_pending_modules(
     "blocking_enabled, exporting_alerts_disabled, "
     "expected_kill_first, expected_kill_last",
     [  # Testcase1: blocking enabled, exporting_alerts enabled
-        (True, False, [1, 2, 6, 7], [3, 4, 5]),
+        (True, False, [1, 2, 9], [3, 8, 4, 5, 6, 7]),
         # Testcase2: blocking disabled, exporting_alerts enabled
-        (False, False, [1, 2, 4, 6, 7], [3, 5]),
+        (False, False, [1, 2, 4, 9], [3, 8, 5, 6, 7]),
         # Testcase3: blocking enabled, exporting_alerts disabled
-        (True, True, [1, 2, 5, 6, 7], [3, 4]),
+        (True, True, [1, 2, 5, 9], [3, 8, 4, 6, 7]),
         # Testcase4: blocking disabled, exporting_alerts disabled
-        (False, True, [1, 2, 4, 5, 6, 7], [3]),
-        # Testcase5: All enabled, some PIDs are None
-        (True, False, [1, 2, 6, 7], [3, 4, 5]),
+        (False, True, [1, 2, 4, 5, 9], [3, 8, 6, 7]),
     ],
 )
 def test_get_hitlist_in_order(
@@ -250,7 +248,9 @@ def test_get_hitlist_in_order(
         Mock(pid=4, name="blocking"),
         Mock(pid=5, name="exporting_alerts"),
         Mock(pid=6, name="alert_summary"),
-        Mock(pid=7, name="LLM"),
+        Mock(pid=7, name="llm_proxy"),
+        Mock(pid=8, name="t_cell"),
+        Mock(pid=9, name="regex_generator"),
     ]
 
     process_manager.main.db.get_pid_of = lambda x: {
@@ -258,7 +258,8 @@ def test_get_hitlist_in_order(
         "blocking": 4,
         "exporting_alerts": 5,
         "alert_summary": 6,
-        "LLM": 7,
+        Modules.LLM_PROXY: 7,
+        Modules.T_CELL: 8,
     }.get(x)
     process_manager.main.args.blocking = blocking_enabled
     process_manager.main.db.get_disabled_modules = lambda: (

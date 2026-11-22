@@ -471,6 +471,8 @@ def test_handle_pending_response_writes_one_paragraph_summary(
 
     evidence = _build_evidence()
     alert = _build_alert(evidence)
+    alert_summary.channel_tracker = alert_summary.init_channel_tracker()
+    alert_summary.channel_tracker["llm_response"]["msg_received"] = True
     alert_summary.active_job = {
         "alert": alert,
         "evidences": [evidence],
@@ -503,6 +505,7 @@ def test_handle_pending_response_writes_one_paragraph_summary(
     }
 
     alert_summary._handle_pending_response()
+    assert not alert_summary.channel_tracker["llm_response"]["msg_received"]
 
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
@@ -630,10 +633,10 @@ def test_should_stop_waits_for_pending_alerts_during_shutdown():
     )
     alert_summary.termination_event.is_set.return_value = True
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
-def test_should_stop_ignores_stale_llm_response_channel_after_work_finishes():
+def test_should_stop_waits_for_active_llm_response_channel():
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.channel_tracker = alert_summary.init_channel_tracker()
     alert_summary.termination_event.is_set.return_value = True
@@ -650,7 +653,7 @@ def test_should_stop_waits_for_pending_shared_llm_request_count():
     alert_summary.channel_tracker["new_alert"]["msg_received"] = False
     alert_summary.db.get_pending_llm_request_count.return_value = 2
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
 def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
@@ -665,7 +668,7 @@ def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
         return_value=True,
     )
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
 def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():

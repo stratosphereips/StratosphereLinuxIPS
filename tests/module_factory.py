@@ -466,6 +466,7 @@ class ModuleFactory:
             "llm_response": regex_generator.c_llm,
             "tw_closed": regex_generator.c_tw_closed,
         }
+        regex_generator.termination_event.is_set.return_value = False
         regex_generator.print = Mock()
         return regex_generator
 
