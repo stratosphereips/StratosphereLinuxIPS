@@ -96,6 +96,9 @@ class SQLiteFlock:
         fd = self._open_lockfile_for_creation()
         try:
             os.fchmod(fd, 0o666)
+        except PermissionError:
+            # another user created it, and already opened it up to everyone
+            pass
         finally:
             os.close(fd)
 

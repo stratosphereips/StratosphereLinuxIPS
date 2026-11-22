@@ -174,7 +174,19 @@ class HostProfileStore(ISQLite):
             # lets readers use column names instead of positions
             self.conn.row_factory = sqlite3.Row
         self._init_tables()
-        self._restrict_access_to_slips_user(self.db_path, 0o600)
+        self._restrict_access_to_db_files()
+
+    def _restrict_access_to_db_files(self) -> None:
+        """Lock down the database and the files SQLite keeps next to it.
+
+        SQLite creates its write-ahead log and index while root still owns
+        the database, so they'd stay root's, and the modules that dropped
+        root could read the store but never write to it.
+        """
+        for suffix in ("", "-wal", "-shm"):
+            db_file = Path(f"{self.db_path}{suffix}")
+            if db_file.exists():
+                self._restrict_access_to_slips_user(db_file, 0o600)
 
     def _create_private_db_dir(self) -> None:
         """Create the store's directory, readable by the Slips user only.

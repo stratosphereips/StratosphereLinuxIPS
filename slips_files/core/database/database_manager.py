@@ -1496,6 +1496,9 @@ class DBManager:
     def get_cached_hostname_from_profile(self, *args, **kwargs):
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 
+    def init_host_profile_store(self, *args, **kwargs):
+        return self._get_host_profile_store(*args, **kwargs)
+
     def save_host_identity_from_flows(self, *args, **kwargs):
         return self._get_host_profile_store().save_host_identity_from_flows(
             *args, **kwargs
