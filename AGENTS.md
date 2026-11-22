@@ -77,6 +77,14 @@ These rules MUST be followed:
 - Avoid mixing unrelated concerns or introducing methods that do not directly support the component's primary responsibility.
 - If a component has multiple reasons to change, split its responsibilities into cohesive, loosely coupled components. Avoid overengineering.
 - Manager classes should be created in Main.__init__
+- if a function needs something from sqlite or redis DB, it has to a wrapper from the database manager. never read or write databases directly from a module.
+- confirm that there's nothing you can use from the database manager before adding new functions.
+- modules shouldn't create and use their own databases, instead, have all the creation/usage of databases inside the databases/ dir. so that other modules can access that db if they need to
+- module names should follow the format: X_doer. e.g http_analyzer, brute_force_detector, etc.
+- when a generated function is too long, split it into shorter helpers.
+- when a module is too long, and contains logic that can be grouped together in a helper class, do it. like exporting_alerts module, it has idmef, slack and stix exporter helpers.
+
+
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.

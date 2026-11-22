@@ -14,6 +14,7 @@ Isolation model:
 """
 
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -39,6 +40,7 @@ import redis
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.flows.zeek import Conn
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -899,7 +901,8 @@ def test_add_mac_addr_to_profile_skips_the_gateway_ip(db: DBManager) -> None:
 def test_mac_seen_with_a_public_ip_becomes_the_gateway_mac(
     db: DBManager,
 ) -> None:
-    assert db.add_mac_addr_to_profile("profile_8.8.8.8", MAC_ADDR, "eth0")
+    # a routed public endpoint reveals the router, it does not own the mac
+    assert not db.add_mac_addr_to_profile("profile_8.8.8.8", MAC_ADDR, "eth0")
 
     assert db.get_gateway_mac("eth0") == MAC_ADDR
     # the gateway mac is never assigned to a local ip afterwards
@@ -1726,6 +1729,31 @@ def ensure_redis_options(fresh_redis_db_class: None) -> None:
     RedisDB._options = {}
 
 
+profileid = "profile_192.168.1.1"
+twid = "timewindow1"
+test_ip = "192.168.1.1"
+flow = Conn(
+    starttime="1601998398.945854",
+    uid="1234",
+    saddr=test_ip,
+    daddr="8.8.8.8",
+    dur=5,
+    proto="TCP",
+    appproto="dhcp",
+    sport=80,
+    dport=88,
+    spkts=20,
+    dpkts=20,
+    sbytes=20,
+    dbytes=20,
+    state="",
+    history="",
+    smac="Established",
+    dmac="",
+    interface="eth0",
+)
+
+
 @pytest.mark.parametrize("cached,expected", [
     ('["104.244.40.0/21"]', ["104.244.40.0/21"]),
     ('["2400:6680::/32"]', ["2400:6680::/32"]),
@@ -1747,6 +1775,36 @@ def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | N
     assert db.get_org_cidrs_by_first_octet("twitter", "104") == expected
     db.rcache.hget.assert_called_once_with("twitter_IPs", "104")
     db.r.hget.assert_not_called()
+
+
+@pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
+def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
+    """Keep durable host profiling out of the flow ingestion path.
+
+    Parameters:
+        method_name: Flow or alternate-flow write to exercise.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.sqlite = factory.logger
+    db.rdb = Mock()
+    db.host_profile_store = Mock()
+
+    result = getattr(db, method_name)(flow, profileid, twid)
+
+    if method_name == "add_flow":
+        db.sqlite.add_flow.assert_called_once_with(
+            flow, profileid, twid, label="benign"
+        )
+        db.rdb.add_flow.assert_called_once_with(
+            flow, profileid=profileid, twid=twid, label="benign"
+        )
+        assert result is db.rdb.add_flow.return_value
+    else:
+        db.sqlite.add_altflow.assert_called_once_with(flow, profileid, twid)
+        assert result is db.sqlite.add_altflow.return_value
+    db.host_profile_store.save_host_identity_from_flow.assert_not_called()
+    db.host_profile_store.save_host_identity_from_flows.assert_not_called()
 
 
 def test_set_evidence_publishes_after_sqlite_commit() -> None:
@@ -1877,3 +1935,124 @@ def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
         123, "TCP", "192.0.2.10", 51234, "198.51.100.43", 43
     )
     db.r.exists.assert_called_once_with(key)
+
+
+def test_get_hostname_from_profile_checks_the_durable_store() -> None:
+    """Resolve names in the host store, with Redis values as hints only."""
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    db.rdb = Mock()
+    db.all_interfaces = ["eth0"]
+    db.host_profile_store = Mock()
+
+    hostname = db.get_hostname_from_profile(profileid)
+
+    db.host_profile_store.get_hostname_of_profile.assert_called_once_with(
+        profileid,
+        network_states=[db.rdb.get_network_state.return_value],
+        current_mac=db.rdb.get_mac_addr_from_profile.return_value,
+        cached_name=db.rdb.get_hostname_from_profile.return_value,
+    )
+    db.rdb.get_network_state.assert_called_once_with("eth0")
+    assert (
+        hostname is db.host_profile_store.get_hostname_of_profile.return_value
+    )
+
+
+def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
+    """Open the permanent store lazily, and reuse it afterwards.
+
+    Parameters:
+        tmp_path: Isolated permanent directory.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    db.rdb = Mock()
+    db.conf = Mock()
+    db.conf.permanent_dir.return_value = str(tmp_path)
+    db.output_dir = "output/test"
+    db.main_pid = os.getpid()
+    db.all_interfaces = []
+    db.host_profile_store = None
+
+    store = db._get_host_profile_store()
+
+    assert (tmp_path / "host_profiles" / "hosts.sqlite").exists()
+    assert store.run_name == f"output/test:{db.main_pid}"
+    assert db._get_host_profile_store() is store
+
+
+def test_init_host_profile_store_opens_the_store_for_later_use() -> None:
+    """Let a module open the store early, before it drops root."""
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    db._get_host_profile_store = Mock()
+
+    store = db.init_host_profile_store()
+
+    db._get_host_profile_store.assert_called_once_with()
+    assert store is db._get_host_profile_store.return_value
+
+
+@pytest.mark.parametrize(
+    "wrapper_name",
+    [
+        "save_host_identity_from_flows",
+        "save_host_identity_from_ip_info",
+        "save_hostname_of_profile",
+    ],
+)
+def test_host_profile_wrappers_forward_to_the_store(wrapper_name: str) -> None:
+    """Forward host identity writes to the permanent store unchanged.
+
+    Parameters:
+        wrapper_name: Database manager wrapper to call.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    db.host_profile_store = Mock()
+
+    result = getattr(db, wrapper_name)("first", second="value")
+
+    store_method = getattr(db.host_profile_store, wrapper_name)
+    store_method.assert_called_once_with("first", second="value")
+    assert result is store_method.return_value
+
+
+@pytest.mark.parametrize(
+    "wrapper_name, backend_name, backend_method",
+    [
+        ("get_flows_after_rowid", "sqlite", "get_flows_after_rowid"),
+        (
+            "get_cached_hostname_from_profile",
+            "rdb",
+            "get_hostname_from_profile",
+        ),
+    ],
+)
+def test_host_profile_readers_forward_to_their_database(
+    wrapper_name: str, backend_name: str, backend_method: str
+) -> None:
+    """Forward the host profile module's reads to SQLite and Redis.
+
+    Parameters:
+        wrapper_name: Database manager wrapper to call.
+        backend_name: Attribute holding the database that owns the data.
+        backend_method: Method expected to be called on that database.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    backend = Mock()
+    setattr(db, backend_name, backend)
+
+    result = getattr(db, wrapper_name)("first", second="value")
+
+    getattr(backend, backend_method).assert_called_once_with(
+        "first", second="value"
+    )
+    assert result is getattr(backend, backend_method).return_value

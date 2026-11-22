@@ -228,6 +228,37 @@ class ModuleFactory:
         assert db.get_used_redis_port() == port
         return db
 
+    def create_host_profile_store_obj(
+        self,
+        db_path,
+        run_name="run",
+        network_state_lookup=None,
+        interfaces=None,
+    ):
+        """Create a real host profile store on a test database file.
+
+        Parameters:
+            db_path: Path of the SQLite file, usually inside tmp_path.
+            run_name: Name that isolates unknown networks of this run.
+            network_state_lookup: Returns the network state of an interface.
+            interfaces: Monitored interface names.
+
+        Returns:
+            Store connected to db_path.
+        """
+        from slips_files.core.database.sqlite_db.host_profiles import (
+            HostProfileStore,
+        )
+
+        return HostProfileStore(
+            self.logger,
+            db_path,
+            os.getpid(),
+            run_name,
+            network_state_lookup or (lambda _: {}),
+            interfaces or [],
+        )
+
     def create_main_obj(self):
         try:
             from slips.main import Main

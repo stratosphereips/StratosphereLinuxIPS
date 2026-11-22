@@ -245,6 +245,48 @@ def test_locked_snapshot_retries_with_a_fresh_transaction(
         database.close()
 
 
+@pytest.mark.parametrize("table", ["flows", "altflows"])
+def test_get_flows_after_rowid_reads_bounded_batches_in_order(
+    db, table: str
+) -> None:
+    """Follow a flow table in small steps without rereading old rows.
+
+    Parameters:
+        db: SQLite database of an isolated run.
+        table: Flow table being followed.
+    """
+    _module_factory = ModuleFactory()
+    stored_flows = [
+        json.dumps({"uid": "first"}),
+        "not json",
+        json.dumps(["not", "a", "flow"]),
+        json.dumps({"uid": "last"}),
+    ]
+    for position, serialized_flow in enumerate(stored_flows):
+        db.execute(
+            f"INSERT INTO {table} (uid, flow, profileid, twid) "
+            "VALUES (?, ?, 'profile-a', 'tw-1')",
+            (f"uid-{position}", serialized_flow),
+        )
+
+    first_batch = db.get_flows_after_rowid(table, 0, 3)
+    last_rowid_of_first_batch, _ = first_batch[-1]
+    second_batch = db.get_flows_after_rowid(
+        table, last_rowid_of_first_batch, 3
+    )
+
+    assert [flow for _, flow in first_batch] == [{"uid": "first"}, {}, {}]
+    assert [flow for _, flow in second_batch] == [{"uid": "last"}]
+    assert db.get_flows_after_rowid(table, second_batch[-1][0], 3) == []
+
+
+def test_get_flows_after_rowid_rejects_unknown_tables(db) -> None:
+    """Refuse table names that aren't one of the flow tables."""
+    _module_factory = ModuleFactory()
+    with pytest.raises(ValueError):
+        db.get_flows_after_rowid("flows; DROP TABLE flows", 0, 1)
+
+
 def test_get_flow_uses_parameterized_query(db):
     flow = Conn(
         starttime="1.0",

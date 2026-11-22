@@ -231,3 +231,26 @@ def test_sqlite_flock_delete_lockfile_tolerates_permission_error(tmp_path):
         sqlite_flock.SLIPS_LOCKS_DIR = original_locks_dir
 
     assert os.path.exists(flock.lockfile_path)
+
+
+def test_sqlite_flock_accepts_a_lockfile_owned_by_another_user(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A module that dropped root can't chmod root's lock file, and
+    doesn't need to, root already opened it up to everyone.
+
+    Parameters:
+        tmp_path: Isolated lock directory.
+        monkeypatch: Scope lock paths to this test.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr(sqlite_flock, "SLIPS_LOCKS_DIR", str(tmp_path))
+
+    with patch(
+        "slips_files.common.sqlite_flock.os.fchmod",
+        side_effect=PermissionError,
+    ):
+        flock = sqlite_flock.SQLiteFlock("sqlite_db", 12345)
+
+    with flock.acquire():
+        assert flock._lock_acquired is True
