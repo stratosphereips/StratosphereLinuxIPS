@@ -1984,6 +1984,19 @@ def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
     assert db._get_host_profile_store() is store
 
 
+def test_init_host_profile_store_opens_the_store_for_later_use() -> None:
+    """Let a module open the store early, before it drops root."""
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.logger = factory.logger
+    db._get_host_profile_store = Mock()
+
+    store = db.init_host_profile_store()
+
+    db._get_host_profile_store.assert_called_once_with()
+    assert store is db._get_host_profile_store.return_value
+
+
 @pytest.mark.parametrize(
     "wrapper_name",
     [

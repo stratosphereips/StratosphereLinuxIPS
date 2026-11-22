@@ -624,24 +624,6 @@ class ModuleFactory:
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
 
-    @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_host_profile_obj(self, mock_db):
-        from modules.host_profile.host_profile import HostProfile
-
-        host_profile = HostProfile(
-            logger=self.logger,
-            output_dir="dummy_output_dir",
-            redis_port=6379,
-            termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
-            ppid=Mock(),
-            bloom_filters_manager=Mock(),
-        )
-        host_profile._setup()
-        host_profile.print = Mock()
-        return host_profile
-
     def create_checker_obj(self):
         from slips_files.core.helpers.checker import Checker
 

@@ -686,6 +686,8 @@ The IP info module has several ways of getting information about an IP address, 
 - Given a MAC, its Vendor
 - Reverse DNS
 
+It also archives the identity of the hosts it sees, see [Host identity archive](#host-identity-archive).
+
 ### ASN
 
 Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-ASN.mmdb```
@@ -725,6 +727,23 @@ The offline database is updated manually and shipped with slips, you can find it
 the ```databases/``` dir.
 
 Slips makes sure it doesn't perform duplicate searches of the same MAC Address either online, or offline.
+
+
+### Host identity archive
+
+The IP info module keeps the names and identity clues of hosts across Slips runs,
+in ```permanent/host_profiles/hosts.sqlite``` (inside ```permanent_dir```).
+
+- It reads the flows Slips already stored, in small batches, and saves the host names,
+  MAC addresses and other clues found in them.
+- It also saves what Slips learned about each IP, like its reverse DNS name, ASN,
+  country and threat intelligence matches, and refreshes it every 5 minutes.
+- After each batch it rests four times as long as the batch took, so a long backlog
+  never slows down the lookups or the detection modules.
+- When Slips stops, the flows that are still waiting get up to 2 seconds to be saved.
+
+Disabling the ```ip_info``` module also stops this archive.
+The files are readable by the user that owns the Slips directory only.
 
 ## Reverse DNS
 This is obtained by doing a standard in-addr.arpa DNS request.

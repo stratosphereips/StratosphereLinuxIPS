@@ -3,21 +3,16 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 import asyncio
-from queue import Queue
-
+import threading
 
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
 from unittest.mock import (
-    ANY,
     AsyncMock,
     Mock,
-    patch,
+    call,
 )
-import json
-import requests
-import socket
 from slips_files.core.flows.zeek import DNS
 from slips_files.core.structures.evidence import (
     ThreatLevel,
@@ -27,24 +22,6 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
-
-
-def test_pending_mac_queries_stay_inside_ip_info_process() -> None:
-    """Use a thread queue for MAC lookups to avoid named semaphores."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-
-    assert isinstance(ip_info.pending_mac_queries, Queue)
-
-
-def test_query_whois_does_not_exempt_other_applications() -> None:
-    """Keep enrichment without granting a host-wide TCP/43 exemption."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    result = Mock()
-    with patch("modules.ip_info.ip_info.whois.query", return_value=result) as query:
-        assert ip_info.query_whois("example.com") is result
-
-    ip_info.db.record_slips_own_service_port.assert_not_called()
-    query.assert_called_once_with("example.com", timeout=2.0)
 
 
 def test_start_mac_db_reader_returns_without_running_loop() -> None:
@@ -65,7 +42,7 @@ async def test_start_mac_db_reader_schedules_reader_in_running_loop() -> None:
 
     ip_info._start_mac_db_reader()
 
-    ip_info.create_task.assert_called_once_with(ip_info.read_mac_db)
+    ip_info.create_task.assert_called_once_with(ip_info.mac_vendor.read_mac_db)
     assert ip_info.reading_mac_db_task == created_task
 
 
@@ -89,264 +66,17 @@ def test_get_geocountry(ip_address, expected_geocountry):
     assert ip_info.get_geocountry(ip_address) == expected_geocountry
 
 
-async def test_get_vendor_from_database(mocker):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mac_addr = "08:00:27:7f:09:e1"
-    profileid = "profile_10.0.2.15"
-    db_vendor = "Database Vendor"
-
-    ip_info.db.get_mac_vendor_from_profile.return_value = db_vendor
-
-    result = await ip_info.get_vendor_async(mac_addr, profileid)
-    assert result is True
-    (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
-    mocker.patch.object(ip_info, "get_vendor_offline").assert_not_called()
-    mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
-
-
-@pytest.mark.parametrize("mac", ["A2:D7:7B:FA:6A:55", "02:00:00:00:00:01", "52:54:00:12:34:56"])
-async def test_local_mac_classification_does_not_query_manufacturer(mac: str) -> None:
-    """Local MAC prefixes cannot identify an IEEE hardware manufacturer.
-
-    Parameters:
-        mac: Private, manually assigned or virtual interface MAC.
-    """
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.get_vendor_offline = Mock()
-    ip_info.run_lookup = AsyncMock()
-    result = await ip_info.get_vendor_async(mac, "profile_192.168.1.20")
-    assert result == {"MAC": mac, "Vendor": "Unknown", "mac_address_type": "locally_administered"}
-    ip_info.db.get_mac_vendor_from_profile.assert_not_called()
-    ip_info.get_vendor_offline.assert_not_called()
-    ip_info.run_lookup.assert_not_awaited()
-    ip_info.db.set_mac_vendor_to_profile.assert_not_called()
-
-
-async def test_get_vendor_from_offline(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mac_addr = "08:00:27:7f:09:e2"
-    profileid = "profile_10.0.2.16"
-    offline_vendor = "Offline Vendor"
-
-    ip_info.db.get_mac_vendor_from_profile.return_value = None
-    mocker.patch.object(
-        ip_info, "get_vendor_offline", return_value=offline_vendor
-    )
-
-    result = await ip_info.get_vendor_async(mac_addr, profileid)
-
-    assert result == {"MAC": mac_addr, "Vendor": offline_vendor}
-    (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
-    (ip_info.get_vendor_offline.assert_called_once_with(mac_addr, profileid))
-    mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
-    ip_info.db.set_mac_vendor_to_profile.assert_called_once_with(
-        profileid, mac_addr, offline_vendor
-    )
-
-
-async def test_get_vendor_from_online(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mac_addr = "08:00:27:7f:09:e3"
-    profileid = "profile_10.0.2.17"
-    online_vendor = "Online Vendor"
-
-    ip_info.db.get_mac_vendor_from_profile.return_value = None
-    mocker.patch.object(ip_info, "get_vendor_offline", return_value=None)
-    ip_info.run_lookup = AsyncMock(return_value=online_vendor)
-
-    result = await ip_info.get_vendor_async(mac_addr, profileid)
-
-    assert result == {"MAC": mac_addr, "Vendor": online_vendor}
-    (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
-    (ip_info.get_vendor_offline.assert_called_once_with(mac_addr, profileid))
-    ip_info.run_lookup.assert_awaited_once_with(
-        ip_info.get_vendor_online, mac_addr
-    )
-    ip_info.db.set_mac_vendor_to_profile.assert_called_once_with(
-        profileid, mac_addr, online_vendor
-    )
-
-
-async def test_get_vendor_not_found(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mac_addr = "08:00:27:7f:09:e4"
-    profileid = "profile_10.0.2.18"
-
-    ip_info.db.get_mac_vendor_from_profile.return_value = None
-    mocker.patch.object(ip_info, "get_vendor_offline", return_value=None)
-    ip_info.run_lookup = AsyncMock(return_value=None)
-
-    result = await ip_info.get_vendor_async(mac_addr, profileid)
-
-    assert result == {"MAC": mac_addr, "Vendor": "Unknown"}
-    (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
-    (ip_info.get_vendor_offline.assert_called_once_with(mac_addr, profileid))
-    ip_info.run_lookup.assert_awaited_once_with(
-        ip_info.get_vendor_online, mac_addr
-    )
-    ip_info.db.set_mac_vendor_to_profile.assert_not_called()
-
-
-async def test_get_vendor_broadcast_mac(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mac_addr = "ff:ff:ff:ff:ff:ff"
-    profileid = "profile_10.0.2.19"
-
-    result = await ip_info.get_vendor_async(mac_addr, profileid)
-
-    assert result is False
-    ip_info.db.get_mac_vendor_from_profile.assert_not_called()
-    mocker.patch.object(ip_info, "get_vendor_offline").assert_not_called()
-    mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
-    ip_info.db.set_mac_vendor_to_profile.assert_not_called()
-
-
-def test_get_domain_info_no_creation_date():
-    domain = "example.com"
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_domain_data.return_value = None
-    ip_info.query_whois = Mock()
-    ip_info.query_whois.return_value = Mock(
-        creation_date=None, registrant=None
-    )
-
-    result = ip_info.get_domain_info(domain)
-
-    assert result is None
-    ip_info.db.set_info_for_domains.assert_not_called()
-
-
-def test_get_domain_info_invalid_tld():
-    domain = "example.invalid"
-    ip_info = ModuleFactory().create_ip_info_obj()
-    result = ip_info.get_domain_info(domain)
-
-    assert result is None
-    ip_info.db.get_domain_data.assert_not_called()
-    ip_info.db.set_info_for_domains.assert_not_called()
-
-
-def test_get_domain_info_cached_data():
-    domain = "cached.com"
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_domain_data.return_value = {"Age": 100, "Org": "Cached LLC"}
-
-    result = ip_info.get_domain_info(domain)
-
-    assert result is None
-    ip_info.db.set_info_for_domains.assert_not_called()
-
-
-@pytest.mark.parametrize("domain", ["example.arpa", "example.local"])
-def test_get_domain_info_special_domains(domain):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    result = ip_info.get_domain_info(domain)
-
-    assert result is None
-    ip_info.db.get_domain_data.assert_not_called()
-    ip_info.db.set_info_for_domains.assert_not_called()
-
-
-def test_get_rdns_valid_ip():
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_address = "8.8.8.8"
-    expected_rdns = {"reverse_dns": "dns.google"}
-
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
-        "socket.inet_pton"
-    ) as mock_inet_pton:
-
-        mock_gethostbyaddr.return_value = ("dns.google", [], ["8.8.8.8"])
-        mock_inet_pton.side_effect = socket.error
-
-        result = ip_info.get_rdns(ip_address)
-        assert result == expected_rdns
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-        mock_inet_pton.assert_called_once()
-        ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
-        )
-
-
-def test_get_rdns_invalid_ip():
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_address = "invalid_ip"
-
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
-        mock_gethostbyaddr.side_effect = socket.gaierror
-
-        result = ip_info.get_rdns(ip_address)
-        assert result is False
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-
-
-def test_get_rdns_negative_cache_skips_second_lookup():
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_address = "invalid_ip"
-
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
-        mock_gethostbyaddr.side_effect = socket.gaierror
-
-        assert ip_info.get_rdns(ip_address) is False
-        assert ip_info.get_rdns(ip_address) is False
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-
-
-@pytest.mark.parametrize("error,status,delay", [
-    (socket.herror(1, "Unknown host"), "no_record", 86400),
-    (socket.herror(2, "Try again"), "error", 300),
-    (socket.gaierror(socket.EAI_AGAIN, "Temporary failure"), "error", 300),
-    (OSError("Resolver unavailable"), "error", 300),
-])
-def test_rdns_records_lookup_outcome(error: OSError, status: str, delay: int) -> None:
-    """Distinguish an absent reverse name from a temporary resolver failure.
-
-    Parameters:
-        error: Resolver result to simulate.
-        status: Expected stored outcome.
-        delay: Minimum time before another background attempt.
-    """
-    ip_info = ModuleFactory().create_ip_info_obj()
-    with patch("socket.gethostbyaddr", side_effect=error), patch(
-        "modules.ip_info.ip_info.time.time", return_value=1000
-    ):
-        assert ip_info.get_rdns("8.8.8.8") is False
-    ip_info.db.set_ip_info.assert_called_once_with("8.8.8.8", {
-        "reverse_dns_lookup": {"status": status, "checked_at": 1000, "retry_after": 1000 + delay}
-    })
-
-
-def test_rdns_negative_result_survives_module_restart() -> None:
-    """Reuse saved negative results instead of repeating DNS on every run."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_ip_info.return_value = {"status": "no_record", "retry_after": 2000}
-    with patch("socket.gethostbyaddr") as lookup, patch(
-        "modules.ip_info.ip_info.time.time", return_value=1000
-    ):
-        assert ip_info.get_rdns("8.8.8.8") is False
-    lookup.assert_not_called()
-
-
 async def test_rdns_is_not_skipped_when_asn_lookup_fails() -> None:
     """Resolve the name before an unrelated remote ASN lookup can fail."""
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.db.get_rdns_info.return_value = None
-    ip_info.get_rdns_async = AsyncMock()
+    ip_info.rdns.get_rdns_async = AsyncMock()
     ip_info.asn.get_asn_async = AsyncMock(side_effect=OSError("ASN offline"))
     with pytest.raises(OSError):
         await ip_info.handle_new_ip_async("8.8.8.8")
-    ip_info.get_rdns_async.assert_awaited_once_with("8.8.8.8")
+    ip_info.rdns.get_rdns_async.assert_awaited_once_with(
+        "8.8.8.8", ip_info.run_lookup
+    )
     assert ip_info.pending_ip_lookups == set()
 
 
@@ -354,53 +84,38 @@ async def test_duplicate_ip_enrichment_is_coalesced() -> None:
     """Keep repeated source and destination requests to one active lookup."""
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.pending_ip_lookups.add("8.8.8.8")
-    ip_info.get_rdns_async = AsyncMock()
+    ip_info.rdns.get_rdns_async = AsyncMock()
     await ip_info.handle_new_ip_async("8.8.8.8")
-    ip_info.get_rdns_async.assert_not_awaited()
+    ip_info.rdns.get_rdns_async.assert_not_awaited()
 
 
-def test_get_rdns_no_reverse_dns():
+async def test_new_mac_is_enriched_using_the_lookup_executor() -> None:
+    """Hand the bounded lookup runner to the MAC vendor helper."""
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_address = "1.1.1.1"
+    ip_info.mac_vendor.get_vendor_async = AsyncMock()
+    ip_info.mac_vendor.check_if_we_have_pending_offline_mac_queries = Mock()
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
-        "socket.inet_pton"
-    ) as mock_inet_pton:
+    await ip_info.handle_new_mac_async("08:00:27:7f:09:e1", "profile_10.0.2.15")
 
-        mock_gethostbyaddr.return_value = ("1.1.1.1", [], ["1.1.1.1"])
-        mock_inet_pton.return_value = b"\x01\x01\x01\x01"
-
-        result = ip_info.get_rdns(ip_address)
-        assert result is False
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-        mock_inet_pton.assert_called_once()
+    ip_info.mac_vendor.get_vendor_async.assert_awaited_once_with(
+        "08:00:27:7f:09:e1", "profile_10.0.2.15", ip_info.run_lookup
+    )
+    pending_queries_check = (
+        ip_info.mac_vendor.check_if_we_have_pending_offline_mac_queries
+    )
+    pending_queries_check.assert_called_once_with()
 
 
-def test_get_rdns_localhost():
+async def test_new_domain_is_enriched_using_the_lookup_executor() -> None:
+    """Hand the bounded lookup runner to the domain helper."""
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_address = "127.0.0.1"
-    expected_rdns = {"reverse_dns": "localhost.localdomain"}
+    ip_info.domain_info.get_domain_info_async = AsyncMock()
 
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr, patch(
-        "socket.inet_pton"
-    ) as mock_inet_pton:
+    await ip_info.handle_new_dns_async("example.com")
 
-        mock_gethostbyaddr.return_value = (
-            "localhost.localdomain",
-            [],
-            ["127.0.0.1"],
-        )
-        mock_inet_pton.side_effect = socket.error
-
-        result = ip_info.get_rdns(ip_address)
-        assert result == expected_rdns
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-        mock_inet_pton.assert_called_once()
-        ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
-        )
+    ip_info.domain_info.get_domain_info_async.assert_awaited_once_with(
+        "example.com", ip_info.run_lookup
+    )
 
 
 def test_set_evidence_malicious_jarm_hash(mocker):
@@ -452,79 +167,6 @@ def test_set_evidence_malicious_jarm_hash(mocker):
     assert src_evidence.proto == Proto.TCP
 
 
-@pytest.mark.parametrize(
-    "status_code, response_text, expected_vendor, " "mock_side_effect",
-    [
-        (
-            200,
-            "Valid Vendor",
-            "Valid Vendor",
-            None,
-        ),
-        (
-            204,
-            "",
-            False,
-            None,
-        ),
-        (
-            None,
-            None,
-            False,
-            requests.exceptions.ReadTimeout(),
-        ),
-        (
-            None,
-            None,
-            False,
-            requests.exceptions.ConnectionError(),
-        ),
-        (
-            None,
-            None,
-            False,
-            json.decoder.JSONDecodeError("Msg", "Doc", 0),
-        ),
-    ],
-)
-def test_get_vendor_online(
-    mocker,
-    status_code,
-    response_text,
-    expected_vendor,
-    mock_side_effect,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mock_response = Mock(status_code=status_code, text=response_text)
-    mock_requests = mocker.patch(
-        "requests.get",
-        return_value=mock_response,
-        side_effect=mock_side_effect,
-    )
-
-    vendor = ip_info.get_vendor_online("00:11:22:33:44:55")
-
-    assert vendor == expected_vendor
-    mock_requests.assert_called_once_with(
-        "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
-    )
-
-
-def test_get_vendor_online_negative_cache_skips_second_lookup(mocker):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    mock_requests = mocker.patch(
-        "requests.get",
-        side_effect=requests.exceptions.ConnectionError(),
-    )
-
-    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
-    assert ip_info.get_vendor_online("00:11:22:33:44:55") is False
-
-    mock_requests.assert_called_once_with(
-        "https://api.macvendors.com/00:11:22:33:44:55", timeout=2
-    )
-
-
 async def tmp_function():
     # Simulating some asynchronous work
     await asyncio.sleep(1)
@@ -559,6 +201,7 @@ async def test_shutdown_gracefully(
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.reading_mac_db_task = tmp_function()
+    ip_info.host_identity_archiver.flush_async = AsyncMock()
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
@@ -570,6 +213,115 @@ async def test_shutdown_gracefully(
 
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
+    ip_info.host_identity_archiver.flush_async.assert_awaited_once_with(
+        ip_info.run_host_archive_step
+    )
+
+
+async def test_shutdown_frees_resources_even_when_the_flush_fails() -> None:
+    """A broken host store must not leave threads and databases open."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.host_identity_archiver.flush_async = AsyncMock(
+        side_effect=RuntimeError
+    )
+    ip_info.country_db = Mock()
+
+    with pytest.raises(RuntimeError):
+        await ip_info.shutdown_gracefully()
+
+    ip_info.country_db.close.assert_called_once()
+    with pytest.raises(RuntimeError):
+        ip_info.host_archive_executor.submit(print)
+    with pytest.raises(RuntimeError):
+        ip_info.lookup_executor.submit(print)
+
+
+async def test_host_archive_steps_run_off_the_event_loop() -> None:
+    """Keep blocking SQLite work in the archive thread, not on the loop."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+
+    def get_thread_name(prefix: str) -> str:
+        return prefix + threading.current_thread().name
+
+    thread_name = await ip_info.run_host_archive_step(get_thread_name, "in:")
+
+    assert thread_name.startswith("in:host-archive")
+    assert threading.current_thread().name != thread_name[3:]
+    ip_info.host_archive_executor.shutdown()
+
+
+@pytest.mark.parametrize(
+    "is_batch_due, expected_batches",
+    [
+        (True, 1),
+        (False, 0),
+    ],
+)
+async def test_main_starts_a_host_archive_batch_only_when_due(
+    is_batch_due: bool, expected_batches: int
+) -> None:
+    """Pace host archiving from main() without sleeping in it.
+
+    Parameters:
+        is_batch_due: Whether the archiver rested enough for a new batch.
+        expected_batches: Batches main() should start.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.get_msg = Mock(return_value=None)
+    ip_info.create_task = Mock()
+    ip_info.host_identity_archiver.claim_due_batch = Mock(
+        return_value=is_batch_due
+    )
+
+    await ip_info.main()
+
+    start_batch = call(
+        ip_info.host_identity_archiver.archive_batch_async,
+        ip_info.run_host_archive_step,
+    )
+    assert ip_info.create_task.call_args_list == (
+        [start_batch] * expected_batches
+    )
+
+
+def test_pre_main_opens_the_host_store_before_dropping_root(mocker) -> None:
+    """Root must create the permanent host store, later it's too late."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    startup_steps = Mock()
+    ip_info.db.init_host_profile_store = startup_steps.init_host_profile_store
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.drop_root_privs_permanently",
+        startup_steps.drop_root_privs_permanently,
+    )
+    ip_info.wait_for_dbs = Mock()
+    ip_info.gateway.get_gateway_ip_if_interface = Mock(return_value=None)
+
+    ip_info.pre_main()
+
+    assert [step[0] for step in startup_steps.mock_calls] == [
+        "init_host_profile_store",
+        "drop_root_privs_permanently",
+    ]
+
+
+def test_pre_main_stores_the_gateway_of_each_interface(mocker) -> None:
+    """Save the gateway IP and MAC found by the gateway helper."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    mocker.patch("modules.ip_info.ip_info.utils.drop_root_privs_permanently")
+    ip_info.wait_for_dbs = Mock()
+    ip_info.gateway.get_gateway_ip_if_interface = Mock(
+        return_value={"eth0": "192.168.1.1"}
+    )
+    ip_info.gateway.get_gateway_mac = Mock(
+        return_value={"eth0": "AA:BB:CC:DD:EE:FF"}
+    )
+
+    ip_info.pre_main()
+
+    assert ip_info.db.set_default_gateway.call_args_list == [
+        call("IP", "192.168.1.1", "eth0"),
+        call("MAC", "AA:BB:CC:DD:EE:FF", "eth0"),
+    ]
 
 
 @pytest.mark.parametrize(
@@ -624,33 +376,6 @@ def test_get_gateway_ip_if_interface_args_interface(
     )
 
 
-@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
-def test_gateway_discovery_skips_invalid_addresses(
-    mocker, gateway: str | None
-) -> None:
-    """Ignore interfaces for which the OS reports no valid gateway.
-
-    Parameters:
-        mocker: Pytest mock fixture.
-        gateway: Missing or malformed gateway returned by the OS.
-    """
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.is_running_non_stop = True
-    mocker.patch(
-        "modules.ip_info.ip_info.utils.get_all_interfaces",
-        return_value=["en0"],
-    )
-    mocker.patch(
-        "modules.ip_info.ip_info.utils.get_gateway_for_iface",
-        return_value=gateway,
-    )
-
-    assert ip_info.get_gateway_ip_if_interface() == {}
-
-
-# def test_get_gateway_ip_if_interface_args_access_point():
-
-
 @pytest.mark.parametrize(
     "ip, is_multicast, cached_info, cached_rdns, expected_calls",
     [
@@ -696,7 +421,7 @@ def test_handle_new_ip(
 
     mock_get_geocountry = mocker.patch.object(ip_info, "get_geocountry")
     mock_get_asn = mocker.patch.object(ip_info.asn, "get_asn")
-    mock_get_rdns = mocker.patch.object(ip_info, "get_rdns")
+    mock_get_rdns = mocker.patch.object(ip_info.rdns, "get_rdns")
     ip_info.asn.update_asn = Mock(return_value=True)
     ip_info.handle_new_ip(ip)
     assert mock_get_geocountry.call_count == expected_calls.get(
@@ -704,41 +429,6 @@ def test_handle_new_ip(
     )
     assert mock_get_asn.call_count == expected_calls.get("get_asn", 0)
     assert mock_get_rdns.call_count == expected_calls.get("get_rdns", 0)
-
-
-def test_check_if_we_have_pending_mac_queries_with_mac_db(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_vendor_db_loaded = True
-    ip_info.pending_mac_queries = Mock()
-    ip_info.pending_mac_queries.empty.side_effect = [False, False, True]
-    ip_info.pending_mac_queries.get.side_effect = [
-        ("00:11:22:33:44:55", "profile_1"),
-        ("AA:BB:CC:DD:EE:FF", "profile_2"),
-        Exception("Empty queue"),
-    ]
-    mock_get_vendor_offline = mocker.patch.object(
-        ip_info, "get_vendor_offline"
-    )
-    ip_info.check_if_we_have_pending_offline_mac_queries()
-    assert mock_get_vendor_offline.call_count == 2
-    mock_get_vendor_offline.assert_any_call("00:11:22:33:44:55", "profile_1")
-    mock_get_vendor_offline.assert_any_call("AA:BB:CC:DD:EE:FF", "profile_2")
-
-
-def test_check_if_we_have_pending_mac_queries_empty_queue(
-    mocker,
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_vendor_db_loaded = True
-    ip_info.pending_mac_queries = Mock()
-    ip_info.pending_mac_queries.empty.return_value = True
-    mock_get_vendor_offline = mocker.patch.object(
-        ip_info, "get_vendor_offline"
-    )
-    ip_info.check_if_we_have_pending_offline_mac_queries()
-    mock_get_vendor_offline.assert_not_called()
 
 
 def test_register_private_dns_server_stores_private_dns_server():
@@ -800,149 +490,3 @@ def test_register_private_dns_server_ignores_non_private_dns_server_flows(
 
     ip_info.db.store_official_dns_server.assert_not_called()
     ip_info.print.assert_not_called()
-
-
-@pytest.fixture
-def ip_info():
-    """Return a mock-ready instance of the IP info manager."""
-    obj = Mock()
-    obj.db = Mock()
-    obj._get_wifi_interface_if_ap = Mock(return_value=None)
-    obj._get_mac_using_ip_neigh = Mock(return_value=None)
-    obj._get_mac_using_arp_cache = Mock(return_value=None)
-    obj.get_own_mac = Mock(return_value=None)
-    obj.is_running_non_stop = True
-    return obj
-
-
-@pytest.mark.parametrize(
-    "gw_ips, mac_in_db, expected",
-    [
-        (
-            {"eth0": "192.168.1.1"},
-            "AA:BB:CC:DD:EE:FF",
-            {"eth0": "AA:BB:CC:DD:EE:FF"},
-        ),
-        ({"wlan0": "10.0.0.1"}, None, None),  # no MAC found
-    ],
-)
-def test_mac_found_in_db_or_not(ip_info, gw_ips, mac_in_db, expected):
-    """Test when MAC exists or not in the DB."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_mac_addr_from_profile.return_value = mac_in_db
-    ip_info.is_running_non_stop = True
-    result = ip_info.get_gateway_mac(gw_ips)
-
-    assert result == expected
-
-
-@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
-def test_gateway_mac_skips_invalid_addresses(gateway: str | None) -> None:
-    """Do not query gateway data or OS neighbor tools for invalid addresses.
-
-    Parameters:
-        gateway: Missing or malformed gateway value.
-    """
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info._get_mac_using_ip_neigh = Mock()
-    ip_info._get_mac_using_arp_cache = Mock()
-
-    assert ip_info.get_gateway_mac({"en0": gateway}) is None
-    ip_info.db.get_mac_addr_from_profile.assert_not_called()
-    ip_info._get_mac_using_ip_neigh.assert_not_called()
-    ip_info._get_mac_using_arp_cache.assert_not_called()
-
-
-def test_non_stop_false_skips_mac_lookup():
-    """Should skip all lookups when not running non-stop."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.is_running_non_stop = False
-    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
-    ip_info._get_mac_using_ip_neigh = Mock()
-    ip_info._get_mac_using_arp_cache = Mock()
-    result = ip_info.get_gateway_mac({"eth0": "192.168.1.1"})
-
-    assert result is None
-    ip_info._get_mac_using_ip_neigh.assert_not_called()
-    ip_info._get_mac_using_arp_cache.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "db_return_value",
-    ["wlan0", None],
-)
-def test_get_wifi_interface_if_ap(db_return_value):
-    """get_wifi_interface() already returns the interface name, not a
-    dict, so this should just pass it through."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_wifi_interface = Mock(return_value=db_return_value)
-
-    assert ip_info._get_wifi_interface_if_ap() == db_return_value
-
-
-def test_wifi_interface_uses_own_mac():
-    """If interface is WiFi AP, use get_own_mac()."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info._get_wifi_interface_if_ap = Mock(return_value="wlan0")
-    ip_info.get_own_mac = Mock(return_value="AA:AA:AA:AA:AA:AA")
-    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
-    result = ip_info.get_gateway_mac({"wlan0": "10.0.0.1"})
-
-    assert result == {"wlan0": "AA:AA:AA:AA:AA:AA"}
-
-
-def test_mac_from_ip_neigh():
-    """Should use ip neigh if available."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
-    ip_info._get_mac_using_ip_neigh = Mock(return_value="AA:BB:CC:11:22:33")
-
-    result = ip_info.get_gateway_mac({"eth0": "172.16.0.1"})
-
-    assert result == {"eth0": "AA:BB:CC:11:22:33"}
-    ip_info._get_mac_using_ip_neigh.assert_called_once_with("172.16.0.1")
-
-
-def test_mac_from_arp_cache_if_ip_neigh_fails():
-    """Should fallback to ARP cache if ip neigh fails."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
-    ip_info._get_mac_using_ip_neigh = Mock(return_value=None)
-    ip_info._get_mac_using_arp_cache = Mock(return_value="FF:EE:DD:CC:BB:AA")
-
-    result = ip_info.get_gateway_mac({"eth0": "192.168.0.1"})
-
-    assert result == {"eth0": "FF:EE:DD:CC:BB:AA"}
-    ip_info._get_mac_using_arp_cache.assert_called_once_with("192.168.0.1")
-
-
-def test_all_methods_fail_returns_none():
-    """If all lookups fail, return None."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.get_mac_addr_from_profile = Mock(return_value=None)
-    ip_info._get_mac_using_ip_neigh = Mock(return_value=None)
-    ip_info._get_mac_using_arp_cache = Mock(return_value=None)
-    ip_info.get_own_mac = Mock(return_value=None)
-    result = ip_info.get_gateway_mac({"eth0": "1.1.1.1"})
-
-    assert result is None
-
-
-@pytest.mark.parametrize(
-    "ip_address, expected_family",
-    [
-        # Testcase 1: IPv4 address
-        ("192.168.1.1", socket.AF_INET),
-        # Testcase 2: IPv6 address
-        ("2001:db8::1", socket.AF_INET6),
-        # Testcase 3: Another IPv4 address
-        ("10.0.0.1", socket.AF_INET),
-        # Testcase 4: Another IPv6 address
-        ("::1", socket.AF_INET6),
-        # Testcase 5: IPv4-mapped IPv6 address
-        ("::ffff:192.0.2.1", socket.AF_INET6),
-    ],
-)
-def test_get_ip_family(ip_address, expected_family):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    assert ip_info.get_ip_family(ip_address) == expected_family

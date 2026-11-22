@@ -1190,3 +1190,31 @@ def test_store_files_are_private_to_the_slips_user(tmp_path: Path) -> None:
 
     assert db_path.parent.stat().st_mode & 0o777 == 0o700
     assert db_path.stat().st_mode & 0o777 == 0o600
+
+
+def test_wal_files_are_handed_to_the_slips_user_with_the_database(
+    tmp_path: Path,
+) -> None:
+    """Modules that dropped root must be able to write to the store.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    db_path = tmp_path / "host_profiles" / "hosts.sqlite"
+    store = _module_factory.create_host_profile_store_obj(db_path)
+    wal_files = [Path(f"{db_path}-wal"), Path(f"{db_path}-shm")]
+    for wal_file in wal_files:
+        wal_file.touch()
+        wal_file.chmod(0o644)
+
+    with patch.object(
+        store, "_restrict_access_to_slips_user"
+    ) as restrict_access:
+        store._restrict_access_to_db_files()
+
+    assert [call.args for call in restrict_access.call_args_list] == [
+        (db_path, 0o600),
+        (wal_files[0], 0o600),
+        (wal_files[1], 0o600),
+    ]
