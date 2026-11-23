@@ -254,9 +254,9 @@ Slips keeps this analysis separate from the live one automatically:
 | What | Live capture | PCAP analysis |
 | --- | --- | --- |
 | Redis | Port 6379, DB 0 | Its own Redis port |
-| Saved data and learned state | `permanent/` | `<output>/permanent/` (starts empty) |
-| Whitelist | Your whitelist | A copy, so edits from the PCAP web page don't change your live whitelist |
-| Redis and web passwords | Yours | Copied, so the same login works |
+| Saved data and learned state | `permanent/` | Nothing is written to `permanent/`; learned state stays in the analysis output |
+| Whitelist | Your whitelist | The same whitelist (a copy is kept in `<output>/metadata/`) |
+| Redis and web passwords | Yours | The same files in `permanent/`, so the same login works |
 | Zeek files | As configured | Kept inside the analysis output |
 | Web interface | As configured | Only reachable from this machine (localhost) |
 | Automatic Slips updates | As configured | Turned off |

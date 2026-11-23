@@ -38,7 +38,8 @@ def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
     manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
     manager._add_metadata()
     captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
-    assert captured["parameters"]["permanent_dir"] == str(output / "permanent")
+    assert captured["parameters"]["permanent_dir"] == "live-state"
+    assert not (output / "permanent").exists()
     assert captured["web_interface"]["bind"] == "localhost"
     assert captured["web_interface"]["port"] == 55012
     assert yaml.safe_load(source.read_text()) == original

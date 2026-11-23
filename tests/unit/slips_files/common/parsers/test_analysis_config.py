@@ -9,10 +9,9 @@ import yaml
 
 from slips_files.common.parsers.analysis_config import (
     isolated_analysis_config, isolated_analysis_output,
-    prepare_analysis_files, validate_analysis_paths,
+    validate_analysis_paths,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.core.database.redis_db import redis_auth
 from tests.module_factory import ModuleFactory
 
 
@@ -65,7 +64,7 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
     output = tmp_path / "analysis"
     effective = isolated_analysis_config(source, str(output))
     assert source == before
-    assert effective["parameters"]["permanent_dir"] == str(output / "permanent")
+    assert effective["parameters"]["permanent_dir"] == "live"
     assert effective["parameters"]["time_window_width"] == 120
     assert effective["parameters"]["store_zeek_files_in_the_output_dir"] is True
     assert effective["parameters"]["metadata_dir"] is True
@@ -75,43 +74,26 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
     assert effective["ml_online_model"] == source["ml_online_model"]
 
 
-@pytest.mark.parametrize("credentials_exist", [False, True])
-def test_analysis_files_copy_only_credentials_and_whitelist(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, credentials_exist: bool,
-) -> None:
-    """Share cache credentials while keeping rules and learned data independent.
+def test_isolated_configuration_never_creates_a_permanent_dir(tmp_path: Path) -> None:
+    """Reuse the source permanent dir, whitelist and feed downloads in place.
 
     Parameters:
-        tmp_path: Source state and separate output.
-        monkeypatch: Password cache isolation.
-        credentials_exist: Whether credentials already exist for a live run.
+        tmp_path: Separate analysis output.
     """
     _factory = ModuleFactory()
-    monkeypatch.setattr(redis_auth, "_cached_password", None)
-    original = tmp_path / "live"
-    original.mkdir()
-    if credentials_exist:
-        (original / "redis_auth.conf").write_text("requirepass unit-test-password\n")
-        (original / "web_auth.json").write_text('{"hash": "existing-login"}')
-    (original / "hosts.sqlite").write_bytes(b"live identities")
-    whitelist = tmp_path / "whitelist.conf"
-    whitelist.write_text("ip,192.0.2.10,src,alerts\n")
-    source = {"parameters": {"permanent_dir": str(original)},
-              "whitelists": {"local_whitelist_path": str(whitelist)}}
-    effective = isolated_analysis_config(source, str(tmp_path / "analysis"))
-    prepare_analysis_files(source, effective)
-    destination = Path(effective["parameters"]["permanent_dir"])
-    for name in ("redis_auth.conf", "web_auth.json"):
-        if (original / name).exists():
-            assert (destination / name).read_bytes() == (original / name).read_bytes()
-            assert (destination / name).stat().st_mode & 0o777 == 0o600
-            assert (destination / name).stat().st_ino != (original / name).stat().st_ino
-    assert not (destination / "hosts.sqlite").exists()
-    copied = Path(effective["whitelists"]["local_whitelist_path"])
-    assert copied.read_text() == whitelist.read_text()
-    copied.write_text("changed only for analysis\n")
-    assert whitelist.read_text() == "ip,192.0.2.10,src,alerts\n"
-    assert redis_auth.ensure_redis_password(str(original / "redis_auth.conf"))
+    source = {"parameters": {"permanent_dir": "live"},
+              "whitelists": {"local_whitelist_path": "rules/whitelist.conf"},
+              "threatintelligence": {"download_path_for_remote_threat_intelligence": "feeds/"}}
+    output = tmp_path / "analysis"
+    effective = isolated_analysis_config(source, str(output))
+    assert effective["parameters"]["permanent_dir"] == "live"
+    assert effective["whitelists"] == source["whitelists"]
+    assert effective["threatintelligence"] == source["threatintelligence"]
+    assert str(output) not in str(
+        {k: v for k, v in effective.items()
+         if k in ("parameters", "whitelists", "threatintelligence")}
+    )
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("output", [".", "live", "live/nested", "config", "input", "input/nested", "rules", "analysis"])
@@ -161,3 +143,15 @@ def test_each_process_reconstructs_same_analysis_configuration(tmp_path: Path, m
     assert configurations[0] == configurations[1]
     assert yaml.safe_load(source.read_text()) == original
     assert sys.argv == arguments
+
+
+def test_remote_feeds_default_to_a_dir_inside_permanent() -> None:
+    """Download feeds inside the permanent dir unless a path is configured."""
+    _factory = ModuleFactory()
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {"parameters": {"permanent_dir": "live"}}
+    assert parser.remote_ti_data_path() == "live/remote_data_files"
+    parser.config["threatintelligence"] = {
+        "download_path_for_remote_threat_intelligence": "feeds/"
+    }
+    assert parser.remote_ti_data_path() == "feeds/"

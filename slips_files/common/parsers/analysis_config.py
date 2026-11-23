@@ -3,7 +3,6 @@
 import argparse
 from copy import deepcopy
 from pathlib import Path
-import shutil
 
 from modules.supported_module_names import Modules
 
@@ -47,6 +46,11 @@ def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
 def isolated_analysis_config(config: dict, output: str) -> dict:
     """Override writable paths for one analysis without editing its source.
 
+    The permanent dir, whitelist and threat intelligence download dir are
+    deliberately left as configured, so the analysis reuses the Redis
+    password and web login stored in the permanent dir. No permanent dir is
+    ever created inside the output dir.
+
     Parameters:
         config: Source configuration to reuse.
         output: Independent analysis output directory.
@@ -55,27 +59,16 @@ def isolated_analysis_config(config: dict, output: str) -> dict:
         Configuration with private runtime data and a localhost web listener.
     """
     result = deepcopy(config)
-    permanent = Path(output) / "permanent"
     overrides = {
         "parameters": {
-            "permanent_dir": str(permanent),
             "metadata_dir": True,
             "store_zeek_files_in_the_output_dir": True,
         },
-        "whitelists": {
-            "local_whitelist_path": str(permanent / "whitelist.conf")
-        },
         "web_interface": {"bind": "localhost"},
         "update": {"auto_update_slips": False},
-        Modules.REGEX_GENERATOR.value: {
-            "persistent_store_dir": "databases/regex_store"
-        },
+        # an empty persistent dir keeps these stores inside the output dir
+        Modules.REGEX_GENERATOR.value: {"persistent_store_dir": ""},
         Modules.T_CELL.value: {"persistent_store_dir": ""},
-        "threatintelligence": {
-            "download_path_for_remote_threat_intelligence": str(
-                permanent / "remote_ti"
-            )
-        },
     }
     for section, values in overrides.items():
         result[section] = {**(result.get(section) or {}), **values}
@@ -118,39 +111,4 @@ def validate_analysis_paths(
         raise SystemExit(
             "Choose an independent -o directory outside the source "
             "configuration, input and permanent data paths."
-        )
-
-
-def prepare_analysis_files(source: dict, effective: dict) -> None:
-    """Copy credentials and whitelist rules into a freshly prepared analysis.
-
-    Parameters:
-        source: Original configuration with credential and whitelist paths.
-        effective: Run configuration with independent writable paths.
-    """
-    from slips_files.core.database.redis_db.redis_auth import (
-        ensure_redis_password,
-    )
-
-    original = Path(
-        (source.get("parameters") or {}).get("permanent_dir") or "permanent"
-    )
-    original.mkdir(parents=True, exist_ok=True)
-    ensure_redis_password(str(original / "redis_auth.conf"))
-    destination = Path(effective["parameters"]["permanent_dir"])
-    destination.mkdir(parents=True, exist_ok=True, mode=0o700)
-    destination.chmod(0o700)
-    for name in ("redis_auth.conf", "web_auth.json"):
-        path = original / name
-        if path.is_file():
-            target = destination / name
-            shutil.copyfile(path, target)
-            target.chmod(0o600)
-    whitelist = Path(
-        (source.get("whitelists") or {}).get("local_whitelist_path")
-        or "config/whitelist.conf"
-    )
-    if whitelist.is_file():
-        shutil.copyfile(
-            whitelist, effective["whitelists"]["local_whitelist_path"]
         )

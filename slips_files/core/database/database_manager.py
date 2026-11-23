@@ -1469,9 +1469,16 @@ class DBManager:
 
     def _get_host_profile_store(self) -> HostProfileStore:
         if self.host_profile_store is None:
+            # an isolated file analysis keeps the identities it learns in
+            # its own output dir instead of the live permanent dir
+            store_root = (
+                Path(self.output_dir)
+                if getattr(self.conf, "isolated_analysis", False) is True
+                else Path(self.conf.permanent_dir())
+            )
             self.host_profile_store = HostProfileStore(
                 self.logger,
-                Path(self.conf.permanent_dir()) / HOST_PROFILES_DB_SUBPATH,
+                store_root / HOST_PROFILES_DB_SUBPATH,
                 self.main_pid,
                 f"{self.output_dir}:{self.main_pid}",
                 self.rdb.get_network_state,

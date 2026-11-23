@@ -953,8 +953,8 @@ def test_shared_config_works_with_automatic_file_isolation(
     manager.main.conf = Mock(web_interface_port=55000 if history_starting else analysis_web)
     manager.main.conf.isolated_analysis = not history_starting
     manager.main.conf.web_interface_enabled.return_value = True
-    manager.main.conf.permanent_dir.return_value = str(
-        tmp_path / "live-state" if history_starting else analysis_output / "permanent")
+    # an isolated analysis reuses the live permanent dir
+    manager.main.conf.permanent_dir.return_value = str(tmp_path / "live-state")
     command = ["python", "./slips.py", "-c", source.name, "-w"]
     if history_starting:
         command.extend(["-m", "-f", "test.pcap", "-o", str(analysis_output), "--web-port", str(analysis_web)])

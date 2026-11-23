@@ -154,7 +154,8 @@ class RedisManager:
             if not isinstance(config, dict):
                 raise ValueError("Invalid Slips configuration")
             analysis_output = isolated_analysis_output(arguments)
-            if analysis_output is not None:
+            other_is_isolated = analysis_output is not None
+            if other_is_isolated:
                 config = isolated_analysis_config(config, analysis_output)
             parameters = config.get("parameters") or {}
             other_web = config.get("web_interface") or {}
@@ -203,6 +204,12 @@ class RedisManager:
         output = Path(self.main.args.output).resolve()
         other_output = (other_cwd / other.output).resolve()
         permanent = Path(self.main.conf.permanent_dir()).resolve()
+        # isolated analyses (-f) reuse the configured permanent dir (redis
+        # password, web login) and never write learned data to it
+        sharing_is_expected = (
+            getattr(self.main.conf, "isolated_analysis", False) is True
+            or other_is_isolated
+        )
         other_permanent = (
             other_cwd / (parameters.get("permanent_dir") or "permanent")
         ).resolve()
@@ -211,7 +218,7 @@ class RedisManager:
             or other_output.is_relative_to(output)
             or permanent.is_relative_to(other_output)
             or other_permanent.is_relative_to(output)
-            or permanent == other_permanent
+            or (permanent == other_permanent and not sharing_is_expected)
         ):
             raise SystemExit(
                 "Another Slips run shares output or persistent data. "

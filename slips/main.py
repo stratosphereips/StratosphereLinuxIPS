@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
@@ -26,7 +25,6 @@ from managers.ui_manager import UIManager
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.parsers.analysis_config import (
-    prepare_analysis_files,
     validate_analysis_paths,
 )
 from slips_files.common.performance_paths import get_performance_plots_dir
@@ -102,13 +100,6 @@ class Main:
             self.input_information = self.input_information.replace(",", "_")
             self.check_zeek_or_bro()
             self.prepare_output_dir()
-            if self.conf.isolated_analysis:
-                prepare_analysis_files(
-                    self.conf.source_config, self.conf.config
-                )
-                print(
-                    f"Independent analysis data: {self.conf.permanent_dir()}"
-                )
             self.redis_man.start_redis_cache_if_not_running()
             self.twid_width = self.conf.get_tw_width()
             # should be initialised after self.input_type is set
