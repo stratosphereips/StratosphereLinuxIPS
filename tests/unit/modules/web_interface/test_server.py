@@ -46,6 +46,146 @@ from slips_files.core.database.sqlite_db.detection_history import (
 )
 
 
+def test_immune_views_read_bounded_stores(tmp_path: Path) -> None:
+    """Read current immune state without loading all stored observations."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"regex_generator": {"store_dir": "output/regex_generator"},
+                                   "t_cell": {"store_dir": "output/t_cell/data"}}, None)
+    regex_dir = tmp_path / "regex_generator"
+    regex_dir.mkdir()
+    with sqlite3.connect(regex_dir / "generated_regexes.sqlite") as db:
+        db.execute("CREATE TABLE generated_regexes (id INTEGER PRIMARY KEY, regex_type TEXT,"
+                   " regex TEXT, status TEXT, rejection_reason TEXT, backend_alias TEXT,"
+                   " model TEXT, created_at REAL)")
+        db.execute("INSERT INTO generated_regexes VALUES (1,'domain','^example','accepted',"
+                   "NULL,'local','model',100)")
+    cell_dir = tmp_path / "t_cell" / "data"
+    cell_dir.mkdir(parents=True)
+    with sqlite3.connect(cell_dir / "t_cell.sqlite") as db:
+        db.executescript("CREATE TABLE cells (profile_ip TEXT,regex_type TEXT,"
+                         "antigen_value TEXT,state INTEGER,state_name TEXT,"
+                         "last_transition_at REAL,updated_at REAL);"
+                         "CREATE TABLE transitions (id INTEGER PRIMARY KEY,profile_ip TEXT,"
+                         "regex_type TEXT,antigen_value TEXT,from_state INTEGER,"
+                         "to_state INTEGER,reason TEXT,created_at REAL);")
+        db.execute("INSERT INTO cells VALUES ('192.0.2.1','domain','example',3,"
+                   "'activated',100,100)")
+        db.execute("INSERT INTO transitions VALUES (1,'192.0.2.1','domain',"
+                   "'example',1,3,'matched',100)")
+    regex = reader.regex_generator_status()
+    cell = reader.t_cell_status()
+    assert regex["statuses"] == [{"status": "accepted", "count": 1}]
+    assert regex["recent"][0]["regex"] == "^example"
+    assert cell["states"] == [{"state": 3, "state_name": "activated", "count": 1}]
+    assert cell["transitions"][0]["reason"] == "matched"
+
+
+@pytest.mark.parametrize("path,method", [
+    ("/api/immune/regex-generator", "regex_generator_status"),
+    ("/api/immune/t-cell", "t_cell_status"),
+    ("/api/explanations/status", "explanation_status"),
+])
+def test_immune_status_routes(path: str, method: str) -> None:
+    """Route monitoring requests to the matching read-only reader method.
+
+    Parameters:
+        path: Requested API endpoint.
+        method: Reader method serving that endpoint.
+    """
+    _factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    getattr(handler.server.reader, method).return_value = {"available": True}
+    handler.server.reader.response_metadata.return_value = {}
+    assert handler._api_response(path, {})["available"] is True
+    getattr(handler.server.reader, method).assert_called_once_with()
+
+
+def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path: Path) -> None:
+    """Queue an evidence explanation only after a request and dedupe clicks."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True},
+                                   "llm_proxy": {"enabled": True}}, None)
+    with sqlite3.connect(reader.sqlite_path) as db:
+        db.execute("CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY,data TEXT)")
+        db.execute("INSERT INTO evidence VALUES (?,?)", ("e1", json.dumps({
+            "evidence_type": "TEST", "threat_level": "low",
+            "confidence": 0.8, "description": "Observed connection to port 1234"})))
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local", "backends": {"local": {}}})
+        if key == "available_llm_backends" else None)
+    reader.redis.exists.return_value = False
+    reader.redis.set.side_effect = [True, False]
+    reader.redis.publish.return_value = 1
+    first = reader.request_explanation({"kind": "evidence", "id": "e1"})
+    second = reader.request_explanation({"kind": "evidence", "id": "e1"})
+    assert first["status"] == second["status"] == "pending"
+    assert first["id"] == second["id"]
+    assert reader.redis.publish.call_count == 1
+    assert reader.redis.set.call_args.kwargs == {"nx": True, "ex": 600}
+    published = json.loads(reader.redis.publish.call_args.args[1])
+    assert published["requester"] == "web_explain"
+    assert published["metadata"]["cache_key"] == first["id"]
+    assert published["version"] == utils.get_current_version()
+
+
+def test_group_explanation_keeps_time_and_interface_scope(tmp_path: Path) -> None:
+    """Explain only a bounded sample from the selected visible group."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True}}, None)
+    reader.evidence = Mock(return_value={"total": 500, "items": [{
+        "evidence_type": "TEST", "threat_level": "medium",
+        "confidence": 0.8, "description": "Observed a network event",
+    }]})
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local", "backends": {"local": {}}})
+        if key == "available_llm_backends" else None)
+    reader.redis.exists.return_value = False
+    reader.redis.set.return_value = True
+    reader.redis.publish.return_value = 1
+    result = reader.request_explanation({"kind": "group", "query": {
+        "type": "TEST", "range": "custom", "from": "100", "interface": "en0",
+        "untrusted": "ignored",
+    }})
+    query = reader.evidence.call_args.args[0]
+    assert query["limit"] == ["20"]
+    assert query["from"] == ["100"]
+    assert query["interface"] == ["en0"]
+    assert "untrusted" not in query
+    published = json.loads(reader.redis.publish.call_args.args[1])
+    assert "sampled 1 newest records" in published["messages"][0]["content"]
+    assert result["status"] == "pending"
+
+
+def test_alert_explanation_reads_only_matching_summary(tmp_path: Path) -> None:
+    """Show the saved summary for the selected alert ID only."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    path = tmp_path / "alerts" / "alerts_summary.log"
+    path.parent.mkdir()
+    path.write_text("Now: Alert alert-one on timewindow 1.\n"
+                    "LLM summary: First finding.\n"
+                    "Now: Alert alert-two on timewindow 1.\n"
+                    "LLM summary: Second finding.\n")
+    assert reader.alert_explanation("alert-one")["text"] == "First finding."
+    assert reader.alert_explanation("missing")["available"] is False
+    with sqlite3.connect(path.with_name("alert_summaries.sqlite")) as db:
+        db.execute("CREATE TABLE summaries (alert_id TEXT PRIMARY KEY,text TEXT,"
+                   "available INTEGER,created_at REAL)")
+        db.execute("INSERT INTO summaries VALUES ('alert-one','Indexed finding.',1,100)")
+    assert reader.alert_explanation("alert-one")["text"] == "Indexed finding."
+
+
 @pytest.mark.parametrize("failed", [False, True])
 def test_threat_intelligence_reads_only_status_and_hash_sizes(failed: bool) -> None:
     """Report feed provenance and unknown older counts without scanning IoCs.
@@ -1937,7 +2077,7 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
             in app_source
         )
         assert "(row) => slipsScore(row)" in section
-        assert "openHost(row.ip, row)" in section
+        assert "openHost(preferredHostIp(row), row)" in section
         host_workspace = app_source.split("async function openHost", 1)[
             1
         ].split("async function refreshHostWorkspace", 1)[0]
@@ -8875,7 +9015,10 @@ def test_host_workspace_range_is_used_for_evidence_and_reset() -> None:
         1
     ].split("bindTableSort", 1)[0]
 
-    assert "const params = hostRangeParams();" in evidence_loader
+    assert "const params = hostEvidenceQuery();" in evidence_loader
+    query_builder = app_source.split("function hostEvidenceQuery()", 1)[1].split(
+        "async function loadHostEvidenceTypes", 1)[0]
+    assert "const params = hostRangeParams();" in query_builder
     assert 'range: "all"' not in evidence_loader
     assert 'resetPage("host-evidence");' in host_binding
 

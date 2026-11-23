@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import sqlite3
 import time
 import uuid
 from collections import defaultdict, deque
@@ -109,6 +110,7 @@ class AlertSummary(IModule):
             else ConfigParser()
         )
         self.enabled = conf.alert_summary_enabled()
+        self.explain_alerts = conf.alert_summary_explain_alerts()
         self.allowed_backends = conf.alert_summary_allowed_backends()
         self.llm_temperature = conf.alert_summary_llm_temperature()
         self.llm_max_tokens = conf.alert_summary_llm_max_tokens()
@@ -282,6 +284,8 @@ class AlertSummary(IModule):
         """
         msg = self.get_msg("new_alert")
         if not msg:
+            return
+        if not self.explain_alerts:
             return
 
         try:
@@ -1609,6 +1613,31 @@ class AlertSummary(IModule):
         self.summary_log.write(f"{entry}\n")
         self.summary_log.flush()
         os.fsync(self.summary_log.fileno())
+        if getattr(self.summary_log, "name", None) == self.summary_log_path:
+            index_path = os.path.join(
+                os.path.dirname(self.summary_log_path),
+                "alert_summaries.sqlite",
+            )
+            try:
+                with sqlite3.connect(index_path, timeout=2) as connection:
+                    connection.execute(
+                        "CREATE TABLE IF NOT EXISTS summaries (alert_id TEXT PRIMARY KEY, "
+                        "text TEXT NOT NULL, available INTEGER NOT NULL, created_at REAL NOT NULL)"
+                    )
+                    connection.execute(
+                        "INSERT OR REPLACE INTO summaries VALUES (?,?,?,?)",
+                        (
+                            str(alert.id),
+                            summary_text.split(": ", 1)[-1],
+                            int(summary_text.startswith("LLM summary: ")),
+                            time.time(),
+                        ),
+                    )
+            except sqlite3.Error as error:
+                self._log_operation(
+                    f"Could not index alert summary {alert.id}: {error}",
+                    verbosity=LOG_VERBOSITY_SUMMARY,
+                )
         self._log_operation(
             f"Wrote summary entry for alert_id={alert.id} "
             f"timewindow={alert.timewindow.number}",

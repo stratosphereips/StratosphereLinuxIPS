@@ -1648,3 +1648,23 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 
 #network-selection, #interface-selection { max-width: 23rem; font-size: inherit; }
 #network-states .network-state + .network-state { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }
+
+.immune-panel { padding: 1rem; }
+.immune-panel > .surface { margin-top: .9rem; padding: 1rem; }
+.immune-panel > .summary-grid { margin-top: .9rem; }
+.immune-total { display: grid; gap: .35rem; padding: .85rem 1rem; }
+.immune-total small { color: var(--muted); }
+.immune-total strong { font-size: 1.3rem; }
+.immune-type-list { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .75rem; }
+.immune-type-pill { border: 1px solid var(--line); border-radius: 999px; padding: .3rem .65rem; background: var(--surface); }
+.immune-regex, .immune-antigen { display: inline-block; max-width: 36rem; overflow-wrap: anywhere; white-space: normal; }
+.t-cell-cycle { display: block; width: 100%; max-height: 280px; margin: .5rem auto; }
+.t-cell-cycle .t-cell-edge { fill: none; stroke: var(--muted); stroke-width: 2; marker-end: url(#t-cell-arrow); }
+.t-cell-cycle marker path { fill: var(--muted); }
+.t-cell-cycle .t-cell-node circle { fill: var(--surface); stroke: var(--accent); stroke-width: 2; }
+.t-cell-cycle .t-cell-node.anergic circle { stroke: var(--warn); }
+.t-cell-cycle .t-cell-node text { fill: var(--text); font: 600 13px ui-sans-serif, system-ui, sans-serif; text-anchor: middle; }
+.t-cell-cycle .t-cell-node text[id] { font-size: 20px; }
+.ai-explanation { margin: .75rem 0; padding: .8rem 1rem; border-left: 3px solid var(--accent); }
+.ai-explanation h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.ai-explanation p { margin: .55rem 0 0; line-height: 1.5; white-space: pre-wrap; }

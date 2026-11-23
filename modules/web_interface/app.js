@@ -93,6 +93,9 @@ const state = {
   defaultHistoryRange: null,
   rangeChoices: new Set(),
   localSorts: {
+    "regex-table": { key: "created_at", order: "desc" },
+    "t-cell-cells": { key: "updated_at", order: "desc" },
+    "t-cell-transitions": { key: "created_at", order: "desc" },
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
@@ -3334,6 +3337,99 @@ function renderAlertDetailPane(record) {
     text("p", record.alert_id, "mono"), rawBlock(record, "alert"), reviewEditor("alert", record));
 }
 
+/** Show an automatic alert explanation when the module completes it.
+ * @param {string} alertId Alert identifier.
+ * @returns {Promise<void>} Completes after the summary lookup.
+ */
+async function showAlertExplanation(alertId) {
+  const settings = await api("alertSummarySettings", "/api/explanations/status",
+    false, false, 10000);
+  if (!settings?.explain_alerts || state.alertsWorkspace.alert?.alert_id !== alertId) return;
+  const card = document.createElement("section");
+  card.className = "surface ai-explanation";
+  const message = text("p", "Waiting for the alert summary…", "muted");
+  const refresh = text("button", "Refresh summary", "secondary");
+  refresh.type = "button";
+  card.append(text("h3", "AI alert summary"), message, refresh);
+  byId("alerts-detail").querySelector(".alerts-type-summary")?.after(card);
+  if (!card.isConnected) byId("alerts-detail").querySelector("h3")?.after(card);
+  const deadline = Date.now() + 300000;
+  /** Check the saved summary while the selected alert remains visible. */
+  const check = async () => {
+    if (!card.isConnected || state.alertsWorkspace.alert?.alert_id !== alertId) return;
+    const payload = await api("alertSummary", `/api/alert-summary/${encodeURIComponent(alertId)}`,
+      false, false, 10000);
+    if (!payload || !card.isConnected) return;
+    if (payload.available) {
+      message.classList.remove("muted");
+      message.textContent = payload.text;
+      refresh.hidden = true;
+    } else if (payload.error) {
+      message.textContent = `Summary unavailable: ${payload.error}`;
+    } else if (Date.now() < deadline) {
+      window.setTimeout(check, 10000);
+    } else {
+      message.textContent = "No summary was completed for this alert. You can refresh later.";
+    }
+  };
+  refresh.addEventListener("click", check);
+  check().catch(() => {});
+}
+
+/** Create an analyst-triggered explanation card for one evidence or group.
+ * @param {string} kind Evidence or group.
+ * @param {Function} requestData Returns the current request body.
+ * @returns {HTMLElement} An explanation card with its own request status.
+ */
+function explanationCard(kind, requestData) {
+  const card = document.createElement("section");
+  card.className = "surface ai-explanation";
+  const heading = text("h3", kind === "group" ? "Explain this group" : "Explain this evidence");
+  const button = text("button", "Explain with AI", "secondary");
+  button.type = "button";
+  const message = text("p", "Generated only when requested. The explanation summarizes observed facts and detection reasons.", "muted");
+  card.append(heading, button, message);
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    message.textContent = "Checking the LLM service…";
+    try {
+      const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
+      const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
+      if (!enabled || !options.ready) throw new Error(enabled
+        ? "The LLM backend is not ready." : "This explanation type is disabled in the run configuration.");
+      const response = await fetch("/api/explanations", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, ...requestData() }),
+      });
+      const started = await response.json();
+      if (!response.ok) throw new Error(started.detail || started.error || "Could not start explanation");
+      let result = started;
+      const deadline = Date.now() + 600000;
+      while (card.isConnected && result.status === "pending" && Date.now() < deadline) {
+        message.textContent = "Generating explanation…";
+        await new Promise((resolve) => window.setTimeout(resolve, 2500));
+        if (!card.isConnected) return;
+        const poll = await fetch(`/api/explanations/${started.id}`, { cache: "no-store" });
+        result = await poll.json();
+        if (!poll.ok) throw new Error(result.detail || "Could not read explanation");
+      }
+      if (!card.isConnected) return;
+      if (result.status === "ready") {
+        message.classList.remove("muted");
+        message.textContent = result.text || "The model returned an empty explanation.";
+        button.textContent = "Refresh explanation";
+      } else {
+        throw new Error(result.error || "The explanation did not complete. Try again.");
+      }
+    } catch (error) {
+      if (card.isConnected) message.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return card;
+}
+
 /** Open one alert in the right pane and load its linked evidence. */
 async function selectAlertDetailPane(record) {
   const workspace = state.alertsWorkspace;
@@ -3366,6 +3462,7 @@ async function selectAlertDetailPane(record) {
   workspace.alert = { ...detailed, summary: record.summary,
     evidence_types: record.evidence_types };
   renderAlertDetailPane(workspace.alert);
+  showAlertExplanation(record.alert_id).catch(() => {});
 }
 
 /** Resize the pane immediately before a draggable Alerts divider. */
@@ -3924,6 +4021,7 @@ function renderEvidenceGroup() {
         || left.index - right.index).map(({ record }) => record)
     : records;
   const right = byId("evidence-right");
+  const priorExplanation = right.querySelector(".ai-explanation");
   const listScroll = right.querySelector(".evidence-record-list")?.scrollTop || 0;
   const tableScroll = right.querySelector(".evidence-record-table-scroll");
   const tablePosition = [tableScroll?.scrollLeft || 0, tableScroll?.scrollTop || 0];
@@ -3959,6 +4057,16 @@ function renderEvidenceGroup() {
       ["Local score", slipsScore(group)],
       ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
     ]));
+    if (!state.archiveSource) {
+      const explanation = priorExplanation?.dataset.groupId === String(group.id)
+        ? priorExplanation : explanationCard("group", () => {
+          const params = evidenceGroupQuery();
+          applyNetworkSelection(params);
+          return { query: Object.fromEntries(params) };
+        });
+      explanation.dataset.groupId = String(group.id);
+      summary.append(explanation);
+    }
     right.append(summary);
   }
   const list = document.createElement("div");
@@ -4615,6 +4723,92 @@ async function loadThreatIntelligence() {
   if (!payload) return;
   state.threatIntelligence = payload;
   renderThreatIntelligence();
+}
+
+/** Render compact totals for a read-only immune module view.
+ * @param {string} target Summary element ID.
+ * @param {Array} values Label and displayed value pairs.
+ * @returns {void}
+ */
+function renderImmuneTotals(target, values) {
+  const container = byId(target);
+  container.replaceChildren();
+  values.forEach(([label, value]) => {
+    const card = document.createElement("article");
+    card.className = "surface immune-total";
+    card.append(text("small", label), text("strong", value));
+    container.append(card);
+  });
+}
+
+/** Load generated pattern counts, storage size, and recent records.
+ * @returns {Promise<void>} Completes after rendering the Regex Generator tab.
+ */
+async function loadRegexGenerator() {
+  const payload = await api("regex-generator", "/api/immune/regex-generator", false);
+  if (!payload) return;
+  byId("regex-status").textContent = payload.available
+    ? "Read-only pattern store; a configured persistent store may include previous runs. Rejected patterns appear only when storing rejected results is enabled."
+    : "No generated pattern store is available for this run.";
+  const counts = Object.fromEntries((payload.statuses || []).map((item) => [item.status, item.count]));
+  const totalStored = (payload.statuses || []).reduce((sum, item) => sum + numeric(item.count), 0);
+  renderImmuneTotals("regex-summary", [
+    ["Stored results", compact(totalStored)],
+    ["Accepted patterns", compact(counts.accepted || 0)],
+    ["Stored rejected", compact(counts.rejected || 0)],
+    ["Pattern database", formatBytes(payload.store_bytes || 0)],
+    ["Benign corpus", formatBytes(payload.corpus_bytes || 0)],
+  ]);
+  const types = byId("regex-types");
+  types.replaceChildren();
+  (payload.types || []).forEach((item) => {
+    const row = text("span", `${item.regex_type} · ${compact(item.count)}`, "immune-type-pill");
+    types.append(row);
+  });
+  if (!payload.types?.length) types.append(text("p", "No accepted patterns stored yet.", "muted"));
+  renderTable("regex-table", sortLocalRows("regex-table", payload.recent || []), [
+    (item) => timeValue(item.created_at),
+    (item) => item.regex_type,
+    (item) => text("code", item.regex, "immune-regex"),
+    (item) => item.status === "rejected" && item.rejection_reason
+      ? `${item.status}: ${item.rejection_reason}` : item.status,
+    (item) => [item.backend_alias, item.model].filter(Boolean).join(" · ") || "—",
+  ]);
+}
+
+/** Load current T Cell states and recent lifecycle transitions.
+ * @returns {Promise<void>} Completes after rendering the T Cell tab.
+ */
+async function loadTCell() {
+  const payload = await api("t-cell", "/api/immune/t-cell", false);
+  if (!payload) return;
+  byId("t-cell-status").textContent = payload.available
+    ? "Read-only view of stored cells and the newest 100 state transitions. A configured persistent store may include previous runs."
+    : "No T Cell store is available for this run.";
+  const counts = Object.fromEntries((payload.states || []).map((item) => [item.state, item.count]));
+  [0, 1, 2, 3, 4, 5].forEach((stateNumber) => {
+    byId(`t-cell-count-${stateNumber}`).textContent = compact(counts[stateNumber] || 0);
+  });
+  const total = Object.values(counts).reduce((sum, count) => sum + numeric(count), 0);
+  renderImmuneTotals("t-cell-summary", [
+    ["Cells tracked", compact(total)],
+    ["Activated / effector", compact(numeric(counts[3]) + numeric(counts[4]))],
+    ["Memory cells", compact(counts[5] || 0)],
+    ["Store size", formatBytes(payload.store_bytes || 0)],
+  ]);
+  renderTable("t-cell-cells", sortLocalRows("t-cell-cells", payload.cells || []), [
+    (item) => item.profile_ip, (item) => item.regex_type,
+    (item) => text("code", item.antigen_value, "immune-antigen"),
+    (item) => item.state_name, (item) => timeValue(item.updated_at),
+  ]);
+  const stateNames = {0: "mature", 1: "recognized", 2: "anergic",
+    3: "activated", 4: "effector", 5: "memory"};
+  renderTable("t-cell-transitions", sortLocalRows("t-cell-transitions", payload.transitions || []), [
+    (item) => timeValue(item.created_at), (item) => item.profile_ip,
+    (item) => text("code", item.antigen_value, "immune-antigen"),
+    (item) => `${stateNames[item.from_state] || "start"} → ${stateNames[item.to_state] || item.to_state}`,
+    (item) => item.reason,
+  ]);
 }
 
 async function loadConfiguration() {
@@ -8275,7 +8469,9 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   recordActions.append(showJson);
   side.append(json);
   columns.append(flowSection, side);
-  content.append(toolbar, banner, columns, reviewEditor("evidence", record));
+  content.append(toolbar, banner);
+  if (!state.archiveSource) content.append(explanationCard("evidence", () => ({ id: record.id })));
+  content.append(columns, reviewEditor("evidence", record));
 
   if (record.whitelisted) {
     const notice = document.createElement("section");
@@ -10024,6 +10220,8 @@ function tabLoader(name) {
     "arp-poisoning": loadArpPoisoning,
     p2p: loadP2P,
     "p2p-graph": loadP2PGraph,
+    "regex-generator": loadRegexGenerator,
+    "t-cell": loadTCell,
     logs: loadLogs,
     configuration: loadConfiguration,
     "threat-intelligence": loadThreatIntelligence,
@@ -10052,7 +10250,7 @@ async function refreshActive() {
 
 function activeRangeIsLive() {
   if (state.archiveSource && ["alerts", "evidence", "hosts"].includes(state.activeTab)) return false;
-  if (["configuration", "whitelists", "threat-intelligence"].includes(state.activeTab)) return false;
+  if (["configuration", "whitelists", "threat-intelligence", "regex-generator", "t-cell"].includes(state.activeTab)) return false;
   if (state.activeTab === "metadata") return true;
   if (["firewall", "arp-poisoning", "p2p", "p2p-graph", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
@@ -10501,6 +10699,9 @@ byId("p2p-load-more").addEventListener("click", () => {
   renderP2PMessages();
 });
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
+bindLocalTableSort("regex-table", () => loadRegexGenerator().catch(() => {}));
+bindLocalTableSort("t-cell-cells", () => loadTCell().catch(() => {}));
+bindLocalTableSort("t-cell-transitions", () => loadTCell().catch(() => {}));
 bindLocalTableSort("p2p-catchup-transfers-table", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-catchup-table", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-catchup-exchanges", () => renderP2PCatchup(state.p2p?.catch_up));

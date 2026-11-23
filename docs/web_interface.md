@@ -1,5 +1,25 @@
 # Local web interface
 
+## Immune module views and explanations
+
+The **Regex Generator** tab shows accepted pattern counts by type, stored
+rejections when enabled, database size, and the 40 newest stored patterns.
+The **T Cell** tab shows current state counts on a lifecycle graph, the 100
+newest active cells, and 100 recent transitions. Both tabs read module SQLite
+stores only when opened or refreshed; they do not start the modules or scan
+traffic. A missing store is shown as unavailable.
+
+When `alert_summary.enabled` and `llm_proxy.enabled` are configured, completed
+automatic alert summaries appear in alert details. **Explain with AI** in an
+evidence record or group sends a request only when clicked. The group prompt
+uses at most 20 matching records and identifies its sample size. Replies are
+cached for seven days in the run Redis database; pending requests expire after
+ten minutes. The current run must have a ready shared LLM backend. The three
+`alert_summary.explain_*` settings control automatic alerts and the two on-click
+explanation types independently.
+Alert summaries are looked up by ID in the run's summary index, with a bounded
+log fallback for runs created before the index existed.
+
 The web_interface module is a technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
 
 Reopen a completed output folder without repeating the analysis:

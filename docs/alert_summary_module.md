@@ -3,6 +3,9 @@
 The `AlertSummary` module creates one analyst-facing summary paragraph for every Slips alert.
 
 It listens for generated alerts, gathers the evidence that caused each alert, queries the shared `LLM` module, and writes one summary line per alert to `output/alerts/alerts_summary.log`.
+New summaries are also indexed by alert ID in
+`output/alerts/alert_summaries.sqlite`, so the web can load an older alert
+without scanning the whole log.
 
 ## What it does
 
@@ -45,6 +48,9 @@ Example section in `config/slips.yaml`:
 ```yaml
 alert_summary:
   enabled: false
+  explain_alerts: true
+  explain_evidence: true
+  explain_evidence_groups: true
   log_verbosity: 2
   allowed_backends: []
   llm_temperature: 0.2
@@ -55,6 +61,12 @@ alert_summary:
 Configuration reference:
 
 - `enabled`: enables or disables the module.
+- `explain_alerts`: generate summaries automatically for new alerts. Set to
+  `false` to leave automatic alert summaries off while keeping web explanations.
+- `explain_evidence` and `explain_evidence_groups`: allow analyst-triggered
+  explanations in the Evidence tab. These never generate on page load. Group
+  explanations sample at most 20 matching records and state the sample size.
+  The shared `llm_proxy` module must also be enabled with a ready backend.
 - `log_verbosity`: controls how much operational detail is written to
   `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
   `1` for startup, shutdown, and failures, `2` for per-alert queueing and

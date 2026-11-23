@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261026-record-table">
+  <link rel="stylesheet" href="/style.css?v=20261123-immune">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -39,6 +39,8 @@
     <button class="tab" data-tab="arp-poisoning">ARP poisoning</button>
     <button class="tab" data-tab="p2p">P2P</button>
     <button class="tab" data-tab="p2p-graph">P2P Graph</button>
+    <button class="tab" data-tab="regex-generator">Regex Generator</button>
+    <button class="tab" data-tab="t-cell">T Cell</button>
     <button class="tab" data-tab="logs">Logs</button>
     <button class="tab" data-tab="configuration">Configuration</button>
     <button class="tab" data-tab="threat-intelligence">Threat Intelligence</button>
@@ -53,6 +55,39 @@
   </div>
 
   <main>
+    <section id="regex-generator" class="panel immune-panel" aria-labelledby="regex-title">
+      <div class="section-heading"><div><p class="eyebrow">IMMUNE MODULE</p><h2 id="regex-title">Regex Generator</h2></div><button class="secondary refresh-list" data-target="regex-generator">Refresh</button></div>
+      <p id="regex-status" class="muted">Loading generated pattern store…</p>
+      <div id="regex-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Accepted patterns by type</h3><div id="regex-types" class="immune-type-list"></div></article>
+      <article class="surface table-surface"><h3>Recent generated patterns</h3><div class="table-wrap"><table id="regex-table"><thead><tr><th data-sort="created_at">Created</th><th data-sort="regex_type">Type</th><th data-sort="regex">Pattern</th><th data-sort="status">Status</th><th data-sort="backend_alias">Backend</th></tr></thead><tbody></tbody></table></div></article>
+    </section>
+
+    <section id="t-cell" class="panel immune-panel" aria-labelledby="t-cell-title">
+      <div class="section-heading"><div><p class="eyebrow">IMMUNE MODULE</p><h2 id="t-cell-title">T Cell</h2></div><button class="secondary refresh-list" data-target="t-cell">Refresh</button></div>
+      <p id="t-cell-status" class="muted">Loading cell state…</p>
+      <div id="t-cell-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Cell lifecycle</h3><p class="muted">Counts show the cells currently in each state. Recent transitions are listed below.</p>
+        <svg id="t-cell-cycle" class="t-cell-cycle" viewBox="0 0 920 250" role="img" aria-label="T Cell lifecycle: mature, recognized, activated, effector, memory, and anergic">
+          <defs><marker id="t-cell-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+          <path class="t-cell-edge" d="M142 78 H207"/>
+          <path class="t-cell-edge" d="M322 78 H387"/>
+          <path class="t-cell-edge" d="M502 78 H567"/>
+          <path class="t-cell-edge" d="M682 78 H747"/>
+          <path class="t-cell-edge" d="M265 135 V140"/>
+          <path class="t-cell-edge" d="M207 190 H85 V137"/>
+          <g class="t-cell-node" transform="translate(85 78)"><circle r="55"/><text y="-4">Mature</text><text id="t-cell-count-0" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(265 78)"><circle r="55"/><text y="-4">Recognized</text><text id="t-cell-count-1" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(445 78)"><circle r="55"/><text y="-4">Activated</text><text id="t-cell-count-3" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(625 78)"><circle r="55"/><text y="-4">Effector</text><text id="t-cell-count-4" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(805 78)"><circle r="55"/><text y="-4">Memory</text><text id="t-cell-count-5" y="20">0</text></g>
+          <g class="t-cell-node anergic" transform="translate(265 190)"><circle r="47"/><text y="-4">Anergic</text><text id="t-cell-count-2" y="20">0</text></g>
+        </svg>
+      </article>
+      <article class="surface table-surface"><h3>Current active cells</h3><div class="table-wrap"><table id="t-cell-cells"><thead><tr><th data-sort="profile_ip">Host</th><th data-sort="regex_type">Antigen type</th><th data-sort="antigen_value">Antigen</th><th data-sort="state_name">State</th><th data-sort="updated_at">Updated</th></tr></thead><tbody></tbody></table></div></article>
+      <article class="surface table-surface"><h3>Recent transitions</h3><div class="table-wrap"><table id="t-cell-transitions"><thead><tr><th data-sort="created_at">Time</th><th data-sort="profile_ip">Host</th><th data-sort="antigen_value">Antigen</th><th data-sort="to_state">Transition</th><th data-sort="reason">Reason</th></tr></thead><tbody></tbody></table></div></article>
+    </section>
+
     <section id="overview" class="panel active" aria-labelledby="overview-title">
       <h2 id="overview-title" class="visually-hidden">Overview</h2>
       <div class="overview-top">
@@ -401,6 +436,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261026-record-table"></script>
+  <script src="/app.js?v=20261123-immune"></script>
 </body>
 </html>

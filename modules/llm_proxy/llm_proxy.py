@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -445,6 +446,28 @@ class LLMProxy(IModule):
     def _publish_response(self, payload: dict):
         requester = str(payload.get("requester") or "").strip()
         try:
+            if requester == "web_explain":
+                digest = str(
+                    (payload.get("metadata") or {}).get("cache_key") or ""
+                )
+                if re.fullmatch(r"[0-9a-f]{64}", digest):
+                    result = {
+                        "success": bool(payload.get("success")),
+                        "text": str(payload.get("text") or "")[:10000],
+                        "error": str(payload.get("error") or "")[:1000],
+                        "backend": str(payload.get("backend") or ""),
+                    }
+                    try:
+                        self.db.rdb.r.setex(
+                            f"web:explain:result:{digest}",
+                            7 * 86400,
+                            json.dumps(result),
+                        )
+                        self.db.rdb.r.delete(f"web:explain:pending:{digest}")
+                    except Exception as error:
+                        self._log_operation(
+                            f"Could not cache web explanation {digest}: {error}"
+                        )
             self._log_operation(
                 "Published llm_response "
                 f"request_id={payload.get('request_id')} "

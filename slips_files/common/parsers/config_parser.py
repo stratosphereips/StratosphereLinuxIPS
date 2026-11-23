@@ -1629,6 +1629,39 @@ class ConfigParser(object):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
+    def alert_summary_explain_alerts(self) -> bool:
+        """Read the automatic alert summary switch.
+
+        Returns:
+            Whether new alerts receive summaries.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_alerts", True
+        )
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_explain_evidence(self) -> bool:
+        """Read the evidence explanation switch.
+
+        Returns:
+            Whether analysts may request evidence explanations.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_evidence", True
+        )
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_explain_evidence_groups(self) -> bool:
+        """Read the evidence-group explanation switch.
+
+        Returns:
+            Whether analysts may request group explanations.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_evidence_groups", True
+        )
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def alert_summary_allowed_backends(self) -> list:
         value = self.read_configuration(
             "alert_summary", "allowed_backends", []

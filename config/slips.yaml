@@ -368,6 +368,12 @@ alert_summary:
   # Enable the analyst-facing alert summary module.
   enabled: false
 
+  # Alert summaries run automatically. Evidence and group summaries require
+  # an analyst click in the web interface.
+  explain_alerts: true
+  explain_evidence: true
+  explain_evidence_groups: true
+
   # Write operational logs for this module to:
   # <output-dir>/llm_proxy-summary/alert_summary.log
   # log_verbosity levels:
