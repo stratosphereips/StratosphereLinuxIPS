@@ -53,6 +53,7 @@ regex_generator:
     certificate_cn: 1
   store_dir: output/regex_generator
   persistent_store_dir: databases/regex_store
+  max_store_size_mb: 2048
   store_rejected_regexes: false
   max_stored_rejected_regexes: 10000
   seed_benign_samples: true
@@ -97,6 +98,10 @@ Configuration reference:
   `<permanent_dir>/databases/regex_store`. If set, it takes precedence over
   `store_dir` and lets the generator reuse the same DBs across many Slips
   restarts.
+- `max_store_size_mb`: size limit for `generated_regexes.sqlite`, including its
+  SQLite journal files. The default is 2048 MiB. When the store reaches the
+  limit, generation pauses and existing patterns remain available. Set `0`
+  for no limit. The separate benign corpus database is not part of this cap.
 - `store_rejected_regexes`: stores rejected regexes in SQLite for audit/debug
   purposes. Default `false` so discarded candidates do not fill the disk.
 - `max_stored_rejected_regexes`: retention cap for rejected rows when

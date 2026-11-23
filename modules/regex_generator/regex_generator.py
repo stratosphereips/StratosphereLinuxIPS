@@ -106,6 +106,7 @@ class RegexGenerator(IModule):
         self.benign_match_strength_threshold = 75.0
         self.type_weights = {regex_type: 1.0 for regex_type in REGEX_TYPES}
         self.pending_request = None
+        self.capacity_paused = False
         self.next_generation_at = 0.0
         self._rng = random.Random()
         self.read_configuration()
@@ -222,6 +223,25 @@ class RegexGenerator(IModule):
         if now < self.next_generation_at:
             time.sleep(min(0.5, self.next_generation_at - now))
             return
+
+        if self.storage is not None and self.storage.at_capacity():
+            if not self.capacity_paused:
+                self.log_detail(
+                    "Generated regex store reached its configured size limit; "
+                    "pausing generation and preserving stored patterns."
+                )
+                self.print(
+                    "RegexGenerator paused at its store size limit.", 2, 0
+                )
+            self.capacity_paused = True
+            self.next_generation_at = now + 60
+            time.sleep(0.5)
+            return
+        if self.capacity_paused:
+            self.log_detail(
+                "Generated regex store is below its limit; resuming generation."
+            )
+            self.capacity_paused = False
 
         available_backends = self.db.get_available_llm_backends()
         backend = self._select_backend(available_backends)
@@ -760,7 +780,13 @@ class RegexGenerator(IModule):
         record["status"] = "accepted"
         record["rejection_reason"] = None
         record["matched_benign_value"] = None
-        self.storage.store_generated_regex(record)
+        if not self.storage.store_generated_regex(record):
+            self.capacity_paused = True
+            self.log_detail(
+                f"Could not store accepted regex request_id={record['request_id']}: "
+                "generated regex store size limit reached."
+            )
+            return
         self.log_detail(
             f"Accepted regex request_id={record['request_id']} "
             f"regex_type={record['regex_type']} regex={record['regex']}"

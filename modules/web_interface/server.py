@@ -434,6 +434,14 @@ class RunDataReader:
         Returns:
             Store size, counts, type totals, and recent records.
         """
+        config, _ = self._run_config()
+        settings = config.get("regex_generator", {})
+        settings = settings if isinstance(settings, dict) else {}
+        try:
+            limit_mb = max(0, int(settings.get("max_store_size_mb", 2048)))
+        except (TypeError, ValueError):
+            limit_mb = 2048
+        limit_bytes = limit_mb * 1024 * 1024
         path = self._immune_store_path(
             "regex_generator", "generated_regexes.sqlite"
         )
@@ -441,6 +449,8 @@ class RunDataReader:
         result = {
             "available": path.is_file(),
             "store_bytes": 0,
+            "limit_bytes": limit_bytes,
+            "at_capacity": False,
             "corpus_bytes": 0,
             "statuses": [],
             "types": [],
@@ -449,6 +459,10 @@ class RunDataReader:
         if not path.is_file():
             return result
         result["store_bytes"] = self._sqlite_store_bytes(path)
+        reserve = min(8 * 1024 * 1024, limit_bytes // 20)
+        result["at_capacity"] = bool(
+            limit_bytes and result["store_bytes"] + reserve >= limit_bytes
+        )
         if corpus.is_file():
             result["corpus_bytes"] = self._sqlite_store_bytes(corpus)
         with sqlite3.connect(

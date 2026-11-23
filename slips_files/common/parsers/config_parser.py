@@ -1597,6 +1597,20 @@ class ConfigParser(object):
             return ""
         return value.strip()
 
+    def regex_generator_max_store_size_mb(self) -> int:
+        """Read the generated regex store size limit.
+
+        Returns:
+            Maximum size in MiB, or zero when unlimited.
+        """
+        value = self.read_configuration(
+            "regex_generator", "max_store_size_mb", 2048
+        )
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 2048
+
     def regex_generator_store_rejected_regexes(self) -> bool:
         value = self.read_configuration(
             "regex_generator", "store_rejected_regexes", False

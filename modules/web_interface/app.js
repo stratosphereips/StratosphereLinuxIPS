@@ -4748,7 +4748,7 @@ async function loadRegexGenerator() {
   const payload = await api("regex-generator", "/api/immune/regex-generator", false);
   if (!payload) return;
   byId("regex-status").textContent = payload.available
-    ? "Read-only pattern store; a configured persistent store may include previous runs. Rejected patterns appear only when storing rejected results is enabled."
+    ? `${payload.at_capacity ? "Store at its configured limit; generation pauses while the module runs. Existing patterns are retained. " : ""}Read-only pattern store; a configured persistent store may include previous runs. Rejected patterns appear only when storing rejected results is enabled.`
     : "No generated pattern store is available for this run.";
   const counts = Object.fromEntries((payload.statuses || []).map((item) => [item.status, item.count]));
   const totalStored = (payload.statuses || []).reduce((sum, item) => sum + numeric(item.count), 0);
@@ -4757,6 +4757,7 @@ async function loadRegexGenerator() {
     ["Accepted patterns", compact(counts.accepted || 0)],
     ["Stored rejected", compact(counts.rejected || 0)],
     ["Pattern database", formatBytes(payload.store_bytes || 0)],
+    ["Pattern limit", payload.limit_bytes ? formatBytes(payload.limit_bytes) : "Unlimited"],
     ["Benign corpus", formatBytes(payload.corpus_bytes || 0)],
   ]);
   const types = byId("regex-types");

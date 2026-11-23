@@ -481,6 +481,11 @@ regex_generator:
   # restarts.
   persistent_store_dir: databases/regex_store
 
+  # Keep generated regexes across runs until their SQLite store reaches this
+  # size. Generation pauses at the limit; existing patterns remain available.
+  # Includes the SQLite WAL and shared-memory files. 0 disables the limit.
+  max_store_size_mb: 2048
+
   # Persist rejected regexes in generated_regexes.sqlite.
   # Leave this disabled unless you need audit/debug history, otherwise disk
   # usage will grow with low-value rejected rows.

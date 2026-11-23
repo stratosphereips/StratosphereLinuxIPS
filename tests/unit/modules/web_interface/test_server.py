@@ -51,7 +51,8 @@ def test_immune_views_read_bounded_stores(tmp_path: Path) -> None:
     _factory = ModuleFactory()
     reader = object.__new__(RunDataReader)
     reader.output_dir = tmp_path
-    reader._run_config = lambda: ({"regex_generator": {"store_dir": "output/regex_generator"},
+    reader._run_config = lambda: ({"regex_generator": {"store_dir": "output/regex_generator",
+                                                       "max_store_size_mb": 1},
                                    "t_cell": {"store_dir": "output/t_cell/data"}}, None)
     regex_dir = tmp_path / "regex_generator"
     regex_dir.mkdir()
@@ -77,6 +78,8 @@ def test_immune_views_read_bounded_stores(tmp_path: Path) -> None:
     regex = reader.regex_generator_status()
     cell = reader.t_cell_status()
     assert regex["statuses"] == [{"status": "accepted", "count": 1}]
+    assert regex["limit_bytes"] == 1024 * 1024
+    assert regex["at_capacity"] is False
     assert regex["recent"][0]["regex"] == "^example"
     assert cell["states"] == [{"state": 3, "state_name": "activated", "count": 1}]
     assert cell["transitions"][0]["reason"] == "matched"

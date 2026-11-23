@@ -348,6 +348,7 @@ class RegexGeneratorStorage:
         self.main_pid = main_pid
         self.db = db
         self.store_dir = self._resolve_store_dir()
+        self.max_store_size_mb = self._read_max_store_size_mb()
         self.store_rejected_regexes = self._read_store_rejected_regexes()
         self.max_stored_rejected_regexes = (
             self._read_max_stored_rejected_regexes()
@@ -504,6 +505,44 @@ class RegexGeneratorStorage:
                 except ValueError:
                     pass
         return 10000
+
+    def _read_max_store_size_mb(self) -> int:
+        """Read the generated regex database size limit.
+
+        Returns:
+            Configured MiB cap, or zero when unlimited.
+        """
+        value = self._read_int_config("regex_generator_max_store_size_mb")
+        if value is not None:
+            return max(0, value)
+        return ConfigParser().regex_generator_max_store_size_mb()
+
+    def generated_store_size_bytes(self) -> int:
+        """Measure the generated regex database and its SQLite journal files.
+
+        Returns:
+            Physical bytes in the database, WAL, and shared-memory files.
+        """
+        db_path = Path(self.generated_db.db_path)
+        total = 0
+        for path in (db_path, Path(f"{db_path}-wal"), Path(f"{db_path}-shm")):
+            try:
+                total += path.stat().st_size
+            except OSError:
+                pass
+        return total
+
+    def at_capacity(self) -> bool:
+        """Check whether another generated regex could exceed the store cap.
+
+        Returns:
+            True when generation should pause to preserve the size limit.
+        """
+        if self.max_store_size_mb <= 0:
+            return False
+        limit = self.max_store_size_mb * 1024 * 1024
+        reserve = min(8 * 1024 * 1024, limit // 20)
+        return self.generated_store_size_bytes() + reserve >= limit
 
     def _read_enable_local_whitelist(self) -> bool:
         value = self._read_bool_config("enable_local_whitelist")
@@ -774,14 +813,25 @@ class RegexGeneratorStorage:
     def was_rejected_in_current_run(self, regex_hash: str) -> bool:
         return regex_hash in self.rejected_regex_filter
 
-    def store_generated_regex(self, record: dict):
+    def store_generated_regex(self, record: dict) -> bool:
+        """Store one generated regex if its SQLite store has room.
+
+        Parameters:
+            record: Validated regex and generation metadata.
+
+        Returns:
+            Whether the record was eligible for persistence.
+        """
         regex_hash = record["regex_hash"]
         status = record.get("status", "")
 
         if status == "rejected":
             self.rejected_regex_filter.add(regex_hash)
             if not self.store_rejected_regexes:
-                return
+                return False
+
+        if self.at_capacity():
+            return False
 
         self.generated_db.insert_generated_regex(record)
         self.generated_regex_filter.add(regex_hash)
@@ -790,6 +840,7 @@ class RegexGeneratorStorage:
                 self.max_stored_rejected_regexes
             )
             self.generated_regex_filter = self._build_generated_regex_filter()
+        return True
 
     def close(self):
         self.benign_db.close()
