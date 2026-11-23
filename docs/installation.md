@@ -97,14 +97,16 @@ leave an older module consuming traffic after a restart. A malformed DNS
 message is logged by Flow Alerts; the DNS timeout thread continues with the
 next message instead of failing in its error handler.
 
-Choose the interface appropriate to your machine. Daemon startup, instance
-listing and stop have also been verified on Apple Silicon. The daemon's PID
-file uses the configured permanent directory, and startup failures are reported
-to the terminal; see [daemon mode](usage.md#daemonized-vs-interactive-mode).
-Intel Macs and other optional integrations have not been validated by these checks. The Linux
-access-point workflow remains Linux-specific. On macOS, active
-blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
-requires running Slips with root privileges.
+Use the interface name of your own machine (for example `en0`). Notes for macOS:
+
+- **Tested:** running as a daemon (`-D`), `--list-instances` and `--stop` work
+  on Apple Silicon Macs. See [daemon mode](usage.md#daemonized-vs-interactive-mode).
+- **Not tested yet:** Intel Macs and the optional integrations.
+- **No sudo needed for the daemon:** its PID file lives in Slips' `permanent/`
+  folder, and startup errors are shown in your terminal.
+- **Blocking (`-p`)** needs root. Slips adds its rules to its own Packet Filter
+  anchor, `com.apple/slips`, and does not touch your other firewall rules.
+- **Access point mode** is only available on Linux.
 
 Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
 `output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed

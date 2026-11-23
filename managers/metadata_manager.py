@@ -53,6 +53,7 @@ class MetadataManager:
             )
             with open(captured_config, "w", encoding="utf-8") as target:
                 yaml.safe_dump(self.main.conf.config, target, sort_keys=False)
+
         if isinstance(getattr(self.main.args, "web_port", None), int):
             captured_config = os.path.join(
                 metadata_dir, os.path.basename(config_file)
@@ -62,6 +63,7 @@ class MetadataManager:
             web_settings = config.get("web_interface") or {}
             web_settings["port"] = self.main.conf.web_interface_port
             config["web_interface"] = web_settings
+
             with open(captured_config, "w", encoding="utf-8") as target:
                 yaml.safe_dump(config, target, sort_keys=False)
 
