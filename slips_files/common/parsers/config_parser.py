@@ -1051,23 +1051,11 @@ class ConfigParser(object):
             self.read_configuration(section, "model_load_path", default)
         ).strip()
 
-    def ml_module_model_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "model_store_path", default)
-        ).strip()
-
     def ml_module_preprocess_load_path(
         self, section: str, default: str
     ) -> str:
         return str(
             self.read_configuration(section, "preprocess_load_path", default)
-        ).strip()
-
-    def ml_module_preprocess_store_path(
-        self, section: str, default: str
-    ) -> str:
-        return str(
-            self.read_configuration(section, "preprocess_store_path", default)
         ).strip()
 
     def ml_module_pca_n_components(
@@ -1099,11 +1087,6 @@ class ConfigParser(object):
     def ml_module_pca_load_path(self, section: str, default: str) -> str:
         return str(
             self.read_configuration(section, "pca_load_path", default)
-        ).strip()
-
-    def ml_module_pca_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "pca_store_path", default)
         ).strip()
 
     def ml_module_benign_target_value(

@@ -50,16 +50,12 @@ class MLLinearModel(ml_base.MLBaseDetection):
             section,
             None,
         )
-        configured_pca_store = conf.ml_module_pca_store_path(
-            section,
-            None,
-        )
 
         self.pca_load_path = self.resolve_artifact_path(
             explicit_path=configured_pca_load,
         )
-        self.pca_store_path = self.resolve_artifact_path(
-            explicit_path=configured_pca_store,
+        self.pca_store_path = self.get_trained_artifact_path(
+            ml_base.PCA_FILENAME
         )
 
         self.pca_n_components = conf.ml_module_pca_n_components(

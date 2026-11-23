@@ -77,12 +77,6 @@ def isolated_analysis_config(config: dict, output: str) -> dict:
             )
         },
     }
-    for module in (Modules.ML_LINEAR_MODEL, Modules.ML_ONLINE_MODEL):
-        directory = permanent / module.value
-        overrides[module.value] = {
-            "model_store_path": str(directory / "model.bin"),
-            "preprocess_store_path": str(directory / "preprocess.bin"),
-        }
     for section, values in overrides.items():
         result[section] = {**(result.get(section) or {}), **values}
     return result

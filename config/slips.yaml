@@ -116,11 +116,12 @@ parameters:
   # detections, but the TCP standard defines 1hs.
   tcp_inactivity_timeout: 60
 
-  # Clear the current run's Redis database 0 at startup. Database 1 on
-  # port 6379 is the shared cache and is not cleared by this setting.
-  # Set false only for workflows that manage Redis state explicitly;
-  # it does not preserve the output directory or safely resume a run.
-  # Use --keep-history to retain old live-interface detections in SQLite.
+  # Should Slips delete the previously stored data in the Redis DB when
+  # it starts?
+  # If Slips does not delete the DB, it can remember all the past
+  # detections and TI information.
+  # Redis will keep the data as long as it is not stopped.
+  # The persistence is in memory, not disk.
   # deletePrevdb : false
   deletePrevdb: true
 
@@ -688,10 +689,9 @@ ml_linear_model:
   model_load_path: modules/ml_linear_model/artifacts/model.bin
   preprocess_load_path: modules/ml_linear_model/artifacts/scaler.bin
   pca_load_path: modules/ml_linear_model/artifacts/pca.bin
-  # Store paths point to custom artifacts so training does not overwrite provided ones.
-  model_store_path: modules/ml_linear_model/artifacts/model_custom.bin
-  preprocess_store_path: modules/ml_linear_model/artifacts/scaler_custom.bin
-  pca_store_path: modules/ml_linear_model/artifacts/pca_custom.bin
+  # Models you train are saved for you, and never replace the provided ones:
+  # - when analyzing a file (-f): <output dir>/ml_linear_model/models/
+  # - on an interface or a growing dir: <permanent_dir>/ml_linear_model/models/
 
 ############################ #
 ml_online_model:
@@ -738,10 +738,9 @@ ml_online_model:
   model_load_path: modules/ml_online_model/artifacts/model.bin
   preprocess_load_path: modules/ml_online_model/artifacts/scaler.bin
   pca_load_path: modules/ml_online_model/artifacts/pca.bin
-  # Store paths point to custom artifacts so training does not overwrite provided ones.
-  model_store_path: modules/ml_online_model/artifacts/model_custom.bin
-  preprocess_store_path: modules/ml_online_model/artifacts/scaler_custom.bin
-  pca_store_path: modules/ml_online_model/artifacts/pca_custom.bin
+  # Models you train are saved for you, and never replace the provided ones:
+  # - when analyzing a file (-f): <output dir>/ml_online_model/models/
+  # - on an interface or a growing dir: <permanent_dir>/ml_online_model/models/
 
   # PCA training params (used only in mode: train)
   pca_n_components: 11

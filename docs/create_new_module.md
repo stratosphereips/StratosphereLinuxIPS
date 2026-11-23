@@ -423,7 +423,11 @@ Add a section in `config/slips.yaml` matching `module_config_section` with:
 
 - `mode`, `training_batch_size`, `seed`
 - `create_performance_metrics_log_files`, `log_suffix`, `test_log_batch_size`
-- `model_load_path`, `model_store_path`, `preprocess_load_path`, `preprocess_store_path`
+- `model_load_path`, `preprocess_load_path`
+
+Trained artifacts have no config key. `MLBaseDetection.get_trained_artifact_path()`
+places them in `<output dir>/<module name>/models/` for a file analysis, or in
+`<permanent_dir>/<module name>/models/` when Slips runs non-stop.
 
 Optional backend-specific keys (for example PCA) should be read in the child class.
 
@@ -432,8 +436,8 @@ Optional backend-specific keys (for example PCA) should be read in the child cla
 Each ML module has its own independent `mode` (`train` or `test`) and artifact paths in `config/slips.yaml`.
 
 - Test provided models: set that module section to `mode: test`.
-- Train custom models without overwriting defaults: set `mode: train`, keep `*_store_path` on custom files.
-- Test custom models: switch `*_load_path` to custom artifact files and set `mode: test`.
+- Train custom models without overwriting defaults: set `mode: train`. Slips saves them in the module's `models/` directory.
+- Test custom models: switch `*_load_path` to the files in that `models/` directory and set `mode: test`.
 
 
 

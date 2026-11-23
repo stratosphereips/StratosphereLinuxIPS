@@ -31,6 +31,11 @@ BACKGROUND = "Background"
 BENIGN = "Benign"
 MALICIOUS = "Malicious"
 
+TRAINED_MODELS_DIRNAME = "models"
+MODEL_FILENAME = "model.bin"
+PREPROCESSOR_FILENAME = "scaler.bin"
+PCA_FILENAME = "pca.bin"
+
 
 class MLBaseDetection(IModule, ABC):
     """
@@ -97,14 +102,6 @@ class MLBaseDetection(IModule, ABC):
             section,
             None,
         )
-        configured_model_store = conf.ml_module_model_store_path(
-            section,
-            None,
-        )
-        configured_preprocess_store = conf.ml_module_preprocess_store_path(
-            section,
-            None,
-        )
 
         configured_seed = conf.ml_module_seed(section, default=self.seed)
         self.seed = int(configured_seed)
@@ -118,11 +115,9 @@ class MLBaseDetection(IModule, ABC):
         self.preprocess_load_path = self.resolve_artifact_path(
             explicit_path=configured_preprocess_load,
         )
-        self.model_path = self.resolve_artifact_path(
-            explicit_path=configured_model_store,
-        )
-        self.preprocess_path = self.resolve_artifact_path(
-            explicit_path=configured_preprocess_store,
+        self.model_path = self.get_trained_artifact_path(MODEL_FILENAME)
+        self.preprocess_path = self.get_trained_artifact_path(
+            PREPROCESSOR_FILENAME
         )
 
         configured_test_log_batch_size = conf.ml_module_test_log_batch_size(
@@ -145,6 +140,36 @@ class MLBaseDetection(IModule, ABC):
 
         self.init_log_file()
 
+    def get_trained_models_dir(self) -> str:
+        """Pick where this run keeps the models it trains.
+
+
+        if slips is running with -f, models get stored in their
+        output/module_name dir
+        if slips is analysig live traffic, models get stored in the
+        permanent dir.
+
+        Returns:
+            Directory for this module's trained model files.
+        """
+        if self.db.is_running_non_stop():
+            permanent_dir = ConfigParser().permanent_dir()
+            module_dir = os.path.join(permanent_dir, self.name)
+        else:
+            module_dir = self.output_dir
+        return os.path.join(module_dir, TRAINED_MODELS_DIRNAME)
+
+    def get_trained_artifact_path(self, filename: str) -> str:
+        """Build the path of one trained file inside the models dir.
+
+        Parameters:
+            filename: Name of the trained file, e.g. model.bin.
+
+        Returns:
+            Path where training stores that file.
+        """
+        return os.path.join(self.get_trained_models_dir(), filename)
+
     def resolve_artifact_path(
         self,
         explicit_path: Optional[str],
@@ -157,7 +182,7 @@ class MLBaseDetection(IModule, ABC):
         if explicit_path is None or str(explicit_path).strip() == "":
             raise ValueError(
                 "Missing ML artifact path in slips.yaml. "
-                "Set model/preprocess load/store paths in the module config section."
+                "Set model/preprocess load paths in the module config section."
             )
         path = str(explicit_path)
         if os.path.isabs(path):

@@ -60,7 +60,7 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
     source = {"parameters": {"permanent_dir": "live", "time_window_width": 120},
               "beaconing": {"min_flows": 7}, "web_interface": {"bind": "interface", "port": 55000},
               "update": {"auto_update_slips": True},
-              "ml_online_model": {"model_load_path": "trained/model.bin", "model_store_path": "live/model.bin"}}
+              "ml_online_model": {"model_load_path": "trained/model.bin"}}
     before = deepcopy(source)
     output = tmp_path / "analysis"
     effective = isolated_analysis_config(source, str(output))
@@ -72,8 +72,7 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
     assert effective["beaconing"] == source["beaconing"]
     assert effective["web_interface"] == {"bind": "localhost", "port": 55000}
     assert effective["update"]["auto_update_slips"] is False
-    assert effective["ml_online_model"]["model_load_path"] == "trained/model.bin"
-    assert Path(effective["ml_online_model"]["model_store_path"]).is_relative_to(output)
+    assert effective["ml_online_model"] == source["ml_online_model"]
 
 
 @pytest.mark.parametrize("credentials_exist", [False, True])

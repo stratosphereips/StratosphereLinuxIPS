@@ -1,7 +1,7 @@
 import numpy
 import pandas as pd
 import pytest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from tests.module_factory import ModuleFactory
 
@@ -143,3 +143,43 @@ def test_main_ignores_p2p_related_flow(base_module) -> None:
     base_module.main()
 
     base_module.run_test_on_flow.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "is_running_non_stop, expected_models_dir",
+    [
+        (True, "permanent_test/dummy_ml/models"),
+        (False, "output_test/dummy_ml/models"),
+    ],
+)
+def test_get_trained_models_dir(
+    base_module, is_running_non_stop: bool, expected_models_dir: str
+) -> None:
+    """Keep file-analysis models out of the permanent dir of a live run."""
+    _module_factory = ModuleFactory()
+    base_module.db = Mock()
+    base_module.db.is_running_non_stop.return_value = is_running_non_stop
+    base_module.output_dir = "output_test/dummy_ml"
+
+    with patch(
+        "slips_files.common.abstracts.ml_module_base.ConfigParser"
+    ) as config_parser:
+        config_parser.return_value.permanent_dir.return_value = (
+            "permanent_test"
+        )
+        models_dir = base_module.get_trained_models_dir()
+
+    assert models_dir == expected_models_dir
+
+
+@pytest.mark.parametrize("filename", ["model.bin", "scaler.bin", "pca.bin"])
+def test_get_trained_artifact_path(base_module, filename: str) -> None:
+    """Place every trained file inside the run's models dir."""
+    _module_factory = ModuleFactory()
+    base_module.get_trained_models_dir = Mock(
+        return_value="output_test/dummy_ml/models"
+    )
+
+    artifact_path = base_module.get_trained_artifact_path(filename)
+
+    assert artifact_path == f"output_test/dummy_ml/models/{filename}"

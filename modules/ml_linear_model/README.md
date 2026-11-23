@@ -70,11 +70,11 @@ false` and point the load paths to the custom artifacts produced by that run
 before starting the next run. Otherwise the next run reloads the shipped model
 instead of continuing your custom training.
 
-`ml_linear_model` needs all three custom artifacts for continuation:
-`model_custom.bin`, `scaler_custom.bin`, and `pca_custom.bin`. On graceful
-shutdown or time-window close, training writes them to the configured store
-paths. To evaluate the resulting model, switch to `mode: test` and use those
-same custom paths as its load paths.
+`ml_linear_model` needs all three trained artifacts for continuation:
+`model.bin`, `scaler.bin`, and `pca.bin`. On graceful shutdown or time-window
+close, training writes them to this module's `models/` directory (see
+"Original model vs custom training details" below). To evaluate the resulting
+model, switch to `mode: test` and use those files as its load paths.
 
 ## Using your own model
 
@@ -148,10 +148,9 @@ Canonical workflow is in `docs/create_new_module.md#ml-module`.
   - `model_load_path: modules/ml_linear_model/artifacts/model.bin`
   - `preprocess_load_path: modules/ml_linear_model/artifacts/scaler.bin`
   - `pca_load_path: modules/ml_linear_model/artifacts/pca.bin`
-- custom training store:
-  - `model_store_path: modules/ml_linear_model/artifacts/model_custom.bin`
-  - `preprocess_store_path: modules/ml_linear_model/artifacts/scaler_custom.bin`
-  - `pca_store_path: modules/ml_linear_model/artifacts/pca_custom.bin`
+- custom training store (chosen by Slips, not configurable):
+  - file analysis (`-f`): `<output dir>/ml_linear_model/models/`
+  - non-stop (`-i` or `-g`): `<permanent_dir>/ml_linear_model/models/`
 
 ## If you change the base class
 
@@ -160,7 +159,7 @@ When updating `MLBaseDetection`, verify these `ml_linear_model` responsibilities
 - feature preparation in `process_features`
 - preprocessor lifecycle (`update_preprocessor`, `transform_features`)
 - model lifecycle (`fit_incremental_model`, `predict_batch`)
-- PCA load/store fields (`pca_load_path`, `pca_store_path`) in `init/read_model/store_model`
+- PCA load/store fields (`pca_load_path`, `self.pca_store_path`) in `init/read_model/store_model`
 
 ## Original model vs custom training details
 
@@ -181,18 +180,25 @@ In `ml_linear_model` section, set:
 
 - `mode: train`
 - `train_from_scratch: false` (warm-start from provided model) or `true` (full scratch)
-- keep store paths as custom files:
-  - `model_store_path: modules/ml_linear_model/artifacts/model_custom.bin`
-  - `preprocess_store_path: modules/ml_linear_model/artifacts/scaler_custom.bin`
-  - `pca_store_path: modules/ml_linear_model/artifacts/pca_custom.bin`
+
+Slips chooses where trained artifacts are saved; it is not configurable:
+
+| How Slips runs | Trained artifacts are saved in |
+|---|---|
+| On a file or directory (`-f`) | `<output dir>/ml_linear_model/models/` |
+| Non-stop: an interface (`-i`) or a growing directory (`-g`) | `<permanent_dir>/ml_linear_model/models/` |
+
+A file analysis never writes to the permanent directory, so it cannot replace
+the models a non-stop Slips is training.
 
 Models are persisted at time-window close (or graceful shutdown), not every batch.
 
 ### 3) Test using your custom trained model
 
-Switch load paths to your custom files:
+Switch load paths to the files of the training run, for example after a file
+analysis whose output directory is `output/my_training_run/`:
 
 - `mode: test`
-- `model_load_path: modules/ml_linear_model/artifacts/model_custom.bin`
-- `preprocess_load_path: modules/ml_linear_model/artifacts/scaler_custom.bin`
-- `pca_load_path: modules/ml_linear_model/artifacts/pca_custom.bin`
+- `model_load_path: output/my_training_run/ml_linear_model/models/model.bin`
+- `preprocess_load_path: output/my_training_run/ml_linear_model/models/scaler.bin`
+- `pca_load_path: output/my_training_run/ml_linear_model/models/pca.bin`
