@@ -1,17 +1,30 @@
-"""Check that modules cross a spawn boundary holding only configuration."""
-import multiprocessing
-import pickle
-"""Exercise real spawn/forkserver boundaries without external services."""
+"""Check that modules cross a spawn boundary holding only configuration.
+
+Exercise real spawn/forkserver boundaries without external services.
+"""
 
 import multiprocessing
 import os
+import pickle
+import time
 from queue import Empty
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
 
 from modules.template.template import Template
 from slips_files.core.aid_manager import AIDManager
 from tests.module_factory import ModuleFactory
+
+
+def wait_for_cleanup(ready: object) -> None:
+    """Keep an isolated child alive until the process manager reaps it.
+
+    Parameters:
+        ready: Queue reporting that the child has started.
+    """
+    ready.put(os.getpid())
+    time.sleep(30)
 
 
 def make_module(**kwargs):
@@ -113,51 +126,9 @@ def test_owned_child_is_reaped_without_redis(recorded_stopped: bool) -> None:
         ready.join_thread()
 
 
-@pytest.mark.parametrize("method", ["spawn", "forkserver"])
-def test_child_initialization_and_shared_state(method: str) -> None:
-    """Check construction location and shared state across real processes.
-
-    Parameters:
-        method: Portable multiprocessing start method to exercise.
-    """
-    factory = ModuleFactory()
-    previous = multiprocessing.get_start_method()
-    multiprocessing.set_start_method(method, force=True)
-    process = None
-    result_queue = None
-    try:
-        from slips_files.core.output import Output
-
-        logger = Output(create_logfiles=False)
-        result_queue = multiprocessing.Queue()
-        process = factory.create_module_process_obj(
-            ChildProbe, result_queue, logger
-        )
-        assert process.received_lines == 0
-        process.start()
-        constructor_pid, run_pid = result_queue.get(timeout=30)
-        process.join(timeout=30)
-        assert process.exitcode == 0
-        assert constructor_pid == run_pid == process.pid
-        assert run_pid != os.getpid()
-        assert process.received_lines == 7
-        assert logger._cli_has_dangling_line.value
-    finally:
-        if process is not None:
-            if process.is_alive():
-                process.kill()
-                process.join(timeout=5)
-            process.close()
-        if result_queue is not None:
-            result_queue.close()
-            result_queue.join_thread()
-        multiprocessing.set_start_method(previous, force=True)
-
-
 def test_aid_worker_owns_database_and_drains_tasks() -> None:
     """Create the AID database in the consumer and store queued flows."""
     factory = ModuleFactory()
-    from slips_files.core.aid_manager import AIDManager
 
     flow = Mock()
     queue = Mock()

@@ -11,7 +11,6 @@ from managers.log_rotation_manager import (
     LOCK_ACQUIRE_TIMEOUT_SECONDS,
     LOG_ROTATION_INTERVAL_SECONDS,
 )
-from slips_files.core.output import Output
 from tests.module_factory import ModuleFactory
 
 MANAGER = "managers.log_rotation_manager"
@@ -78,12 +77,14 @@ def test_get_logs_to_rotate(mode: str, is_slips_log_rotated: bool) -> None:
         logs = dict(manager._get_logs_to_rotate())
 
     expected = {
-        Path("output/errors.log"): Output.errors_logfile_lock,
+        Path("output/errors.log"): manager.main.logger.errors_logfile_lock,
         Path("output/alerts/alerts.log"): None,
         Path("output/alerts/alerts.json"): None,
     }
     if is_slips_log_rotated:
-        expected[Path("output/slips.log")] = Output.slips_logfile_lock
+        expected[Path("output/slips.log")] = (
+            manager.main.logger.slips_logfile_lock
+        )
     assert logs == expected
 
 

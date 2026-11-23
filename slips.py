@@ -33,8 +33,10 @@ import warnings
 # start method.
 multiprocessing.set_start_method("spawn", force=True)
 
-
-from managers.process_manager.instance_control import handle_instance_command
+# this import has to come after set_start_method() above
+from managers.process_manager.instance_control import (  # noqa: E402
+    handle_instance_command,
+)
 
 # Ignore warnings on CPU from tensorflow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"

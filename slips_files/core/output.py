@@ -96,8 +96,7 @@ class Output(IObserver):
         super().__init__()
         # Instance attributes travel with the logger under spawn/forkserver.
         # Class attributes alone would be recreated independently in children.
-        
-        
+
         # Output is instantiated once in the main process and handed to every
         # child process. These multiprocessing locks are sent along with it
         # (see __getstate__) so they actually serialize writes to the shared

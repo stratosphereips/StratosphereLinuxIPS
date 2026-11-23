@@ -3,6 +3,8 @@
 
 from datetime import datetime
 import json
+import subprocess
+import sys
 
 from slips_files.core.evidence_handler import (
     DEFAULT_EVIDENCE_HANDLER_WORKERS,
@@ -152,6 +154,60 @@ def test_stop_evidence_workers_ignores_join_errors():
 
     process_1.join.assert_called_once()
     process_2.join.assert_called_once()
+
+
+@pytest.mark.parametrize("delay", [0, 5.2])
+def test_evidence_shutdown_drains_queued_work_without_five_second_kill(
+    delay: float,
+) -> None:
+    """Retain every queued task when finishing takes longer than five seconds.
+
+    Parameters:
+        delay: Consumer pause before processing accepted evidence.
+    """
+    _handler = ModuleFactory().create_evidence_handler_obj()
+    script = """
+import time
+from multiprocessing import get_context
+from types import SimpleNamespace
+from slips_files.core.evidence_handler import EvidenceHandler
+context = get_context("fork")
+queue = context.Queue()
+reader, writer = context.Pipe(duplex=False)
+def consume():
+    time.sleep(DELAY)
+    values = []
+    while True:
+        item = queue.get()
+        if item == "stop":
+            break
+        values.append(item)
+    writer.send(values)
+    writer.close()
+worker = context.Process(target=consume)
+worker.start()
+for number in range(80):
+    queue.put(number)
+EvidenceHandler.stop_evidence_workers(SimpleNamespace(
+    evidence_worker_child_processes=[worker],
+    evidence_worker_queue=queue,
+))
+assert worker.exitcode == 0
+assert reader.poll(1) and reader.recv() == list(range(80))
+queue.close()
+queue.join_thread()
+reader.close()
+writer.close()
+worker.close()
+""".replace("DELAY", repr(delay))
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 @patch(
