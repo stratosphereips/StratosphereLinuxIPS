@@ -458,6 +458,97 @@ class DetectionHistory:
         )
         return True
 
+    def _archive_evidence_batch(
+        self, cutoff: float, batch_size: int, now: float, filename: str
+    ) -> int:
+        """Archive a bounded group of ordinary evidence in one durable write.
+
+        Parameters:
+            cutoff: Evidence older than this time is eligible.
+            batch_size: Evidence batch bound used to size the link budget.
+            now: Archive update time.
+            filename: Current archive segment.
+
+        Returns:
+            Number of evidence records moved, or zero for a complex record.
+        """
+        connection = self.connection
+        limit = min(batch_size, 500)
+        candidates = [
+            row[0]
+            for row in connection.execute(
+                "SELECT evidence_id FROM evidence INDEXED BY evidence_time_cover_idx "
+                "WHERE evidence_time<? AND NOT EXISTS "
+                "(SELECT 1 FROM alert_evidence ae JOIN alerts a ON a.alert_id=ae.alert_id "
+                "WHERE ae.evidence_id=evidence.evidence_id AND a.alert_time>=?) "
+                "ORDER BY evidence_time,evidence_id LIMIT ?",
+                (cutoff, cutoff, limit),
+            )
+        ]
+        if len(candidates) < 2:
+            return 0
+        link_limit = max(200, batch_size * 8)
+        identifiers = []
+        link_count = 0
+        for identifier in candidates:
+            count = connection.execute(
+                "SELECT COUNT(*) FROM evidence_flows WHERE evidence_id=?",
+                (identifier,),
+            ).fetchone()[0]
+            if link_count + count > link_limit:
+                break
+            identifiers.append(identifier)
+            link_count += count
+        if len(identifiers) < 2:
+            return 0
+        marks = ",".join("?" for _ in identifiers)
+        links = connection.execute(
+            f"SELECT evidence_id,uid FROM evidence_flows WHERE evidence_id IN ({marks}) "
+            "ORDER BY evidence_id,uid",
+            identifiers,
+        ).fetchall()
+        with closing(self._open_archive(filename)) as archive:
+            try:
+                for identifier in identifiers:
+                    self._copy_row(
+                        archive, "evidence", "evidence_id", identifier
+                    )
+                    self._copy_row(
+                        archive, "evidence_reviews", "evidence_id", identifier
+                    )
+                archive.executemany(
+                    "INSERT OR IGNORE INTO evidence_flows(evidence_id,uid) VALUES (?,?)",
+                    links,
+                )
+                archive.execute(
+                    "INSERT OR REPLACE INTO archive_metadata VALUES ('ready','1')"
+                )
+                archive.execute(
+                    "INSERT OR REPLACE INTO archive_metadata VALUES ('updated_at',?)",
+                    (str(now),),
+                )
+                archive.commit()
+            finally:
+                archive.rollback()
+        connection.executemany(
+            "INSERT OR REPLACE INTO history_archived_ids VALUES (?,?,?)",
+            [("evidence", identifier, now) for identifier in identifiers],
+        )
+        connection.executemany(
+            "DELETE FROM evidence WHERE evidence_id=?",
+            [(identifier,) for identifier in identifiers],
+        )
+        connection.executemany(
+            "DELETE FROM evidence_reviews WHERE evidence_id=?",
+            [(identifier,) for identifier in identifiers],
+        )
+        connection.executemany(
+            "DELETE FROM evidence_flows WHERE evidence_id=?",
+            [(identifier,) for identifier in identifiers],
+        )
+        connection.commit()
+        return len(identifiers)
+
     def archive_step(
         self,
         entity: str,
@@ -527,6 +618,12 @@ class DetectionHistory:
                 part += 1
             filename = f"{prefix}-{part:04d}.sqlite"
             self._set_state("archive_filename", filename)
+            if entity == "evidence":
+                moved = self._archive_evidence_batch(
+                    cutoff, batch_size, now, filename
+                )
+                if moved:
+                    return moved
             connection.execute(
                 "INSERT INTO history_archive_queue(entity,record_id,filename) VALUES (?,?,?)",
                 (entity, identifier, filename),
@@ -691,7 +788,14 @@ class DetectionHistory:
         size = sum(path.stat().st_size for path in paths)
         for path in paths:
             over_size = bool(max_size_mb and size > max_size_mb * 1024 * 1024)
+            if path.name in queued:
+                continue
             updated = path.stat().st_mtime
+            if over_size:
+                path.unlink()
+                return 1
+            if updated >= now - retention_days * 86400:
+                continue
             try:
                 with sqlite3.connect(
                     f"file:{path}?mode=ro", uri=True, timeout=0.1
@@ -703,9 +807,7 @@ class DetectionHistory:
                         updated = float(row[0])
             except sqlite3.OperationalError:
                 pass
-            if path.name in queued or (
-                not over_size and updated >= now - retention_days * 86400
-            ):
+            if updated >= now - retention_days * 86400:
                 continue
             path.unlink()
             return 1
@@ -800,9 +902,7 @@ class DetectionHistory:
                     age_seconds, int(policy.get("min_active_hours", 24)) * 3600
                 )
             while time.monotonic() < deadline:
-                status["phase"] = "summary"
-                units = self.summary_step(batch)
-                status["units"] += units
+                units = 0
                 if not status["disk_pressure"]:
                     for entity in ENTITIES:
                         if time.monotonic() >= deadline:
@@ -811,12 +911,19 @@ class DetectionHistory:
                         archived = self.archive_step(
                             entity,
                             now - age_seconds,
-                            batch,
+                            min(batch, 50) if entity == "evidence" else batch,
                             now,
                             int(policy.get("archive_file_size_mb", 256)),
                         )
                         units += archived
                         status["units"] += archived
+                if time.monotonic() < deadline and (
+                    not status["size_pressure"] or not units
+                ):
+                    status["phase"] = "summary"
+                    summarized = self.summary_step(batch)
+                    units += summarized
+                    status["units"] += summarized
                 if not units:
                     break
         except sqlite3.OperationalError as error:
@@ -824,6 +931,8 @@ class DetectionHistory:
         finally:
             self.connection.set_progress_handler(None, 0)
             self.connection.rollback()
+        if status.get("units") and status["size_pressure"]:
+            self.connection.execute("PRAGMA incremental_vacuum(256)")
         status["elapsed_ms"] = round((time.monotonic() - started) * 1000, 1)
         if status["deferred"]:
             return status

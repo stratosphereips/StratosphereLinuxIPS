@@ -451,7 +451,12 @@ evidence until that alert becomes eligible for rotation. Existing backlog
 drains gradually. Legacy raw flows with many evidence links use resumable
 classification checkpoints before they become eligible for cleanup. Hourly
 summaries speed compact evidence queries once their backfill catches up;
-dirty or incomplete hours use exact raw queries.
+dirty or incomplete hours use exact raw queries. When the active database
+exceeds its size target, maintenance archives eligible older detections before
+rebuilding hourly summaries. It copies simple evidence in bounded batches,
+commits the archive before deleting active rows, and returns freed SQLite pages
+incrementally. A large backlog still takes time to drain; recent detections
+and evidence supporting recent alerts remain protected.
 Archive tables and indexes initialize in one atomic transaction, reducing
 durable writes on SD cards and leaving no partial schema after a failed setup.
 
