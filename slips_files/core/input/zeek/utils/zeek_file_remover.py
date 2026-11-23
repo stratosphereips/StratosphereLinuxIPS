@@ -85,15 +85,19 @@ class ZeekFileRemover:
             old_log_file, rotated_at
         )
 
-    def remove_old_zeek_files(self):
+    def remove_old_zeek_files(self) -> None:
         """
         This thread waits for filemonitor.py to tell it that zeek changed the log files,
         it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while not self.input.should_stop():
             # keep the rotated files for the period specified in slips.yaml
-            if msg := self.input.get_msg("remove_old_files"):
+            msg = self.input.get_msg("remove_old_files")
+            if msg:
                 # this channel receives renamed zeek log files,
                 # we can safely delete them and close their handle
                 changed_files = json.loads(msg["data"])
                 self.process_rotation_message(changed_files)
+            self.zeek_utils.check_if_time_to_del_rotated_files()
+            if not msg:
+                time.sleep(0.25)
