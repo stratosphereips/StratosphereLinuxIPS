@@ -252,13 +252,23 @@ def test_main_pauses_generation_when_regex_store_is_full(
     generator.storage = Mock()
     generator.storage.at_capacity.return_value = True
     generator.next_generation_at = 0
+    generator.log_detail = Mock()
     mocker.patch.object(generator, "_handle_one_tw_closed_message")
     mocker.patch("modules.regex_generator.regex_generator.time.sleep")
 
     generator.main()
+    generator.next_generation_at = 0
+    generator.main()
 
     assert generator.capacity_paused is True
     assert generator.next_generation_at > time.time()
+    generator.print.assert_called_once_with(
+        "Regex generation paused: persistent store reached its size limit; "
+        "saved patterns are preserved.",
+        1,
+        0,
+    )
+    generator.log_detail.assert_called_once()
     generator.db.get_available_llm_backends.assert_not_called()
     generator.db.publish.assert_not_called()
 
@@ -293,6 +303,11 @@ def test_create_log_file_writes_progress_log(tmp_path, mocker):
 
     regex_generator.pre_main()
     regex_generator.log_detail("test log line")
+    mocker.patch.object(
+        regex_generator.storage, "at_capacity", return_value=True
+    )
+    mocker.patch("modules.regex_generator.regex_generator.time.sleep")
+    regex_generator.main()
 
     with open(
         regex_generator.log_rotator.log_file_path, "r", encoding="utf-8"
@@ -301,6 +316,7 @@ def test_create_log_file_writes_progress_log(tmp_path, mocker):
 
     assert "RegexGenerator module ready." in log_contents
     assert "test log line" in log_contents
+    assert "Regex generation paused:" in log_contents
     regex_generator.shutdown_gracefully()
 
 

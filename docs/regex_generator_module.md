@@ -100,7 +100,8 @@ Configuration reference:
   restarts.
 - `max_store_size_mb`: size limit for `generated_regexes.sqlite`, including its
   SQLite journal files. The default is 2048 MiB. When the store reaches the
-  limit, generation pauses and existing patterns remain available. Set `0`
+  limit, generation pauses, logs the pause in the standard Slips log and regex
+  generator detail log (if enabled), and keeps existing patterns available. Set `0`
   for no limit. The separate benign corpus database is not part of this cap.
 - `store_rejected_regexes`: stores rejected regexes in SQLite for audit/debug
   purposes. Default `false` so discarded candidates do not fill the disk.

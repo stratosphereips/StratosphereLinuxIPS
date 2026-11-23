@@ -22,7 +22,6 @@ from slips_files.core.database.sqlite_db.regex_generator_db import (
     RegexGeneratorStorage,
 )
 
-
 PROMPT_VERSION = "regex-generator-v2"
 SYSTEM_PROMPT = """
 Return exactly one regex line.
@@ -209,6 +208,18 @@ class RegexGenerator(IModule):
             return False
         return super().should_stop()
 
+    def _pause_for_capacity(self) -> None:
+        """Log the first transition to a full persistent regex store."""
+        if self.capacity_paused:
+            return
+        self.capacity_paused = True
+        message = (
+            "Regex generation paused: persistent store reached its size limit; "
+            "saved patterns are preserved."
+        )
+        self.log_detail(message)
+        self.print(message, 1, 0)
+
     def main(self):
         self._handle_one_tw_closed_message()
 
@@ -225,22 +236,14 @@ class RegexGenerator(IModule):
             return
 
         if self.storage is not None and self.storage.at_capacity():
-            if not self.capacity_paused:
-                self.log_detail(
-                    "Generated regex store reached its configured size limit; "
-                    "pausing generation and preserving stored patterns."
-                )
-                self.print(
-                    "RegexGenerator paused at its store size limit.", 2, 0
-                )
-            self.capacity_paused = True
+            self._pause_for_capacity()
             self.next_generation_at = now + 60
             time.sleep(0.5)
             return
         if self.capacity_paused:
-            self.log_detail(
-                "Generated regex store is below its limit; resuming generation."
-            )
+            message = "Regex generation resumed: persistent store is below its limit."
+            self.log_detail(message)
+            self.print(message, 1, 0)
             self.capacity_paused = False
 
         available_backends = self.db.get_available_llm_backends()
@@ -781,7 +784,7 @@ class RegexGenerator(IModule):
         record["rejection_reason"] = None
         record["matched_benign_value"] = None
         if not self.storage.store_generated_regex(record):
-            self.capacity_paused = True
+            self._pause_for_capacity()
             self.log_detail(
                 f"Could not store accepted regex request_id={record['request_id']}: "
                 "generated regex store size limit reached."
