@@ -6,6 +6,7 @@
 import asyncio
 import contextlib
 import datetime
+import fcntl
 import json
 import os
 import sys
@@ -52,9 +53,48 @@ class RemoteFeedUpdaterMixin:
             self._update_ti_file_sync, link_to_download
         )
 
+    @contextlib.contextmanager
+    def _feed_file_lock(self, file_name: str):
+        """
+        Block until no other Slips process is writing or parsing this feed
+        file in the shared download dir.
+
+        The startup lock (slips_feeds_update) only covers the first update
+        and makes other processes skip it, so it can't stop timer updates
+        of concurrent Slips runs from overwriting or deleting the same
+        file. A blocking lock per feed file does.
+
+        Parameters:
+            file_name: name of the feed file inside the download dir.
+        """
+        lock_path = os.path.join(
+            self.path_to_remote_ti_files_dir, f".{file_name}.lock"
+        )
+        with open(lock_path, "a") as lock_file:
+            fcntl.flock(lock_file, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+
     def _update_ti_file_sync(self, link_to_download: str) -> bool:
         """
         Blocking implementation of update_ti_file(), run in a thread.
+        """
+        file_name = link_to_download.split("/")[-1]
+        try:
+            with self._feed_file_lock(file_name):
+                return self._update_ti_file_locked(link_to_download)
+        except Exception:
+            self.print(
+                f"Problem on update_ti_file() for {link_to_download}", 0, 1
+            )
+            self.print(traceback.format_exc(), 0, 1)
+            return False
+
+    def _update_ti_file_locked(self, link_to_download: str) -> bool:
+        """
+        Download and parse one feed while holding its file lock.
         """
         try:
             self.log(f"Updating the remote file {link_to_download}")

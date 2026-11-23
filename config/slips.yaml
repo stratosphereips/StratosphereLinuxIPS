@@ -843,8 +843,9 @@ threatintelligence:
   local_threat_intelligence_files: config/local_ti_files/
 
   # yamllint disable-line rule:line-length
-  # The remote TI files will be temporaly stored in this directory
-  download_path_for_remote_threat_intelligence: modules/threat_intelligence/remote_data_files/
+  # The remote TI files will be temporaly stored in this directory.
+  # If empty, <parameters.permanent_dir>/remote_data_files/ is used.
+  download_path_for_remote_threat_intelligence: ""
 
   # Update period of threat_intelligence files. How often should Slips update
   # the IoCs.

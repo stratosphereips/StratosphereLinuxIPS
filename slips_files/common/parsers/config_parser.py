@@ -1337,8 +1337,10 @@ class ConfigParser(object):
         path = self.read_configuration(
             "threatintelligence",
             "download_path_for_remote_threat_intelligence",
-            "modules/threat_intelligence/remote_data_files/",
+            "",
         )
+        if not path:
+            return os.path.join(self.permanent_dir(), "remote_data_files")
         return utils.sanitize(path)
 
     def ti_files(self):
