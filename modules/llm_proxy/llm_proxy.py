@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import queue
+import re
 import threading
 import time
 import uuid
@@ -12,6 +13,7 @@ from typing import Any, Dict, List
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from modules.supported_module_names import Modules
 
 from modules.llm_proxy.anthropic_backend_mixin import MixinAnthropicBackend
 from modules.llm_proxy.llm_backend import LLMBackend
@@ -195,6 +197,30 @@ class LLMProxy(IModule):
             2,
             0,
         )
+
+    def should_stop(self) -> bool:
+        """Keep the backend available until its callers and requests finish.
+
+        Returns:
+            True when shutdown was requested and the shared LLM is idle.
+        """
+        if not self.termination_event.is_set():
+            return False
+        for requester in (Modules.REGEX_GENERATOR, Modules.ALERT_SUMMARY):
+            pid = self.db.get_pid_of(requester)
+            if not isinstance(pid, int) or pid <= 0:
+                continue
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                return False
+            else:
+                return False
+        if self.request_queue.unfinished_tasks:
+            return False
+        return super().should_stop()
 
     def main(self):
         if msg := self.get_msg(self.db.channels.LLM_REQUEST):
@@ -420,6 +446,28 @@ class LLMProxy(IModule):
     def _publish_response(self, payload: dict):
         requester = str(payload.get("requester") or "").strip()
         try:
+            if requester == "web_explain":
+                digest = str(
+                    (payload.get("metadata") or {}).get("cache_key") or ""
+                )
+                if re.fullmatch(r"[0-9a-f]{64}", digest):
+                    result = {
+                        "success": bool(payload.get("success")),
+                        "text": str(payload.get("text") or "")[:10000],
+                        "error": str(payload.get("error") or "")[:1000],
+                        "backend": str(payload.get("backend") or ""),
+                    }
+                    try:
+                        self.db.rdb.r.setex(
+                            f"web:explain:result:{digest}",
+                            7 * 86400,
+                            json.dumps(result),
+                        )
+                        self.db.rdb.r.delete(f"web:explain:pending:{digest}")
+                    except Exception as error:
+                        self._log_operation(
+                            f"Could not cache web explanation {digest}: {error}"
+                        )
             self._log_operation(
                 "Published llm_response "
                 f"request_id={payload.get('request_id')} "

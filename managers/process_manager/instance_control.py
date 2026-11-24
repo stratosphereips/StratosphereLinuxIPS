@@ -22,6 +22,7 @@ class RunningInstance:
     pid: int
     created: float
     arguments: tuple[str, ...]
+    checkout: Path | None = None
 
 
 def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
@@ -34,7 +35,7 @@ def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
     commands.add_argument(
         "--list-instances",
         action="store_true",
-        help="List running Slips instances from this checkout without "
+        help="List accessible Slips instances across checkouts without "
         "starting a capture or connecting to Redis.",
     )
     commands.add_argument(
@@ -135,13 +136,13 @@ def capture_arguments(
 
 
 def inspect_instance(
-    process: psutil.Process, entrypoint: Path
+    process: psutil.Process, entrypoint: Path | None
 ) -> RunningInstance | None:
-    """Verify a live main process executes this checkout's actual entry point.
+    """Verify a live Slips main process and its executed entry point.
 
     Parameters:
         process: Candidate process.
-        entrypoint: Slips entry point for this checkout.
+        entrypoint: Required entry point, or None to accept any checkout.
 
     Returns:
         Verified process identity, or None for another or inaccessible process.
@@ -155,7 +156,15 @@ def inspect_instance(
         script = Path(command[position])
         if not script.is_absolute():
             script = Path(process.cwd()) / script
-        if script.resolve() != entrypoint.resolve():
+        script = script.resolve()
+        expected = entrypoint.resolve() if entrypoint is not None else script
+        if script != expected:
+            return None
+        if entrypoint is None and not (
+            script.is_file()
+            and (script.parent / "slips_files").is_dir()
+            and (script.parent / "modules").is_dir()
+        ):
             return None
         if process.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}:
             return None
@@ -168,20 +177,23 @@ def inspect_instance(
                 parent_script = Path(parent_command[parent_position])
                 if not parent_script.is_absolute():
                     parent_script = Path(parent.cwd()) / parent_script
-                if parent_script.resolve() == entrypoint.resolve():
+                if parent_script.resolve() == expected:
                     return None
             except (psutil.Error, OSError):
                 continue
-        return RunningInstance(process.pid, process.create_time(), arguments)
+        checkout = script.parent if entrypoint is None else None
+        return RunningInstance(
+            process.pid, process.create_time(), arguments, checkout
+        )
     except (psutil.Error, OSError):
         return None
 
 
-def list_instances(entrypoint: Path) -> list[RunningInstance]:
-    """Find accessible Slips main processes from one checkout.
+def list_instances(entrypoint: Path | None) -> list[RunningInstance]:
+    """Find accessible Slips main processes from one or all checkouts.
 
     Parameters:
-        entrypoint: Entry point to match independently of process working dirs.
+        entrypoint: Entry point to match, or None to list all checkouts.
 
     Returns:
         Verified instances in PID order, excluding this management command.
@@ -291,17 +303,25 @@ def web_ports_for_instance(instance: RunningInstance) -> list[int]:
     return sorted(ports)
 
 
-def print_instances(instances: list[RunningInstance]) -> None:
+def print_instances(
+    instances: list[RunningInstance], all_checkouts: bool = False
+) -> None:
     """Show enough launch information to select the intended capture.
 
     Parameters:
         instances: Verified main processes.
+        all_checkouts: Show checkout paths for a machine-wide listing.
     """
     if not instances:
-        print("No accessible running Slips instances from this checkout.")
+        scope = "on this machine" if all_checkouts else "from this checkout"
+        print(f"No accessible running Slips instances {scope}.")
         return
-    print("Slips instances from this checkout:")
-    print(f"{'PID':<9} {'MODE':<9} {'WEB PORT':<12} {'INPUT':<24} OUTPUT")
+    scope = "on this machine" if all_checkouts else "from this checkout"
+    print(f"Slips instances {scope}:")
+    header = (
+        f"{'PID':<9} {'MODE':<9} {'WEB PORT':<12} {'INPUT':<24} {'OUTPUT':<24}"
+    )
+    print(f"{header} CHECKOUT" if all_checkouts else header.rstrip())
     for instance in instances:
         args = instance.arguments
         mode = "daemon" if {"-D", "--daemon"}.intersection(args) else "normal"
@@ -317,7 +337,18 @@ def print_instances(instances: list[RunningInstance]) -> None:
             source = "saved results"
             output = saved_output
         ports = ",".join(map(str, web_ports_for_instance(instance))) or "—"
-        print(f"{instance.pid:<9} {mode:<9} {ports:<12} {source:<24} {output}")
+        row = (
+            f"{instance.pid:<9} {mode:<9} {ports:<12} "
+            f"{source:<24} {output:<24}"
+        )
+        if all_checkouts:
+            checkout = (
+                os.path.relpath(instance.checkout, Path.cwd())
+                if instance.checkout is not None
+                else "—"
+            )
+            row += f" {checkout}"
+        print(row.rstrip())
 
 
 def stop_instances(
@@ -490,8 +521,8 @@ def handle_instance_command(arguments: list[str]) -> int | None:
         if not options.restart.isdecimal() or int(options.restart) <= 0:
             parser.error("--restart expects a positive daemon PID")
     entrypoint = Path(__file__).resolve().parents[2] / "slips.py"
-    instances = list_instances(entrypoint)
-    print_instances(instances)
+    instances = list_instances(None if options.list_instances else entrypoint)
+    print_instances(instances, all_checkouts=options.list_instances)
     if options.list_instances:
         return 0
     if options.restart is not None:

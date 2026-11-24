@@ -305,6 +305,25 @@ def test_should_stop_uses_base_module_stop_conditions(
     assert llm.should_stop() is expected
 
 
+def test_should_stop_waits_for_callers_and_inflight_work() -> None:
+    """Keep the shared backend alive while callers or requests remain.
+    """
+    llm = ModuleFactory().create_llm_obj()
+    llm.termination_event.is_set.return_value = True
+    llm.channel_tracker = llm.init_channel_tracker()
+    llm.db.get_pid_of.side_effect = lambda name: 123 if name == "alert_summary" else None
+    with patch("modules.llm_proxy.llm_proxy.os.kill"):
+        assert llm.should_stop() is False
+
+    llm.db.get_pid_of.side_effect = None
+    llm.db.get_pid_of.return_value = None
+    llm.request_queue.put_nowait({"request_id": "inflight"})
+    assert llm.should_stop() is False
+    llm.request_queue.get_nowait()
+    llm.request_queue.task_done()
+    assert llm.should_stop() is True
+
+
 def test_shutdown_gracefully_clears_available_backend_registry():
     llm = ModuleFactory().create_llm_obj()
 

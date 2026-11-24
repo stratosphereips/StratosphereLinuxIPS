@@ -256,6 +256,26 @@ class TCell(IModule):
         self._log_detail("T Cell module ready.")
         return False
 
+    def should_stop(self) -> bool:
+        """Consume evidence until the evidence handler finishes.
+
+        Returns:
+            True when shutdown was requested and no evidence remains.
+        """
+        if not self.termination_event.is_set():
+            return False
+        pid = self.db.get_pid_of("evidence_handler")
+        if isinstance(pid, int) and pid > 0:
+            try:
+                os.kill(pid, 0)
+            except ProcessLookupError:
+                pass
+            except PermissionError:
+                return False
+            else:
+                return False
+        return super().should_stop()
+
     def main(self):
         if msg := self.get_msg("evidence_added"):
             self._process_evidence_message(msg)

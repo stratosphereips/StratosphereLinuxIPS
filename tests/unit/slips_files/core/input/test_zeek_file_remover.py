@@ -68,6 +68,24 @@ def test_remove_old_zeek_files_closes_and_schedules_cleanup():
     ]
 
 
+def test_remover_deletes_expired_logs_without_new_rotation_messages() -> None:
+    """Expire queued Zeek logs even when no more rotation arrives."""
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    input_process.should_stop = MagicMock(side_effect=[False, False, True])
+    input_process.get_msg = MagicMock(return_value=None)
+    input_process.zeek_utils.rotated_files_to_delete = [("old.log", 100.0)]
+    remover = ZeekFileRemover(input_process, input_process.zeek_utils)
+
+    with patch("time.time", return_value=150.0), patch("os.remove") as remove:
+        with patch("time.sleep"):
+            remover.remove_old_zeek_files()
+
+    remove.assert_called_once_with("old.log")
+    assert input_process.zeek_utils.rotated_files_to_delete == []
+
+
 @pytest.mark.parametrize("keep_rotated_files_for", [0, 5])
 def test_check_if_time_to_del_rotated_files_deletes_ready_files(
     keep_rotated_files_for,

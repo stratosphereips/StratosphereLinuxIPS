@@ -1,7 +1,7 @@
 """Verify module wiring, identity context and ordinary evidence handling."""
 
 import json
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -29,6 +29,19 @@ def fit(module: object, **changes: object) -> None:
                     "flow": flow(day, uid=f"normal-{day}-{index}", **changes),
                 }
             )
+
+
+def test_capacity_warning_reports_new_skips_only() -> None:
+    """Do not repeat an old capacity warning after learning has room again."""
+    module = ModuleFactory().create_service_anomaly_obj()
+    module.store = Mock()
+    module.detector.capacity_skips = 2
+
+    module._checkpoint(force=True)
+    assert "2 service/client observations" in module.print.call_args.args[0]
+    assert module.detector.capacity_skips == 0
+    module._checkpoint(force=True)
+    assert module.print.call_count == 1
 
 
 @pytest.mark.parametrize("accepted", [True, False])

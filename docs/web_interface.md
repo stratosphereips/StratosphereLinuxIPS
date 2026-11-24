@@ -1,5 +1,25 @@
 # Local web interface
 
+## Immune module views and explanations
+
+The **Regex Generator** tab shows accepted pattern counts by type, stored
+rejections when enabled, database size, and the 40 newest stored patterns.
+The **T Cell** tab shows current state counts on a lifecycle graph, the 100
+newest active cells, and 100 recent transitions. Both tabs read module SQLite
+stores only when opened or refreshed; they do not start the modules or scan
+traffic. A missing store is shown as unavailable.
+
+When `alert_summary.enabled` and `llm_proxy.enabled` are configured, completed
+automatic alert summaries appear in alert details. **Explain with AI** in an
+evidence record or group sends a request only when clicked. The group prompt
+uses at most 20 matching records and identifies its sample size. Replies are
+cached for seven days in the run Redis database; pending requests expire after
+ten minutes. The current run must have a ready shared LLM backend. The three
+`alert_summary.explain_*` settings control automatic alerts and the two on-click
+explanation types independently.
+Alert summaries are looked up by ID in the run's summary index, with a bounded
+log fallback for runs created before the index existed.
+
 The web_interface module is a technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
 
 Reopen a completed output folder without repeating the analysis:
@@ -285,10 +305,12 @@ In the middle pane, **Filters for this group** controls only the records inside
 the selected evidence group. Its **Group by → Type** option shows collapsible
 type sections with counts covering every matching record, including records
 not loaded yet. Open a type to inspect its records and use **Load more** inside
-that section. The same menu contains the group's source and threat filters;
-search stays beside it. These controls intersect the main Evidence filters
-without changing them, and grouping leaves record sorting unchanged. **Reset
-group filters** resets only this group's controls.
+that section. **Threat**, **Module**, and **Score handling** group the records
+loaded so far, with counts labeled accordingly. The same menu contains the
+group's source and exact or inclusive threat filters;
+search stays beside it. These controls remain selected when you inspect another
+group, intersect the main Evidence filters without changing them, and leave
+record sorting unchanged. **Reset group filters** clears the record controls.
 
 The **Alerts**, **Evidence**, and **Hosts** tabs keep search and result counts
 visible, with a funnel icon opening the other filtering options in a popup.
@@ -300,13 +322,19 @@ and scope use **All** without a result count. **From** and **To** labels and the
 date fields appear together only when **Custom** is selected. Controls share the
 same font and height.
 Close the popup with its close button, Escape, or a click outside it. Changing
-tabs closes it too. Closing it preserves selections; existing saved browser
-preferences still apply. Table sorting and column controls stay beside the tables.
+tabs closes it too. The browser remembers filter selections, searches, grouping,
+range choices, network and interface selection, and layout when you switch
+tabs, reload the page, or restart Slips. A run you revisit keeps its own saved
+view; a new run starts with your latest browser preferences. Preferences are
+stored in that browser's local storage. Table sorting and column controls stay
+beside the tables.
 The group summary shows its type once, one host identity, the description and
 a compact row for threat, score and network. Record headers keep additional
 description details without repeating their opening sentence. Identifiers stay
 in the collapsed **Evidence record** section. Device names appear in a muted
 color as **[name]**, at the address's font size and with their original case.
+Host addresses in the group summary and its description open that address in
+the Hosts workspace.
 With evidence grouping set to **None**, the middle record-list pane is hidden.
 Select evidence directly in the left table to open its details on the right;
 the divider resizes these two panes. Closing the details gives the table the
@@ -755,6 +783,14 @@ values for the measured lower bound. Historical charts keep their recorded
 samples, including data collected by earlier Slips versions. Flow throughput
 has its own panel and uses the selected performance-history time range.
 
+The Overview CPU and memory plots also show the Redis server used by the run
+and the shared cache Redis server. These lines are process CPU and resident RAM,
+included in the Slips total. If both logical databases use the same Redis
+server, one **Run + cache Redis** line is shown because process resources cannot
+be attributed to individual Redis databases. The legend identifies the ports;
+hover over a plot for exact values. Older history without Redis-specific
+samples continues to show only the total.
+
 ## Long-running behavior
 
 For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Under size pressure, evidence-linked flows remain protected for at least the configured ordinary-flow age after their newest linked evidence; the size target is allowed to be exceeded when durable evidence alone is larger than the target. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires. The evidence drawer first reads SQLite and then recovers missing linked flows from bounded current or saved Zeek JSON logs when available. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. On older databases, deleted rows may not reduce the file's physical size until Slips is stopped and SQLite `VACUUM` is run; allow temporary free disk space for that operation.
@@ -945,7 +981,7 @@ type-ordered evidence index and counts alert links from two ordered indexes.
 
 The evidence inspector initially loads **20 triggering flow UIDs**. **Load more triggering flows** loads the next page, including related protocol records; evidence with more than 1,000 UIDs remains fully accessible. The count distinguishes loaded, unavailable, and recovered flows. Connection and protocol tab contents are built when selected, and complete JSON is formatted only when expanded. Closing or switching records cancels the previous flow request. A durable record without flow IDs returns immediately instead of scanning Redis history. The browser also renders older unpaged API responses in batches of 20 until the server is restarted. This applies in the Evidence, Alerts, and Hosts workspaces, including Device + type groups.
 
-The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. Additional stored values appear in a compact table, omitting fields already shown above; empty fields can be revealed and the complete original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
+The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. Additional stored values appear in a compact table, omitting fields already shown above; empty fields can be revealed and the complete original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. Whitelist editors start collapsed on the evidence, alert, and Whitelists tabs; selecting Whitelist for a host opens its editor directly. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
 
 New ARP findings show the saved target counts, prior source-specific contacts,
 observed replies and observed application traffic. `ARP_DISCOVERY` is
@@ -1370,6 +1406,15 @@ MAC-derived host aliases because Slips accumulators are IP-specific. Interface,
 standard-input, and CYST runs plot RATL; finite input runs plot ATL. The chart
 includes the configured alert threshold, the last score and peak score in each
 bounded server-side interval, and detected drops.
+The dotted orange vertical markers identify a new score time window or a score
+drop; hover over a marker to see its time and reason.
+When a device has several addresses, its heading prefers IPv4. The score plot
+shows one IP-specific score series with its source address beside the title;
+it chooses an address with saved score samples in the selected range when the
+highlighted address has none.
+Score lines break across periods without stored samples, and the caption gives
+the longest gap. A gap alone does not establish whether the host was silent or
+the capture missed traffic; inspect retained flows and capture statistics.
 An analysis-period change appears as a score reset, alongside a drop after an
 alert resets the accumulator. The host range selector also controls this
 plot.
@@ -1581,7 +1626,14 @@ With **Current network only**, inventory membership and Last seen use actual
 flow, detection, or discovery observations. Refreshing cached metadata or
 learning a hostname cannot make an old host current. New packet observations
 are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
-still establish activity through retained flows and detections. Refreshing the
+still establish activity through retained flows, detections, and saved sightings
+from earlier sessions on the same network.
+An ARP request confirms its sender, not that its unanswered target is present.
+Slips saves the requested target and requester as a fact on that capture network
+without counting the target as an observed host.
+An IP sighting without a matching network-scoped MAC or name must not inherit a
+device identity learned on another network. Older raw flows may have expired
+under flow retention even while a saved sighting remains. Refreshing the
 inventory replaces every loaded page, so an old row beyond the first page does
 not survive a filter or network change. Device grouping includes only addresses
 observed on the selected network and within the selected time range.
@@ -1608,6 +1660,10 @@ an explanation and empty scoped activity.
 Following an IP from a host's evidence or traffic opens that address with a **Back** button. Back restores the previous host, selected evidence and record navigation, activity filters, time range, paging, review draft and scroll position. This also works when the destination has no Slips host profile. The investigation trail retains up to twelve hosts; after returning to its start, **Hosts** returns to the inventory. Starting another inventory investigation or switching runs clears the trail.
 
 Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens a rule editor beside the host, with its IP filled in and **Both sides** selected. Suppression and evidence type remain editable. For a grouped device, a checkbox can save one rule for each known address; addresses learned later need their own rules. Rules use the existing persistence mechanism and the run's configured whitelist file, including a custom personal whitelist path.
+
+The host header keeps the score and **Whitelist** action visible. Its filter menu contains the time range, custom dates, current network and interface scope, and the option to show whitelisted evidence. The menu badge and summary show which filters are active.
+
+Once a host is open, its selected range and activity filters carry to other hosts while browsing. Opening the first host clears searches and threat filters left over from a previous run. **Back** restores each earlier host's own view.
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
@@ -1663,7 +1719,7 @@ The selected host workspace includes:
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
-- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
+- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs. **Filters for this host** beside the search groups matching records by detection type across the entire selected host and range, with collapsible sections and exact counts. The same menu filters by local or P2P source and threat. Other grouping choices organize the current page only;
 - newest historical flows with cursor navigation into older traffic.
 
 Every related-evidence and flow-table heading is sortable across the selected host and time range. The flow sort uses indexed fields where available and reads stored protocol details when sorting ports, connection state, or duration. The Whitelists table also sorts by every displayed column, including whether a rule can be removed.

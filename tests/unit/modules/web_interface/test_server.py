@@ -22,7 +22,7 @@ import psutil
 from pytest_mock import MockerFixture
 
 from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY, HistoryCollector
-from modules.web_interface.network_scope import NetworkScope
+from modules.web_interface.network_scope import NetworkScope, NetworkSelection
 from modules.supported_module_names import Modules
 from modules.web_interface.server import (
     RequestHandler,
@@ -42,7 +42,151 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
+    EVIDENCE_NETWORK_INDEX_SQL,
 )
+
+
+def test_immune_views_read_bounded_stores(tmp_path: Path) -> None:
+    """Read current immune state without loading all stored observations."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"regex_generator": {"store_dir": "output/regex_generator",
+                                                       "max_store_size_mb": 1},
+                                   "t_cell": {"store_dir": "output/t_cell/data"}}, None)
+    regex_dir = tmp_path / "regex_generator"
+    regex_dir.mkdir()
+    with sqlite3.connect(regex_dir / "generated_regexes.sqlite") as db:
+        db.execute("CREATE TABLE generated_regexes (id INTEGER PRIMARY KEY, regex_type TEXT,"
+                   " regex TEXT, status TEXT, rejection_reason TEXT, backend_alias TEXT,"
+                   " model TEXT, created_at REAL)")
+        db.execute("INSERT INTO generated_regexes VALUES (1,'domain','^example','accepted',"
+                   "NULL,'local','model',100)")
+    cell_dir = tmp_path / "t_cell" / "data"
+    cell_dir.mkdir(parents=True)
+    with sqlite3.connect(cell_dir / "t_cell.sqlite") as db:
+        db.executescript("CREATE TABLE cells (profile_ip TEXT,regex_type TEXT,"
+                         "antigen_value TEXT,state INTEGER,state_name TEXT,"
+                         "last_transition_at REAL,updated_at REAL);"
+                         "CREATE TABLE transitions (id INTEGER PRIMARY KEY,profile_ip TEXT,"
+                         "regex_type TEXT,antigen_value TEXT,from_state INTEGER,"
+                         "to_state INTEGER,reason TEXT,created_at REAL);")
+        db.execute("INSERT INTO cells VALUES ('192.0.2.1','domain','example',3,"
+                   "'activated',100,100)")
+        db.execute("INSERT INTO transitions VALUES (1,'192.0.2.1','domain',"
+                   "'example',1,3,'matched',100)")
+    regex = reader.regex_generator_status()
+    cell = reader.t_cell_status()
+    assert regex["statuses"] == [{"status": "accepted", "count": 1}]
+    assert regex["limit_bytes"] == 1024 * 1024
+    assert regex["at_capacity"] is False
+    assert regex["recent"][0]["regex"] == "^example"
+    assert cell["states"] == [{"state": 3, "state_name": "activated", "count": 1}]
+    assert cell["transitions"][0]["reason"] == "matched"
+
+
+@pytest.mark.parametrize("path,method", [
+    ("/api/immune/regex-generator", "regex_generator_status"),
+    ("/api/immune/t-cell", "t_cell_status"),
+    ("/api/explanations/status", "explanation_status"),
+])
+def test_immune_status_routes(path: str, method: str) -> None:
+    """Route monitoring requests to the matching read-only reader method.
+
+    Parameters:
+        path: Requested API endpoint.
+        method: Reader method serving that endpoint.
+    """
+    _factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    getattr(handler.server.reader, method).return_value = {"available": True}
+    handler.server.reader.response_metadata.return_value = {}
+    assert handler._api_response(path, {})["available"] is True
+    getattr(handler.server.reader, method).assert_called_once_with()
+
+
+def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path: Path) -> None:
+    """Queue an evidence explanation only after a request and dedupe clicks."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True},
+                                   "llm_proxy": {"enabled": True}}, None)
+    with sqlite3.connect(reader.sqlite_path) as db:
+        db.execute("CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY,data TEXT)")
+        db.execute("INSERT INTO evidence VALUES (?,?)", ("e1", json.dumps({
+            "evidence_type": "TEST", "threat_level": "low",
+            "confidence": 0.8, "description": "Observed connection to port 1234"})))
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local", "backends": {"local": {}}})
+        if key == "available_llm_backends" else None)
+    reader.redis.exists.return_value = False
+    reader.redis.set.side_effect = [True, False]
+    reader.redis.publish.return_value = 1
+    first = reader.request_explanation({"kind": "evidence", "id": "e1"})
+    second = reader.request_explanation({"kind": "evidence", "id": "e1"})
+    assert first["status"] == second["status"] == "pending"
+    assert first["id"] == second["id"]
+    assert reader.redis.publish.call_count == 1
+    assert reader.redis.set.call_args.kwargs == {"nx": True, "ex": 600}
+    published = json.loads(reader.redis.publish.call_args.args[1])
+    assert published["requester"] == "web_explain"
+    assert published["metadata"]["cache_key"] == first["id"]
+    assert published["version"] == utils.get_current_version()
+
+
+def test_group_explanation_keeps_time_and_interface_scope(tmp_path: Path) -> None:
+    """Explain only a bounded sample from the selected visible group."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True}}, None)
+    reader.evidence = Mock(return_value={"total": 500, "items": [{
+        "evidence_type": "TEST", "threat_level": "medium",
+        "confidence": 0.8, "description": "Observed a network event",
+    }]})
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local", "backends": {"local": {}}})
+        if key == "available_llm_backends" else None)
+    reader.redis.exists.return_value = False
+    reader.redis.set.return_value = True
+    reader.redis.publish.return_value = 1
+    result = reader.request_explanation({"kind": "group", "query": {
+        "type": "TEST", "range": "custom", "from": "100", "interface": "en0",
+        "untrusted": "ignored",
+    }})
+    query = reader.evidence.call_args.args[0]
+    assert query["limit"] == ["20"]
+    assert query["from"] == ["100"]
+    assert query["interface"] == ["en0"]
+    assert "untrusted" not in query
+    published = json.loads(reader.redis.publish.call_args.args[1])
+    assert "sampled 1 newest records" in published["messages"][0]["content"]
+    assert result["status"] == "pending"
+
+
+def test_alert_explanation_reads_only_matching_summary(tmp_path: Path) -> None:
+    """Show the saved summary for the selected alert ID only."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    path = tmp_path / "alerts" / "alerts_summary.log"
+    path.parent.mkdir()
+    path.write_text("Now: Alert alert-one on timewindow 1.\n"
+                    "LLM summary: First finding.\n"
+                    "Now: Alert alert-two on timewindow 1.\n"
+                    "LLM summary: Second finding.\n")
+    assert reader.alert_explanation("alert-one")["text"] == "First finding."
+    assert reader.alert_explanation("missing")["available"] is False
+    with sqlite3.connect(path.with_name("alert_summaries.sqlite")) as db:
+        db.execute("CREATE TABLE summaries (alert_id TEXT PRIMARY KEY,text TEXT,"
+                   "available INTEGER,created_at REAL)")
+        db.execute("INSERT INTO summaries VALUES ('alert-one','Indexed finding.',1,100)")
+    assert reader.alert_explanation("alert-one")["text"] == "Indexed finding."
 
 
 @pytest.mark.parametrize("failed", [False, True])
@@ -342,6 +486,13 @@ def test_host_inventory_findings_match_opened_evidence(
              **({"network": ["current"]} if network else {}), **({"device": ["1"]} if device else {})}
     inventory = reader.hosts(query)
     row = next(item for item in inventory["items"] if ip in item.get("device_ips", [item["ip"]]))
+    if device:
+        assert row["ip"] == ip
+        assert reader.host(alias, query)["ip"] == ip
+        if expected_count:
+            history = reader.score_history(ip, query)
+            assert history["scored_evidence"] > 0
+            assert history["score_profile_ip"] == (alias if recent else ip)
     assert row["peak_alert_score"] == expected_peak
     assert row["max_threat_level"] == expected_threat
     assert row["evidence_count"] == expected_count
@@ -820,6 +971,95 @@ def test_host_traffic_and_score_endpoints_share_current_network_boundary(
         }
     )
     assert reader.score_history("192.168.12.1", query)["timeline"] == []
+
+
+def test_scoped_host_reads_do_not_materialize_all_network_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep one host's scoped reads indexed without building a global ID table.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "ALTER TABLE evidence ADD COLUMN accumulated_threat_level REAL"
+        )
+        connection.execute(EVIDENCE_NETWORK_INDEX_SQL)
+        connection.execute(
+            "UPDATE evidence SET data=? WHERE evidence_id='new'",
+            (json.dumps({"interface": "en0"}),),
+        )
+    scoped = reader._for_network_scope({"network": ["current"]})
+    with patch.object(
+        NetworkSelection,
+        "materialize_evidence",
+        side_effect=AssertionError("global evidence scan"),
+    ):
+        stats = scoped._host_finding_stats(
+            ["192.168.1.22", "192.168.12.1"],
+            {"network": ["current"], "range": ["7d"]},
+        )
+        activity = scoped._host_activity_times(["192.168.1.22"])
+    assert stats["192.168.1.22"]["evidence"] == 1
+    assert stats["192.168.12.1"]["evidence"] == 0
+    assert activity["192.168.1.22"] > 0
+
+
+def test_device_evidence_uses_member_profiles_before_network_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep device evidence restricted to its indexed member addresses.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE INDEX evidence_profile_time_idx ON evidence(profile_ip,evidence_time)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, 'timewindow1','low','ARP_SCAN','arp','scan',0.8,'{}',1,0)",
+            [
+                ("current-v4-evidence", 2_000_000_000 - 30, "192.168.1.20"),
+                ("current-v6-evidence", 2_000_000_000 - 30, "fe80::20"),
+            ],
+        )
+    statements: list[str] = []
+    original = reader._connect_sqlite
+
+    def traced_connection() -> sqlite3.Connection:
+        """Record evidence SQL to verify the profile restriction.
+
+        Returns:
+            A scoped read connection with query tracing enabled.
+        """
+        connection = original()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    reader._connect_sqlite = traced_connection
+    page = reader.evidence({
+        "range": ["7d"], "network": ["connection"],
+        "device_id": ["mac:02:00:00:00:00:20"],
+        "include_full_total": ["0"],
+    })
+    assert {item["id"] for item in page["items"]} == {
+        "current-v4-evidence", "current-v6-evidence"
+    }
+    assert any("profile_ip IN" in sql for sql in statements)
 
 
 @pytest.mark.parametrize("device", [False, True])
@@ -1840,7 +2080,7 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
             in app_source
         )
         assert "(row) => slipsScore(row)" in section
-        assert "openHost(row.ip, row)" in section
+        assert "openHost(preferredHostIp(row), row)" in section
         host_workspace = app_source.split("async function openHost", 1)[
             1
         ].split("async function refreshHostWorkspace", 1)[0]
@@ -4781,6 +5021,54 @@ def test_host_names_resolves_live_and_historical_identity(
     )
 
 
+def test_current_network_does_not_reuse_another_networks_host_identity(
+    tmp_path: Path,
+) -> None:
+    """A local IP-only sighting cannot inherit an older device's name or MAC.
+
+    Parameters:
+        tmp_path: Isolated history and permanent host databases.
+    """
+    _module_factory = ModuleFactory()
+    ip = "192.168.1.248"
+    old_mac = "d8:3a:dd:bb:1d:6d"
+    profile_path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24",
+             "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(profile_path, "run", lambda _: state, ["en0"])
+    store.observe_flow(SimpleNamespace(type_="conn", interface="en0",
+        starttime=100, saddr=ip, daddr="8.8.8.8", smac=old_mac))
+    state["gateway_mac"] = "aa:bb:cc:dd:ee:02"
+    store.observe_flow(SimpleNamespace(type_="arp", operation="request",
+        interface="en0", starttime=200, saddr="192.168.1.20",
+        daddr=ip, src_hw="02:00:00:00:00:20",
+        dst_hw="00:00:00:00:00:00"))
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = profile_path
+    reader.history_path = tmp_path / "history.sqlite"
+    reader._annotation_networks = Mock(
+        return_value=["gateway:aa:bb:cc:dd:ee:02"]
+    )
+    initialize_history(reader.history_path)
+    snapshot = {"ip": ip, "scope": "local", "hostname": "rpi5-1.local",
+                "hostname_source": "mDNS", "mac": old_mac,
+                "mac_vendor": "Raspberry Pi"}
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.execute("INSERT INTO host_snapshots VALUES (?, ?, ?)",
+                           (ip, 100, json.dumps(snapshot)))
+    host = dict(snapshot)
+    reader._restore_host_identities([host], {"network": ["current"]})
+    assert host["hostname"] == host["mac"] == host["mac_vendor"] == ""
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "rpi5-1.local", None, "Raspberry Pi", old_mac,
+    ]
+    reader.cache = Mock()
+    assert reader.host_names({"network": ["current"], "ip": [ip]})[
+        "names"
+    ][ip] == {"name": "", "source": ""}
+
+
 def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
     """Show a manual name or vendor beside IPs in alert labels.
 
@@ -5591,6 +5879,8 @@ def test_host_flows_exclude_mac_alias_addresses(tmp_path) -> None:
 def test_metrics_response_never_exceeds_requested_points(tmp_path) -> None:
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
+    reader.redis_port = 6381
+    reader.cache_redis_port = 6379
     reader.history_path = tmp_path / "history.sqlite"
     initialize_history(reader.history_path)
     now = time.time()
@@ -5613,6 +5903,42 @@ def test_metrics_response_never_exceeds_requested_points(tmp_path) -> None:
 
     assert result["page_size"] <= 100
     assert result["max_points"] == 100
+
+
+@pytest.mark.parametrize("cache_port", [6379, 6381])
+def test_metrics_response_includes_redis_server_history(
+    tmp_path, cache_port: int,
+) -> None:
+    """Expose Redis series and identify when two databases share a process.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        cache_port: Port of the shared cache Redis server.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis_port = 6381
+    reader.cache_redis_port = cache_port
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    sampled_at = time.time() - 5
+    with connect_history(reader.history_path) as connection:
+        connection.execute(
+            "INSERT INTO runtime_metrics_1s VALUES (?, ?, ?, ?, ?)",
+            (sampled_at, 15, 150, 1, 1),
+        )
+        connection.execute(
+            "INSERT INTO redis_metrics_1s VALUES (?, ?, ?, ?, ?)",
+            (sampled_at, 10, 100, 5, 50),
+        )
+
+    result = reader.metrics({"range": ["15m"]})
+
+    assert result["redis_shared"] is (cache_port == 6381)
+    assert result["redis_run_port"] == 6381
+    assert result["redis_cache_port"] == cache_port
+    assert result["items"][0]["run_redis_cpu"] == 10
+    assert result["items"][0]["cache_redis_memory"] == 50
 
 
 def test_durable_module_counts_survive_redis_window_expiry(tmp_path) -> None:
@@ -6038,6 +6364,7 @@ def test_host_finding_queries_choose_indexes_without_changing_filters(
                 assert f"INDEXED BY {expected}" in sql
                 plan = " ".join(str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN "+sql))
                 assert expected in plan
+                assert "SEARCH" in plan
                 assert "COVERING INDEX" in plan
             else:
                 assert "INDEXED BY" not in sql
@@ -6266,6 +6593,7 @@ def test_device_view_combines_local_addresses_before_paging(
     assert reader._host_ips("8.8.8.8", query) == ["8.8.8.8"]
     assert inventory["total"] == 2
     grouped = next(item for item in inventory["items"] if item["device_id"] == device_id)
+    assert grouped["ip"] == "10.0.0.1"
     assert set(grouped["device_ips"]) == {"10.0.0.1", "fe80::1"}
     assert alert_groups["total"] == 1
     assert alert_groups["items"][0]["alert_count"] == 2
@@ -8690,7 +9018,10 @@ def test_host_workspace_range_is_used_for_evidence_and_reset() -> None:
         1
     ].split("bindTableSort", 1)[0]
 
-    assert "const params = hostRangeParams();" in evidence_loader
+    assert "const params = hostEvidenceQuery();" in evidence_loader
+    query_builder = app_source.split("function hostEvidenceQuery()", 1)[1].split(
+        "async function loadHostEvidenceTypes", 1)[0]
+    assert "const params = hostRangeParams();" in query_builder
     assert 'range: "all"' not in evidence_loader
     assert 'resetPage("host-evidence");' in host_binding
 

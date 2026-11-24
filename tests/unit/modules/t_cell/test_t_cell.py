@@ -73,6 +73,21 @@ def test_t_cell_uses_lowercase_underscore_output_dir():
     )
 
 
+def test_shutdown_waits_for_evidence_handler() -> None:
+    """Keep T cell consuming evidence until its publisher exits."""
+    t_cell = ModuleFactory().create_t_cell_obj()
+    t_cell.termination_event.is_set.return_value = True
+    t_cell.channel_tracker = t_cell.init_channel_tracker()
+    t_cell.db.get_pid_of.return_value = 123
+
+    with patch("modules.t_cell.t_cell.os.kill"):
+        assert t_cell.should_stop() is False
+    with patch(
+        "modules.t_cell.t_cell.os.kill", side_effect=ProcessLookupError
+    ):
+        assert t_cell.should_stop() is True
+
+
 def test_pre_main_shuts_down_when_regex_generator_disabled_and_store_empty():
     """T Cell should stop when no regex source is available."""
     t_cell = ModuleFactory().create_t_cell_obj()

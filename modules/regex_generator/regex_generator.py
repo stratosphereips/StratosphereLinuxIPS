@@ -22,7 +22,6 @@ from slips_files.core.database.sqlite_db.regex_generator_db import (
     RegexGeneratorStorage,
 )
 
-
 PROMPT_VERSION = "regex-generator-v2"
 SYSTEM_PROMPT = """
 Return exactly one regex line.
@@ -106,6 +105,7 @@ class RegexGenerator(IModule):
         self.benign_match_strength_threshold = 75.0
         self.type_weights = {regex_type: 1.0 for regex_type in REGEX_TYPES}
         self.pending_request = None
+        self.capacity_paused = False
         self.next_generation_at = 0.0
         self._rng = random.Random()
         self.read_configuration()
@@ -198,6 +198,28 @@ class RegexGenerator(IModule):
             self.storage.close()
         return True
 
+    def should_stop(self) -> bool:
+        """Finish an in-flight generation request before shutdown.
+
+        Returns:
+            True when shutdown was requested and no request remains.
+        """
+        if self.termination_event.is_set() and self.pending_request:
+            return False
+        return super().should_stop()
+
+    def _pause_for_capacity(self) -> None:
+        """Log the first transition to a full persistent regex store."""
+        if self.capacity_paused:
+            return
+        self.capacity_paused = True
+        message = (
+            "Regex generation paused: persistent store reached its size limit; "
+            "saved patterns are preserved."
+        )
+        self.log_detail(message)
+        self.print(message, 1, 0)
+
     def main(self):
         self._handle_one_tw_closed_message()
 
@@ -206,9 +228,23 @@ class RegexGenerator(IModule):
             self._handle_pending_response(now)
             return
 
+        if self.termination_event.is_set():
+            return
+
         if now < self.next_generation_at:
             time.sleep(min(0.5, self.next_generation_at - now))
             return
+
+        if self.storage is not None and self.storage.at_capacity():
+            self._pause_for_capacity()
+            self.next_generation_at = now + 60
+            time.sleep(0.5)
+            return
+        if self.capacity_paused:
+            message = "Regex generation resumed: persistent store is below its limit."
+            self.log_detail(message)
+            self.print(message, 1, 0)
+            self.capacity_paused = False
 
         available_backends = self.db.get_available_llm_backends()
         backend = self._select_backend(available_backends)
@@ -496,6 +532,9 @@ class RegexGenerator(IModule):
         )
         self._finalize_request(response)
         self.pending_request = None
+        self.channel_tracker[self.db.channels.LLM_RESPONSE][
+            "msg_received"
+        ] = False
         self.next_generation_at = (
             time.time() + self.generation_interval_seconds
         )
@@ -744,7 +783,13 @@ class RegexGenerator(IModule):
         record["status"] = "accepted"
         record["rejection_reason"] = None
         record["matched_benign_value"] = None
-        self.storage.store_generated_regex(record)
+        if not self.storage.store_generated_regex(record):
+            self._pause_for_capacity()
+            self.log_detail(
+                f"Could not store accepted regex request_id={record['request_id']}: "
+                "generated regex store size limit reached."
+            )
+            return
         self.log_detail(
             f"Accepted regex request_id={record['request_id']} "
             f"regex_type={record['regex_type']} regex={record['regex']}"

@@ -108,6 +108,11 @@ Slips has 2 modes, interactive and daemonized.
 shutdown. **Daemon mode** (`-D`) detaches Slips so the terminal returns while
 capture continues in the background.
 
+The interactive summary's **Evidence** value counts evidence currently retained
+in the active Redis run. A new finding increases it; removing a whitelisted or
+disabled finding decreases it once. Restarting the evidence handler preserves
+the existing count, and startup repairs negative counters left by older runs.
+
 ```bash
 ./slips.py -i en0 -w -o output/live --keep-history -D
 ./slips.py --list-instances
@@ -158,11 +163,13 @@ environment used to run Slips:
 ./slips.py --restart 12345
 ```
 
-`--list-instances` shows accessible running Slips main processes from this
-checkout, with their PID, launch mode, open webpage port, interface or input file, and output
-directory. It finds normal foreground runs, shell background runs (`&` or
-`nohup`), service launches, and `-D` daemons. It excludes worker processes,
-other checkouts, stale PIDs and the management command itself.
+`--list-instances` shows accessible running Slips main processes from every
+checkout on this machine, with their PID, launch mode, open webpage port,
+interface or input file, output directory, and checkout path relative to the
+current directory. It finds normal foreground runs, shell background runs
+(`&` or `nohup`), service launches, and `-D` daemons. It excludes worker
+processes, stale PIDs and the management command itself. `--stop` and
+`--restart` still act only on runs from the checkout where they are invoked.
 On Linux, forked workers inherit their main process's command line; Slips
 checks their ancestry so these workers are not listed as separate instances.
 The **WEB PORT** column shows the actual listening port, including custom
@@ -446,7 +453,12 @@ evidence until that alert becomes eligible for rotation. Existing backlog
 drains gradually. Legacy raw flows with many evidence links use resumable
 classification checkpoints before they become eligible for cleanup. Hourly
 summaries speed compact evidence queries once their backfill catches up;
-dirty or incomplete hours use exact raw queries.
+dirty or incomplete hours use exact raw queries. When the active database
+exceeds its size target, maintenance archives eligible older detections before
+rebuilding hourly summaries. It copies simple evidence in bounded batches,
+commits the archive before deleting active rows, and returns freed SQLite pages
+incrementally. A large backlog still takes time to drain; recent detections
+and evidence supporting recent alerts remain protected.
 Archive tables and indexes initialize in one atomic transaction, reducing
 durable writes on SD cards and leaving no partial schema after a failed setup.
 
@@ -1347,7 +1359,7 @@ this file can be used for training Slips RNN module.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
 - ```-D``` or  ```--daemon``` Run slips in daemon mode
 - ```-k``` or  ```--killall``` Kill all unused redis servers
-- `--list-instances` List accessible running Slips instances from this checkout.
+- `--list-instances` List accessible running Slips instances from all checkouts.
 - `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.
 - `--restart [PID]` Stop a running daemon and start it again with its original arguments and working directory, using the Python environment invoking this command.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one

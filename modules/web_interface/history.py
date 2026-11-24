@@ -187,6 +187,12 @@ def initialize_history(path: Path) -> None:
         "samples INTEGER NOT NULL)",
         "CREATE INDEX IF NOT EXISTS metrics_1m_time_idx "
         "ON runtime_metrics_1m(bucket_ts)",
+        "CREATE TABLE IF NOT EXISTS redis_metrics_1s ("
+        "ts REAL PRIMARY KEY, run_cpu REAL, run_memory REAL, "
+        "cache_cpu REAL, cache_memory REAL)",
+        "CREATE TABLE IF NOT EXISTS redis_metrics_1m ("
+        "bucket_ts REAL PRIMARY KEY, run_cpu REAL, run_memory REAL, "
+        "cache_cpu REAL, cache_memory REAL)",
     )
     with connect_history(path) as connection:
         indexed_interfaces = connection.execute(
@@ -261,6 +267,7 @@ class HistoryCollector:
         redis_client: redis.Redis,
         root_pid: int,
         host_profiles_path: Optional[Path] = None,
+        cache_redis_client: Optional[redis.Redis] = None,
     ) -> None:
         """
         Initialize collector state.
@@ -271,11 +278,13 @@ class HistoryCollector:
             redis_client: Current run Redis client.
             root_pid: Main Slips process identifier.
             host_profiles_path: Shared permanent identity store.
+            cache_redis_client: Shared cache Redis client, when available.
         """
         self.output_dir = Path(output_dir)
         self.flows_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = history_path
         self.redis = redis_client
+        self.cache_redis = cache_redis_client
         self.root_pid = root_pid
         self.host_profiles_path = (
             host_profiles_path
@@ -289,6 +298,7 @@ class HistoryCollector:
         except psutil.Error:
             self._root_process = None
         self._redis_process: Optional[psutil.Process] = None
+        self._cache_redis_process: Optional[psutil.Process] = None
         self._last_redis_process_check = -float("inf")
         self._process_scope_complete = False
         self._last_flow_count: Optional[int] = None
@@ -603,11 +613,31 @@ class HistoryCollector:
                 ValueError,
             ):
                 self._redis_process = None
+            if self.cache_redis is not None:
+                try:
+                    server = self.cache_redis.info("server")
+                    pid = int(server["process_id"])
+                    self._cache_redis_process = (
+                        psutil.Process(pid) if pid > 0 else None
+                    )
+                except (
+                    redis.RedisError,
+                    psutil.Error,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                ):
+                    self._cache_redis_process = None
         roots = [root]
         if self._redis_process is not None:
             roots.append(self._redis_process)
         else:
             self._process_scope_complete = False
+        if self.cache_redis is not None:
+            if self._cache_redis_process is not None:
+                roots.append(self._cache_redis_process)
+            else:
+                self._process_scope_complete = False
         unique: Dict[int, psutil.Process] = {}
         for owner in roots:
             try:
@@ -640,6 +670,8 @@ class HistoryCollector:
         cpu_total = 0.0
         memory_bytes = 0
         live_pids = set()
+        process_samples: Dict[int, tuple[float, float]] = {}
+        cpu_count = max(psutil.cpu_count() or 1, 1)
         for process in self._live_processes():
             live_pids.add(process.pid)
             cached = self._processes.get(process.pid)
@@ -648,8 +680,14 @@ class HistoryCollector:
                 self._processes[process.pid] = process
             try:
                 with cached.oneshot():
-                    cpu_total += cached.cpu_percent(interval=None)
-                    memory_bytes += cached.memory_info().rss
+                    process_cpu = cached.cpu_percent(interval=None)
+                    process_memory = cached.memory_info().rss
+                    cpu_total += process_cpu
+                    memory_bytes += process_memory
+                    process_samples[process.pid] = (
+                        process_cpu / cpu_count,
+                        process_memory / 1024 / 1024,
+                    )
             except psutil.AccessDenied:
                 self._process_scope_complete = False
             except psutil.Error:
@@ -659,8 +697,15 @@ class HistoryCollector:
             for pid, process in self._processes.items()
             if pid in live_pids
         }
-        cpu_count = max(psutil.cpu_count() or 1, 1)
         cpu_percent = cpu_total / cpu_count
+        run_sample = process_samples.get(
+            self._redis_process.pid if self._redis_process else -1,
+            (None, None),
+        )
+        cache_sample = process_samples.get(
+            self._cache_redis_process.pid if self._cache_redis_process else -1,
+            (None, None),
+        )
         total_memory = max(psutil.virtual_memory().total, 1)
         try:
             current_count = int(
@@ -677,13 +722,14 @@ class HistoryCollector:
             flows_per_second = flow_delta / elapsed
         self._last_flow_count = current_count
         self._last_flow_check = now_monotonic
+        sampled_at = time.time()
         with connect_history(self.history_path) as connection:
             self._metadata_set(
                 connection,
                 RUNTIME_RESOURCES_KEY,
                 json.dumps(
                     {
-                        "sampled_at": time.time(),
+                        "sampled_at": sampled_at,
                         "root_pid": self.root_pid,
                         "cpu_percent": cpu_percent,
                         "memory_percent": memory_bytes / total_memory * 100,
@@ -700,12 +746,18 @@ class HistoryCollector:
                 "(ts, cpu_percent, memory_mb, flows_per_second, flow_delta) "
                 "VALUES (?, ?, ?, ?, ?)",
                 (
-                    time.time(),
+                    sampled_at,
                     cpu_percent,
                     memory_bytes / 1024 / 1024,
                     flows_per_second,
                     flow_delta,
                 ),
+            )
+            connection.execute(
+                "INSERT OR REPLACE INTO redis_metrics_1s "
+                "(ts,run_cpu,run_memory,cache_cpu,cache_memory) "
+                "VALUES (?,?,?,?,?)",
+                (sampled_at, *run_sample, *cache_sample),
             )
 
     @staticmethod
@@ -1890,6 +1942,21 @@ class HistoryCollector:
                     "DELETE FROM runtime_metrics_1s WHERE ts < ?",
                     (complete_minute_cutoff,),
                 )
+            redis_rows = connection.execute(
+                "SELECT CAST(ts / 60 AS INTEGER) * 60 AS bucket, "
+                "AVG(run_cpu), AVG(run_memory), AVG(cache_cpu), AVG(cache_memory) "
+                "FROM redis_metrics_1s WHERE ts < ? GROUP BY bucket",
+                (complete_minute_cutoff,),
+            ).fetchall()
+            if redis_rows:
+                connection.executemany(
+                    "INSERT OR REPLACE INTO redis_metrics_1m VALUES (?,?,?,?,?)",
+                    [tuple(row) for row in redis_rows],
+                )
+                connection.execute(
+                    "DELETE FROM redis_metrics_1s WHERE ts < ?",
+                    (complete_minute_cutoff,),
+                )
 
         return len(rows)
 
@@ -1913,6 +1980,7 @@ class HistoryCollector:
             for table, timestamp in (
                 ("error_events", "event_time"),
                 ("runtime_metrics_1m", "bucket_ts"),
+                ("redis_metrics_1m", "bucket_ts"),
                 ("host_snapshots", "observed_at"),
             ):
                 count += connection.execute(

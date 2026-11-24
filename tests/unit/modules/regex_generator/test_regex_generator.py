@@ -25,6 +25,7 @@ def _build_storage_conf(
     seed_benign_samples: bool = True,
     store_rejected_regexes: bool = False,
     max_stored_rejected_regexes: int = 10000,
+    max_store_size_mb: int = 2048,
     enable_local_whitelist: bool = True,
     local_whitelist_path: str = "config/whitelist.conf",
     tranco_top_benign_limit: int = 1000,
@@ -42,6 +43,9 @@ def _build_storage_conf(
     )
     conf.regex_generator_max_stored_rejected_regexes = Mock(
         return_value=max_stored_rejected_regexes
+    )
+    conf.regex_generator_max_store_size_mb = Mock(
+        return_value=max_store_size_mb
     )
     conf.enable_local_whitelist = Mock(return_value=enable_local_whitelist)
     conf.local_whitelist_path = Mock(return_value=local_whitelist_path)
@@ -73,6 +77,7 @@ def test_regex_generator_config_defaults():
     )
     assert parser.regex_generator_store_rejected_regexes() is False
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
+    assert parser.regex_generator_max_store_size_mb() == 2048
     assert parser.regex_generator_seed_benign_samples() is True
     assert parser.tranco_top_benign_limit() == 1000
 
@@ -105,6 +110,7 @@ def test_regex_generator_config_sanitization():
             "persistent_store_dir": " /tmp/regex-db ",
             "store_rejected_regexes": "true",
             "max_stored_rejected_regexes": "bad",
+            "max_store_size_mb": "bad",
             "seed_benign_samples": "false",
         },
     }
@@ -132,6 +138,7 @@ def test_regex_generator_config_sanitization():
     assert parser.regex_generator_persistent_store_dir() == "/tmp/regex-db"
     assert parser.regex_generator_store_rejected_regexes() is True
     assert parser.regex_generator_max_stored_rejected_regexes() == 10000
+    assert parser.regex_generator_max_store_size_mb() == 2048
     assert parser.regex_generator_seed_benign_samples() is False
     assert parser.tranco_top_benign_limit() == 1000
 
@@ -235,6 +242,52 @@ def test_main_waits_when_no_runtime_ready_backend(tmp_path, mocker):
     regex_generator.shutdown_gracefully()
 
 
+def test_main_pauses_generation_when_regex_store_is_full(
+    tmp_path, mocker
+) -> None:
+    """A full persistent store must stop new LLM requests."""
+    generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    generator.storage = Mock()
+    generator.storage.at_capacity.return_value = True
+    generator.next_generation_at = 0
+    generator.log_detail = Mock()
+    mocker.patch.object(generator, "_handle_one_tw_closed_message")
+    mocker.patch("modules.regex_generator.regex_generator.time.sleep")
+
+    generator.main()
+    generator.next_generation_at = 0
+    generator.main()
+
+    assert generator.capacity_paused is True
+    assert generator.next_generation_at > time.time()
+    generator.print.assert_called_once_with(
+        "Regex generation paused: persistent store reached its size limit; "
+        "saved patterns are preserved.",
+        1,
+        0,
+    )
+    generator.log_detail.assert_called_once()
+    generator.db.get_available_llm_backends.assert_not_called()
+    generator.db.publish.assert_not_called()
+
+
+def test_shutdown_finishes_pending_request_without_starting_another() -> None:
+    """Stop generation after an in-flight LLM response is handled."""
+    generator = ModuleFactory().create_regex_generator_obj()
+    generator.termination_event.is_set.return_value = True
+    generator.channel_tracker = generator.init_channel_tracker()
+    generator.pending_request = {"request_id": "pending"}
+    assert generator.should_stop() is False
+
+    generator.pending_request = None
+    generator.next_generation_at = 0
+    generator.main()
+    generator.db.get_available_llm_backends.assert_not_called()
+    assert generator.should_stop() is True
+
+
 def test_create_log_file_writes_progress_log(tmp_path, mocker):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
@@ -250,6 +303,11 @@ def test_create_log_file_writes_progress_log(tmp_path, mocker):
 
     regex_generator.pre_main()
     regex_generator.log_detail("test log line")
+    mocker.patch.object(
+        regex_generator.storage, "at_capacity", return_value=True
+    )
+    mocker.patch("modules.regex_generator.regex_generator.time.sleep")
+    regex_generator.main()
 
     with open(
         regex_generator.log_rotator.log_file_path, "r", encoding="utf-8"
@@ -258,6 +316,7 @@ def test_create_log_file_writes_progress_log(tmp_path, mocker):
 
     assert "RegexGenerator module ready." in log_contents
     assert "test log line" in log_contents
+    assert "Regex generation paused:" in log_contents
     regex_generator.shutdown_gracefully()
 
 
@@ -467,6 +526,28 @@ def test_handle_pending_response_matches_by_request_id(tmp_path, mocker):
 
     regex_generator._finalize_request.assert_not_called()
     assert regex_generator.pending_request["request_id"] == "req-1"
+
+
+def test_final_response_clears_channel_activity() -> None:
+    """A consumed response must not keep shutdown waiting forever."""
+    generator = ModuleFactory().create_regex_generator_obj()
+    generator.channel_tracker = generator.init_channel_tracker()
+    generator.channel_tracker["llm_response"]["msg_received"] = True
+    generator.pending_request = {
+        "request_id": "req-1",
+        "regex_type": "dns_domain",
+        "backend": "local_qwen",
+        "sent_at": time.time(),
+    }
+    generator._finalize_request = Mock()
+    generator.get_msg = Mock(
+        return_value={"data": json.dumps({"request_id": "req-1"})}
+    )
+
+    generator._handle_pending_response(time.time())
+
+    assert generator.pending_request is None
+    assert not generator.channel_tracker["llm_response"]["msg_received"]
 
 
 def test_handle_pending_response_keeps_waiting_after_soft_timeout(
@@ -691,6 +772,54 @@ def test_storage_prefers_persistent_store_dir_when_configured(tmp_path):
     )
 
     assert storage.store_dir == str(persistent_dir)
+    storage.close()
+
+
+def test_generated_regex_store_limit_preserves_saved_patterns(
+    tmp_path, mocker
+) -> None:
+    """Stop writing at the size cap without deleting accepted regexes."""
+    generator = ModuleFactory().create_regex_generator_obj(
+        store_dir=str(tmp_path / "regex_generator")
+    )
+    storage = RegexGeneratorStorage(
+        Mock(),
+        _build_storage_conf(
+            str(tmp_path / "regex_generator"), max_store_size_mb=1
+        ),
+        generator.output_dir,
+        12345,
+    )
+    record = {
+        "regex_type": "dns_domain",
+        "regex": "^first$",
+        "regex_hash": "hash-first",
+        "status": "accepted",
+        "rejection_reason": None,
+        "matched_benign_value": None,
+        "backend_alias": "local_qwen",
+        "provider": "ollama",
+        "model": "qwen2.5:3b",
+        "temperature": 1.2,
+        "prompt_version": PROMPT_VERSION,
+        "request_id": "req-first",
+        "created_at": 1.0,
+    }
+    assert storage.store_generated_regex(record) is True
+    assert storage.generated_store_size_bytes() > 0
+    mocker.patch.object(
+        storage, "generated_store_size_bytes", return_value=1024 * 1024
+    )
+    assert storage.at_capacity() is True
+    assert (
+        storage.store_generated_regex(
+            {**record, "regex": "^second$", "regex_hash": "hash-second"}
+        )
+        is False
+    )
+    assert [row["regex"] for row in storage.get_generated_regexes()] == [
+        "^first$"
+    ]
     storage.close()
 
 

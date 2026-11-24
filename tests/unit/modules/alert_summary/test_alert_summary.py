@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import sqlite3
 import time
+from pathlib import Path
+from unittest.mock import Mock
 
 from modules.alert_summary.alert_summary import (
     PROMPT_VERSION,
@@ -63,6 +66,9 @@ def test_alert_summary_config_defaults():
     parser.config = {}
 
     assert parser.alert_summary_enabled() is False
+    assert parser.alert_summary_explain_alerts() is True
+    assert parser.alert_summary_explain_evidence() is True
+    assert parser.alert_summary_explain_evidence_groups() is True
     assert parser.alert_summary_allowed_backends() == []
     assert parser.alert_summary_log_verbosity() == 2
     assert parser.alert_summary_llm_temperature() == 0.2
@@ -79,6 +85,9 @@ def test_alert_summary_config_sanitization():
     parser.config = {
         "alert_summary": {
             "enabled": "true",
+            "explain_alerts": "false",
+            "explain_evidence": "false",
+            "explain_evidence_groups": "false",
             "allowed_backends": "local_qwen",
             "log_verbosity": 99,
             "llm_temperature": "bad",
@@ -92,6 +101,9 @@ def test_alert_summary_config_sanitization():
     }
 
     assert parser.alert_summary_enabled() is True
+    assert parser.alert_summary_explain_alerts() is False
+    assert parser.alert_summary_explain_evidence() is False
+    assert parser.alert_summary_explain_evidence_groups() is False
     assert parser.alert_summary_allowed_backends() == []
     assert parser.alert_summary_log_verbosity() == 3
     assert parser.alert_summary_llm_temperature() == 0.2
@@ -101,6 +113,25 @@ def test_alert_summary_config_sanitization():
     assert parser.alert_summary_history_max_alerts() == 3
     assert parser.alert_summary_history_max_tokens() == 0
     assert parser.alert_summary_history_patterns_per_alert() == 2
+
+
+def test_completed_alert_summary_is_indexed_by_alert_id(tmp_path: Path) -> None:
+    """Keep completed alert summaries directly addressable by the web."""
+    summary = ModuleFactory().create_alert_summary_obj()
+    alert = _build_alert(_build_evidence())
+    folder = tmp_path / "alerts"
+    folder.mkdir()
+    summary.summary_log_path = str(folder / "alerts_summary.log")
+    summary.summary_log = open(summary.summary_log_path, "w", encoding="utf-8")
+    summary.db.get_hostname_from_profile = Mock(return_value="")
+    try:
+        summary._write_summary_entry(alert, "LLM summary: Network scan observed.")
+    finally:
+        summary.summary_log.close()
+    with sqlite3.connect(folder / "alert_summaries.sqlite") as db:
+        row = db.execute("SELECT text,available FROM summaries WHERE alert_id=?",
+                         (str(alert.id),)).fetchone()
+    assert row == ("Network scan observed.", 1)
 
 
 def test_build_prompt_messages_uses_incident_metadata_and_digest():
@@ -471,6 +502,8 @@ def test_handle_pending_response_writes_one_paragraph_summary(
 
     evidence = _build_evidence()
     alert = _build_alert(evidence)
+    alert_summary.channel_tracker = alert_summary.init_channel_tracker()
+    alert_summary.channel_tracker["llm_response"]["msg_received"] = True
     alert_summary.active_job = {
         "alert": alert,
         "evidences": [evidence],
@@ -503,6 +536,7 @@ def test_handle_pending_response_writes_one_paragraph_summary(
     }
 
     alert_summary._handle_pending_response()
+    assert not alert_summary.channel_tracker["llm_response"]["msg_received"]
 
     with open(alert_summary.summary_log_path, "r", encoding="utf-8") as handle:
         content = handle.read()
@@ -630,10 +664,10 @@ def test_should_stop_waits_for_pending_alerts_during_shutdown():
     )
     alert_summary.termination_event.is_set.return_value = True
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
-def test_should_stop_ignores_stale_llm_response_channel_after_work_finishes():
+def test_should_stop_waits_for_active_llm_response_channel():
     alert_summary = ModuleFactory().create_alert_summary_obj()
     alert_summary.channel_tracker = alert_summary.init_channel_tracker()
     alert_summary.termination_event.is_set.return_value = True
@@ -650,7 +684,7 @@ def test_should_stop_waits_for_pending_shared_llm_request_count():
     alert_summary.channel_tracker["new_alert"]["msg_received"] = False
     alert_summary.db.get_pending_llm_request_count.return_value = 2
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
 def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
@@ -665,7 +699,7 @@ def test_should_stop_waits_for_alive_evidence_handler_on_shutdown(mocker):
         return_value=True,
     )
 
-    assert alert_summary.should_stop() is True
+    assert alert_summary.should_stop() is False
 
 
 def test_get_alert_evidence_handles_mixed_timestamp_types_without_crashing():

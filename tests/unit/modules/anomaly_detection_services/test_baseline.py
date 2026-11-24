@@ -318,8 +318,8 @@ def test_service_capacity_pruning_and_duplicate_uid() -> None:
         max_services=1, retention_days=1
     )
     observation = Observation.from_zeek(flow(uid="same"))
-    module.detector.process(observation, "a", "client")
-    module.detector.process(observation, "a", "client")
+    module.detector.process(observation, "a", "client", local_service=True)
+    module.detector.process(observation, "a", "client", local_service=True)
     assert module.detector.services["a"].summary.count == 1
     second = Observation.from_zeek(flow(uid="capacity"))
     assert module.detector.process(second, "b", "client") == []
@@ -328,6 +328,91 @@ def test_service_capacity_pruning_and_duplicate_uid() -> None:
     module.detector.process(later, "a", "client")
     assert module.detector.services["a"].summary.count == 1
     assert "a" not in module.detector.deleted
+
+
+@pytest.mark.parametrize("pressure", ["services", "clients"])
+def test_remote_models_make_room_for_local_learning(pressure: str) -> None:
+    """Keep local baselines complete when Internet endpoints fill a limit.
+
+    Parameters:
+        pressure: Service-model or client-record capacity limit.
+    """
+    module = ModuleFactory().create_service_anomaly_obj(
+        max_services=2 if pressure == "services" else 3,
+        max_clients=2,
+    )
+    first = Observation.from_zeek(flow(uid="local-first"))
+    remote = Observation.from_zeek(flow(uid="remote-first"))
+    newcomer = Observation.from_zeek(flow(uid="local-new"))
+    module.detector.process(first, "local-a", "client-a", local_service=True)
+    module.detector.process(remote, "remote", "client-a")
+    target = "local-b" if pressure == "services" else "local-a"
+    module.detector.process(
+        newcomer, target, "client-b", local_service=True
+    )
+
+    assert "remote" not in module.detector.services
+    assert "remote" in module.detector.deleted
+    assert module.detector.client_count == 2
+    assert module.detector.services[target].clients_complete
+    assert module.detector.capacity_skips == 0
+
+
+def test_capacity_still_fails_conservatively_when_only_local_models_remain() -> None:
+    """Do not discard a local baseline to admit another local service."""
+    module = ModuleFactory().create_service_anomaly_obj(max_services=1)
+    module.detector.process(
+        Observation.from_zeek(flow(uid="local-a")),
+        "local-a", "client", local_service=True,
+    )
+    module.detector.process(
+        Observation.from_zeek(flow(uid="local-b")),
+        "local-b", "client", local_service=True,
+    )
+
+    assert list(module.detector.services) == ["local-a"]
+    assert module.detector.capacity_skips == 1
+
+
+def test_remote_service_churn_stops_at_capacity() -> None:
+    """Skip extra Internet endpoints without evicting on every new flow."""
+    module = ModuleFactory().create_service_anomaly_obj(max_services=1)
+    module.detector.process(
+        Observation.from_zeek(flow(uid="remote-a")),
+        "remote-a", "client",
+    )
+    module.detector.process(
+        Observation.from_zeek(flow(uid="remote-b")),
+        "remote-b", "client",
+    )
+
+    assert list(module.detector.services) == ["remote-a"]
+    assert module.detector.capacity_skips == 0
+    assert not module.detector.deleted
+
+
+def test_incomplete_local_client_model_retrains_without_novelty_alert() -> None:
+    """Discard truncated local clients and start a fresh training window."""
+    module = ModuleFactory().create_service_anomaly_obj(
+        training_hours=24, min_training_connections=1, min_training_days=1
+    )
+    module.detector.process(
+        Observation.from_zeek(flow(uid="known")),
+        "local", "client-a", local_service=True,
+    )
+    module.detector.services["local"].clients_complete = False
+
+    assert module.detector.retrain_incomplete_local_services() == 1
+    assert module.detector.client_count == 0
+    assert "local" in module.detector.deleted
+
+    reasons = module.detector.process(
+        Observation.from_zeek(flow(2, uid="returning")),
+        "local", "client-b", local_service=True,
+    )
+    assert reasons == []
+    assert module.detector.services["local"].clients_complete
+    assert "local" not in module.detector.deleted
 
 
 def test_train_detect_modes_and_rate_limits() -> None:

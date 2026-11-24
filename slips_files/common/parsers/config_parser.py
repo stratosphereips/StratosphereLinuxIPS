@@ -1597,6 +1597,20 @@ class ConfigParser(object):
             return ""
         return value.strip()
 
+    def regex_generator_max_store_size_mb(self) -> int:
+        """Read the generated regex store size limit.
+
+        Returns:
+            Maximum size in MiB, or zero when unlimited.
+        """
+        value = self.read_configuration(
+            "regex_generator", "max_store_size_mb", 2048
+        )
+        try:
+            return max(0, int(value))
+        except (TypeError, ValueError):
+            return 2048
+
     def regex_generator_store_rejected_regexes(self) -> bool:
         value = self.read_configuration(
             "regex_generator", "store_rejected_regexes", False
@@ -1627,6 +1641,39 @@ class ConfigParser(object):
         value = self.read_configuration("alert_summary", "enabled", False)
         if isinstance(value, bool):
             return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_explain_alerts(self) -> bool:
+        """Read the automatic alert summary switch.
+
+        Returns:
+            Whether new alerts receive summaries.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_alerts", True
+        )
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_explain_evidence(self) -> bool:
+        """Read the evidence explanation switch.
+
+        Returns:
+            Whether analysts may request evidence explanations.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_evidence", True
+        )
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_explain_evidence_groups(self) -> bool:
+        """Read the evidence-group explanation switch.
+
+        Returns:
+            Whether analysts may request group explanations.
+        """
+        value = self.read_configuration(
+            "alert_summary", "explain_evidence_groups", True
+        )
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def alert_summary_allowed_backends(self) -> list:

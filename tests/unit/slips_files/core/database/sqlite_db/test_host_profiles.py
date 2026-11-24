@@ -13,6 +13,42 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("operation, expected_target", [
+    ("request", False), ("reply", True),
+])
+def test_arp_request_does_not_confirm_target_presence(
+    tmp_path: Path, operation: str, expected_target: bool
+) -> None:
+    """Only an ARP reply confirms that its destination was addressed.
+
+    Parameters:
+        tmp_path: Isolated permanent host database.
+        operation: Parsed ARP operation.
+        expected_target: Whether the target gets a confirmed observation.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    network = {"local_network": "192.168.1.0/24",
+               "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(path, "run", lambda _: network, ["en0"])
+    store.observe_flow(SimpleNamespace(type_="arp", operation=operation,
+        interface="en0", starttime=100, saddr="192.168.1.20",
+        daddr="192.168.1.248", src_hw="02:00:00:00:00:20",
+        dst_hw="02:00:00:00:00:48" if expected_target else
+        "00:00:00:00:00:00"))
+    seen = HostProfileStore.observation_times(
+        path, ["gateway:aa:bb:cc:dd:ee:01"]
+    )
+    assert seen["192.168.1.20"] == 100
+    assert ("192.168.1.248" in seen) is expected_target
+    facts = HostProfileStore.read(path, "192.168.1.248")[0]["facts"]
+    assert any(
+        fact["kind"] == "arp_requested_by"
+        and fact["value"] == "192.168.1.20"
+        for fact in facts
+    ) is (operation == "request")
+
+
 @pytest.mark.parametrize("delayed", [False, True])
 def test_poll_gap_keeps_hotspot_hosts_on_the_hotspot(
     tmp_path: Path, delayed: bool

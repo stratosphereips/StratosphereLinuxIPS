@@ -237,6 +237,50 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
     assert "No accessible running" in capsys.readouterr().out
 
 
+def test_list_instances_across_checkouts(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
+    """List separate Slips checkouts without listing workers or unrelated scripts.
+
+    Parameters:
+        tmp_path: Directories for separate checkout fixtures.
+        capsys: Captured machine-wide listing.
+    """
+    _factory = ModuleFactory()
+    first_root = tmp_path / "first"
+    second_root = tmp_path / "second"
+    unrelated_root = tmp_path / "unrelated"
+    for root in (first_root, second_root):
+        (root / "slips_files").mkdir(parents=True)
+        (root / "modules").mkdir()
+        (root / "slips.py").touch()
+    unrelated_root.mkdir()
+    (unrelated_root / "slips.py").touch()
+    first = candidate(41001, first_root / "slips.py", "-i", "en0")
+    second = candidate(41002, second_root / "slips.py", "-D", "-i", "eth0")
+    worker = candidate(41003, second_root / "slips.py", "-D", "-i", "eth0")
+    worker.parents.return_value = [second]
+    unrelated = candidate(41004, unrelated_root / "slips.py", "-i", "eth0")
+    with patch.object(
+        control.psutil,
+        "process_iter",
+        return_value=[first, second, worker, unrelated],
+    ):
+        instances = control.list_instances(None)
+    assert [instance.pid for instance in instances] == [41001, 41002]
+    assert [instance.checkout for instance in instances] == [
+        first_root.resolve(),
+        second_root.resolve(),
+    ]
+    with patch.object(control, "web_ports_for_instance", return_value=[]):
+        control.print_instances(instances, all_checkouts=True)
+    listing = capsys.readouterr().out
+    assert "CHECKOUT" in listing
+    assert os.path.relpath(first_root, Path.cwd()) in listing
+    assert os.path.relpath(second_root, Path.cwd()) in listing
+    assert "41003" not in listing and "41004" not in listing
+
+
 @pytest.mark.parametrize("background", [False, True])
 def test_saved_viewer_discovery_and_listing(background: bool, capsys: pytest.CaptureFixture) -> None:
     """Find viewers for stopping while excluding them from capture conflicts.
@@ -372,8 +416,13 @@ def test_management_selection(arguments: list[str], count: int, selected: list[i
     """
     _factory = ModuleFactory()
     instances = [control.RunningInstance(41001 + index, 100.0, ()) for index in range(count)]
-    with patch.object(control, "list_instances", return_value=instances), patch.object(control, "stop_instances", return_value=0) as stop:
+    with patch.object(control, "list_instances", return_value=instances) as discover, patch.object(control, "stop_instances", return_value=0) as stop:
         assert control.handle_instance_command(arguments) == expected
+    discovery_scope = discover.call_args.args[0]
+    if arguments == ["--list-instances"]:
+        assert discovery_scope is None
+    else:
+        assert discovery_scope == Path(control.__file__).resolve().parents[2] / "slips.py"
     if selected:
         assert [instance.pid for instance in stop.call_args.args[0]] == selected
     else:

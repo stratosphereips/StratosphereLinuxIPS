@@ -245,7 +245,10 @@ class ShutdownMixin:
         # indicate that they're done processing using a semaphore
         # slips won't reach this function unless they are done already.
         # so no need to kill them last
-        pids_to_kill_last = [self.main.db.get_pid_of("evidence_handler")]
+        pids_to_kill_last = [
+            self.main.db.get_pid_of("evidence_handler"),
+            self.main.db.get_pid_of(Modules.T_CELL),
+        ]
 
         if self.main.args.blocking:
             pids_to_kill_last.append(self.main.db.get_pid_of(Modules.BLOCKING))
@@ -257,6 +260,12 @@ class ShutdownMixin:
             pids_to_kill_last.append(
                 self.main.db.get_pid_of(Modules.EXPORTING_ALERTS)
             )
+        pids_to_kill_last.extend(
+            (
+                self.main.db.get_pid_of(Modules.ALERT_SUMMARY),
+                self.main.db.get_pid_of(Modules.LLM_PROXY),
+            )
+        )
         # remove all None PIDs. this happens when a module in that list
         # isnt started in the current run. e.g. virustotal module starts then
         # stops immediately if no API is found. so its pid will be None.
@@ -273,6 +282,8 @@ class ShutdownMixin:
             else:
                 to_kill_first.append(process)
 
+        priority = {pid: index for index, pid in enumerate(pids_to_kill_last)}
+        to_kill_last.sort(key=lambda process: priority[process.pid])
         return to_kill_first, to_kill_last
 
     def wait_for_processes_to_finish(

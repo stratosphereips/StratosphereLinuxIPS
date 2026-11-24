@@ -342,6 +342,54 @@ def test_archive_size_rotation_and_cap(tmp_path: Path) -> None:
     db.close()
 
 
+def test_archive_batches_evidence_and_links_before_deleting_active_rows(
+    tmp_path: Path,
+) -> None:
+    """Move several simple detections with one archive commit.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    for identifier in ("first", "second", "third"):
+        db.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time) VALUES (?,1)",
+            (identifier,),
+        )
+        db.execute(
+            "INSERT INTO evidence_flows VALUES (?,?)",
+            (identifier, f"uid-{identifier}"),
+        )
+    history = DetectionHistory(db.conn, str(tmp_path))
+    assert history.archive_step("evidence", 100, 10, 2000) == 3
+    assert detection_total(db.conn, "evidence") == 0
+    with sqlite3.connect(next(history.directory.glob("*.sqlite"))) as archive:
+        assert archive.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == 3
+        assert archive.execute("SELECT COUNT(*) FROM evidence_flows").fetchone()[0] == 3
+    db.close()
+
+
+def test_fresh_archives_are_not_opened_during_expiration(
+    tmp_path: Path,
+) -> None:
+    """Check fresh archive age from its mtime without opening its database.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    history = DetectionHistory(db.conn, str(tmp_path))
+    history._open_archive("detections-2033-05-0001.sqlite").close()
+    with patch(
+        "slips_files.core.database.sqlite_db.detection_history.sqlite3.connect"
+    ) as connect:
+        assert history.expire_archives(time.time(), 30, 2048) == 0
+    connect.assert_not_called()
+    db.close()
+
+
 def test_nullable_summary_keys_are_aggregated(tmp_path: Path) -> None:
     """Combine nullable legacy rows without converting nulls to empty strings.
 

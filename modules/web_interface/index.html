@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261026-record-table">
+  <link rel="stylesheet" href="/style.css?v=20261123-immune">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -39,6 +39,8 @@
     <button class="tab" data-tab="arp-poisoning">ARP poisoning</button>
     <button class="tab" data-tab="p2p">P2P</button>
     <button class="tab" data-tab="p2p-graph">P2P Graph</button>
+    <button class="tab" data-tab="regex-generator">Regex Generator</button>
+    <button class="tab" data-tab="t-cell">T Cell</button>
     <button class="tab" data-tab="logs">Logs</button>
     <button class="tab" data-tab="configuration">Configuration</button>
     <button class="tab" data-tab="threat-intelligence">Threat Intelligence</button>
@@ -53,17 +55,50 @@
   </div>
 
   <main>
+    <section id="regex-generator" class="panel immune-panel" aria-labelledby="regex-title">
+      <div class="section-heading"><div><p class="eyebrow">IMMUNE MODULE</p><h2 id="regex-title">Regex Generator</h2></div><button class="secondary refresh-list" data-target="regex-generator">Refresh</button></div>
+      <p id="regex-status" class="muted">Loading generated pattern store…</p>
+      <div id="regex-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Accepted patterns by type</h3><div id="regex-types" class="immune-type-list"></div></article>
+      <article class="surface table-surface"><h3>Recent generated patterns</h3><div class="table-wrap"><table id="regex-table"><thead><tr><th data-sort="created_at">Created</th><th data-sort="regex_type">Type</th><th data-sort="regex">Pattern</th><th data-sort="status">Status</th><th data-sort="backend_alias">Backend</th></tr></thead><tbody></tbody></table></div></article>
+    </section>
+
+    <section id="t-cell" class="panel immune-panel" aria-labelledby="t-cell-title">
+      <div class="section-heading"><div><p class="eyebrow">IMMUNE MODULE</p><h2 id="t-cell-title">T Cell</h2></div><button class="secondary refresh-list" data-target="t-cell">Refresh</button></div>
+      <p id="t-cell-status" class="muted">Loading cell state…</p>
+      <div id="t-cell-summary" class="summary-grid"></div>
+      <article class="surface"><h3>Cell lifecycle</h3><p class="muted">Counts show the cells currently in each state. Recent transitions are listed below.</p>
+        <svg id="t-cell-cycle" class="t-cell-cycle" viewBox="0 0 920 250" role="img" aria-label="T Cell lifecycle: mature, recognized, activated, effector, memory, and anergic">
+          <defs><marker id="t-cell-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker></defs>
+          <path class="t-cell-edge" d="M142 78 H207"/>
+          <path class="t-cell-edge" d="M322 78 H387"/>
+          <path class="t-cell-edge" d="M502 78 H567"/>
+          <path class="t-cell-edge" d="M682 78 H747"/>
+          <path class="t-cell-edge" d="M265 135 V140"/>
+          <path class="t-cell-edge" d="M207 190 H85 V137"/>
+          <g class="t-cell-node" transform="translate(85 78)"><circle r="55"/><text y="-4">Mature</text><text id="t-cell-count-0" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(265 78)"><circle r="55"/><text y="-4">Recognized</text><text id="t-cell-count-1" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(445 78)"><circle r="55"/><text y="-4">Activated</text><text id="t-cell-count-3" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(625 78)"><circle r="55"/><text y="-4">Effector</text><text id="t-cell-count-4" y="20">0</text></g>
+          <g class="t-cell-node" transform="translate(805 78)"><circle r="55"/><text y="-4">Memory</text><text id="t-cell-count-5" y="20">0</text></g>
+          <g class="t-cell-node anergic" transform="translate(265 190)"><circle r="47"/><text y="-4">Anergic</text><text id="t-cell-count-2" y="20">0</text></g>
+        </svg>
+      </article>
+      <article class="surface table-surface"><h3>Current active cells</h3><div class="table-wrap"><table id="t-cell-cells"><thead><tr><th data-sort="profile_ip">Host</th><th data-sort="regex_type">Antigen type</th><th data-sort="antigen_value">Antigen</th><th data-sort="state_name">State</th><th data-sort="updated_at">Updated</th></tr></thead><tbody></tbody></table></div></article>
+      <article class="surface table-surface"><h3>Recent transitions</h3><div class="table-wrap"><table id="t-cell-transitions"><thead><tr><th data-sort="created_at">Time</th><th data-sort="profile_ip">Host</th><th data-sort="antigen_value">Antigen</th><th data-sort="to_state">Transition</th><th data-sort="reason">Reason</th></tr></thead><tbody></tbody></table></div></article>
+    </section>
+
     <section id="overview" class="panel active" aria-labelledby="overview-title">
       <h2 id="overview-title" class="visually-hidden">Overview</h2>
       <div class="overview-top">
-        <article id="overview-status" class="surface overview-status"><div class="overview-card-head"><span class="eyebrow">STATUS</span><button id="overview-alerts-link" class="overview-link" type="button" hidden>Open alerts →</button></div><h3 id="overview-status-title">Loading status…</h3><p id="overview-status-description" class="muted"></p><div id="overview-alert-hosts" class="overview-alert-hosts"></div></article>
+        <article id="overview-status" class="surface overview-status"><div class="overview-card-head"><span class="eyebrow">STATUS</span><div class="overview-status-actions"><button id="overview-alerts-link" class="overview-link" type="button" hidden>Open alerts →</button></div></div><h3 id="overview-status-title">Loading status…</h3><p id="overview-status-description" class="muted"></p><div id="overview-alert-hosts" class="overview-alert-hosts"></div></article>
         <article id="overview-system" class="surface overview-system"><span id="overview-system-label" class="eyebrow">SYSTEM</span><div id="overview-system-items" class="overview-system-items"></div></article>
       </div>
       <div id="summary-cards" class="summary-grid overview-summary"></div>
       <div class="overview-bottom">
         <article class="surface overview-network"><div id="network-states" class="network-states"></div></article>
         <article class="surface overview-load"><h3>Host load</h3><div id="system-load" class="metrics"></div></article>
-        <article class="surface overview-performance"><div class="overview-card-head"><h3>Slips performance</h3><select id="metrics-range" aria-label="Performance history range"><option value="5m">5 min</option><option value="15m" selected>15 min</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="all">Full run</option></select></div><div class="chart-grid"><figure><figcaption><span>CPU <button type="button" class="resource-info" aria-label="About Slips CPU" data-tooltip="CPU used by this run's Slips, Redis, Zeek and child processes, as a percentage of the machine's total CPU capacity across all logical cores.">ⓘ</button></span><span id="overview-cpu-peak"></span></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption><span>Memory <button type="button" class="resource-info" aria-label="About Slips memory" data-tooltip="Resident physical RAM (RSS) used by this run's Slips, Redis, Zeek and child processes. Swap is excluded.">ⓘ</button></span></figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
+        <article class="surface overview-performance"><div class="overview-card-head"><h3>Slips performance</h3><select id="metrics-range" aria-label="Performance history range"><option value="5m">5 min</option><option value="15m" selected>15 min</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="all">Full run</option></select></div><div id="performance-legend" class="performance-legend"><span class="performance-total">Slips total</span><span id="redis-run-legend" class="performance-redis-run" hidden></span><span id="redis-cache-legend" class="performance-redis-cache" hidden></span></div><div class="chart-grid"><figure><figcaption><span>CPU <button type="button" class="resource-info" aria-label="About Slips CPU" data-tooltip="CPU used by this run's Slips, Redis, Zeek and child processes, as a percentage of all logical cores. Redis lines show the corresponding server process and are included in the total.">ⓘ</button></span><span id="overview-cpu-peak"></span></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption><span>Memory <button type="button" class="resource-info" aria-label="About Slips memory" data-tooltip="Resident physical RAM (RSS) used by this run's Slips, Redis, Zeek and child processes. Redis lines show server process RSS, not memory attributed to a logical database. Swap is excluded.">ⓘ</button></span></figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
       </div>
       <article class="surface overview-throughput"><div class="overview-card-head"><h3>Flow throughput</h3><span id="throughput-range" class="muted"></span></div><div class="chart-grid"><figure><figcaption>Flows / s <span id="overview-fps-peak"></span></figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
       <div class="overview-detail-actions"><button class="secondary" id="refresh-overview">Refresh</button><button class="secondary" id="toggle-overview-details" aria-expanded="false" aria-controls="overview-details">More run details</button></div>
@@ -366,7 +401,7 @@
             <article class="surface"><h3>Network observations</h3><div id="host-networks-seen"></div><details class="host-extra"><summary id="host-saved-history-label">All saved identity clues and network names</summary><div id="host-permanent-profiles"></div></details></article>
           </div>
           <div class="host-center-column">
-            <article class="surface host-score-panel"><figure class="score-history-figure"><figcaption>Slips score <small><i class="chart-key average"></i>score <i class="chart-key peak"></i>peak <i class="chart-key threshold"></i>alert threshold</small></figcaption><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure><p id="host-score-history-status" class="score-history-status">Loading score history…</p></article>
+            <article class="surface host-score-panel"><figure class="score-history-figure"><figcaption><span>Slips score <small id="host-score-source"></small></span><small class="score-chart-legend"><span><i class="chart-key average"></i>score</span><span><i class="chart-key peak"></i>peak</span><span><i class="chart-key threshold"></i>alert threshold</span><span><i class="chart-key reset"></i>new time window or score drop</span></small></figcaption><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure><p id="host-score-history-status" class="score-history-status">Loading score history…</p></article>
             <article class="surface host-activity-panel"><div class="host-activity-tabs" role="tablist" aria-label="Host detections and traffic"><button data-host-activity="alerts" class="active" type="button" role="tab" aria-selected="true" aria-controls="host-alerts-panel">Alerts</button><button data-host-activity="evidence" type="button" role="tab" aria-selected="false" aria-controls="host-evidence-panel">Evidence</button><button data-host-activity="flows" type="button" role="tab" aria-selected="false" aria-controls="host-flows-panel">Flows</button></div>
               <div class="host-activity-controls"><label>Group by <select id="host-activity-group" aria-label="Group host activity"><option value="">No grouping</option></select></label><label id="host-activity-threat-label">Threat <select id="host-activity-threat" aria-label="Filter host activity by threat"><option value="">All threats</option><option value="critical">Critical</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option><option value="info">Info</option><option value="critical_or_more">Critical+</option><option value="high_or_more">High+</option><option value="medium_or_more">Medium+</option><option value="low_or_more">Low+</option><option value="info_or_more">Info+</option></select></label><input id="host-alert-search" type="search" aria-label="Search host alerts" placeholder="Search alerts…"><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search all evidence columns…" hidden><input id="host-flow-search" type="search" aria-label="Filter visible flows" placeholder="Search flows on this page…" hidden><span id="host-activity-group-note" class="muted" hidden></span></div>
               <div id="host-activity-filter-notice" class="host-activity-filter-notice" role="status" hidden></div>
@@ -401,6 +436,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261026-record-table"></script>
+  <script src="/app.js?v=20261123-immune"></script>
 </body>
 </html>
