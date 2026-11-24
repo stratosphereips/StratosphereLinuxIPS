@@ -250,7 +250,7 @@ function initFilterPopups() {
     ]],
   ];
   definitions.push(
-    ["overview", "Overview", "#overview-status .overview-card-head", "", []],
+    ["overview", "Overview", "#overview-status .overview-status-actions", "", []],
     ["host", "Host", "#host-detail-view .compact-toolbar", "", [
       [".excluded-visibility-toggle"], ["#host-range", "Range"],
       ["#host-from", "From"], ["#host-to", "To"],

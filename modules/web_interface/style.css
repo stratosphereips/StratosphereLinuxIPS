@@ -1243,6 +1243,9 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .overview-link:hover, .overview-link:focus-visible { color: #9bcaff; text-decoration: underline; }
 .overview-link[hidden] { display: none; }
 .overview-status { min-height: 122px; border-left: 3px solid var(--accent) !important; background: #0b1c1b !important; }
+.overview-status-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: .45rem; min-width: 0; margin-left: auto; }
+.overview-status-actions .filter-context { order: 1; max-width: 18ch; }
+.overview-status-actions .filter-popup-trigger { order: 2; }
 .overview-status.has-alerts { border-left-color: var(--danger) !important; background: #1b1015 !important; }
 #overview .eyebrow { margin: 0 0 .35rem; color: #75afa7; font-size: .72rem; letter-spacing: .1em; }
 .overview-status.has-alerts .eyebrow { color: #e7a4ae !important; }

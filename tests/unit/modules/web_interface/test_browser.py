@@ -6674,6 +6674,13 @@ def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, wid
             assert history.locator("option").first.inner_text() == "History · Active"
             assert page.locator(".topbar-actions > :last-child").get_attribute("class") == "run-state"
             assert page.locator(".run-state > :last-child").get_attribute("class") == "run-state-meta"
+            status = page.locator("#overview-status").bounding_box()
+            overview_filter = page.locator("#overview-filter-button").bounding_box()
+            assert status and overview_filter
+            assert status["x"] + status["width"] - overview_filter["x"] - overview_filter["width"] < 40
+            assert page.locator("#overview-filter-button").evaluate(
+                "node => node.parentElement.classList.contains('overview-status-actions')"
+            )
             checked = True
             for tab in ("overview", "alerts", "evidence", "hosts", "p2p", "p2p-graph", "firewall", "arp-poisoning"):
                 page.evaluate("tab => {switchTab(tab); clearTimeout(state.timer);}", tab)
