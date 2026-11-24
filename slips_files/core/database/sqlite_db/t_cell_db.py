@@ -300,9 +300,7 @@ class TCellSQLiteDB(_BaseTCellSQLiteDB):
         placeholders = ", ".join("?" for _ in normalized_states)
         rows = self.select(
             "cells",
-            condition=(
-                f"profile_ip = ? AND state IN ({placeholders})"
-            ),
+            condition=(f"profile_ip = ? AND state IN ({placeholders})"),
             params=(profile_ip, *normalized_states),
             order_by="updated_at DESC, created_at DESC",
         )
@@ -408,7 +406,9 @@ class TCellSQLiteDB(_BaseTCellSQLiteDB):
         profile_ip: str,
         regex_hash: str,
         since_ts: float,
-        exclude_observation_ids: list[int] | tuple[int, ...] | set[int] | None = None,
+        exclude_observation_ids: (
+            list[int] | tuple[int, ...] | set[int] | None
+        ) = None,
         exclude_observation_id: int | None = None,
     ) -> bool:
         condition = (
@@ -500,11 +500,13 @@ class TCellStorage:
         conf,
         output_dir: str,
         main_pid: int,
+        db=None,
     ):
         self.logger = logger
         self.conf = conf
         self.output_dir = output_dir
         self.main_pid = main_pid
+        self.db = db
         self.store_dir = self._resolve_store_dir()
         self.db = TCellSQLiteDB(
             self.logger,
@@ -513,7 +515,12 @@ class TCellStorage:
         )
 
     def _resolve_store_dir(self) -> str:
-        raw_store_dir, is_persistent = self._read_store_dir()
+        # file/pcap analyses never use the persistent store, so what they
+        # learn doesn't leak into the live permanent dir
+        is_running_non_stop = self.db is None or self.db.is_running_non_stop()
+        raw_store_dir, is_persistent = self._read_store_dir(
+            allow_persistent=is_running_non_stop
+        )
         store_dir = self._normalize_store_dir(raw_store_dir, is_persistent)
         store_dir.mkdir(parents=True, exist_ok=True)
         return str(store_dir)
@@ -542,9 +549,13 @@ class TCellStorage:
             relative_parts = ["t_cell"]
         return Path(self.output_dir).expanduser().joinpath(*relative_parts)
 
-    def _read_store_dir(self) -> tuple[str, bool]:
-        persistent_value = self._read_string_config(
-            "t_cell_persistent_store_dir"
+    def _read_store_dir(
+        self, allow_persistent: bool = True
+    ) -> tuple[str, bool]:
+        persistent_value = (
+            self._read_string_config("t_cell_persistent_store_dir")
+            if allow_persistent
+            else None
         )
         if persistent_value:
             return persistent_value, True
@@ -554,8 +565,10 @@ class TCellStorage:
             return value, False
 
         parser = ConfigParser()
-        persistent_getter = getattr(parser, "t_cell_persistent_store_dir", None)
-        if callable(persistent_getter):
+        persistent_getter = getattr(
+            parser, "t_cell_persistent_store_dir", None
+        )
+        if allow_persistent and callable(persistent_getter):
             try:
                 persistent_value = persistent_getter()
             except TypeError:
@@ -638,7 +651,9 @@ class TCellStorage:
         profile_ip: str,
         regex_hash: str,
         since_ts: float,
-        exclude_observation_ids: list[int] | tuple[int, ...] | set[int] | None = None,
+        exclude_observation_ids: (
+            list[int] | tuple[int, ...] | set[int] | None
+        ) = None,
         exclude_observation_id: int | None = None,
     ) -> bool:
         return self.db.has_recent_regex_activity(

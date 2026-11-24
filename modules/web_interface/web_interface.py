@@ -246,7 +246,12 @@ class WebInterface(IModule):
         """
         utils.drop_root_privs_permanently()
         port = self.conf.web_interface_port
-        bind_mode = self.conf.web_interface_bind
+        # file analyses only listen on localhost
+        bind_mode = (
+            self.conf.web_interface_bind
+            if self.db.is_running_non_stop()
+            else "localhost"
+        )
         bind_address = self._bind_address(bind_mode)
         if not bind_address:
             self.print(
@@ -302,6 +307,8 @@ class WebInterface(IModule):
             bind_address,
             "--port",
             str(port),
+            "--permanent-dir",
+            os.path.abspath(self.conf.permanent_dir()),
             "--redis-port",
             str(self.redis_port),
             "--output-dir",

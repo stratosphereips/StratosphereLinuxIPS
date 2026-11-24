@@ -4,8 +4,6 @@ import argparse
 from copy import deepcopy
 from pathlib import Path
 
-from modules.supported_module_names import Modules
-
 
 def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
     """Identify an offline analysis with its own output and Redis instance.
@@ -44,12 +42,15 @@ def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
 
 
 def isolated_analysis_config(config: dict, output: str) -> dict:
-    """Override writable paths for one analysis without editing its source.
+    """Build the settings an isolated analysis actually runs with.
 
-    The permanent dir, whitelist and threat intelligence download dir are
-    deliberately left as configured, so the analysis reuses the Redis
-    password and web login stored in the permanent dir. No permanent dir is
-    ever created inside the output dir.
+    ConfigParser keeps only what slips.yaml says. Code that reads one of
+    the settings below checks db.is_running_non_stop() and applies the
+    same override for file analyses; this function only records them in
+    the metadata dir. Keep both in sync. Every path setting
+    (permanent dir, whitelist, feed downloads, persistent stores) is left as
+    configured; modules that must not write into the live permanent dir
+    during a file analysis choose their own output-dir path in code.
 
     Parameters:
         config: Source configuration to reuse.
@@ -66,9 +67,6 @@ def isolated_analysis_config(config: dict, output: str) -> dict:
         },
         "web_interface": {"bind": "localhost"},
         "update": {"auto_update_slips": False},
-        # an empty persistent dir keeps these stores inside the output dir
-        Modules.REGEX_GENERATOR.value: {"persistent_store_dir": ""},
-        Modules.T_CELL.value: {"persistent_store_dir": ""},
     }
     for section, values in overrides.items():
         result[section] = {**(result.get(section) or {}), **values}

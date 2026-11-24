@@ -13,6 +13,9 @@ from typing import (
 )
 
 from modules.supported_module_names import Modules
+from slips_files.common.parsers.analysis_config import (
+    isolated_analysis_config,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import header_line
 
@@ -21,6 +24,15 @@ class MetadataManager:
     def __init__(self, main):
         self.main = main
         self.enable_metadata = self.main.conf.enable_metadata()
+
+    def _is_metadata_enabled(self) -> bool:
+        """
+        File analyses always keep metadata, whatever slips.yaml says.
+
+        Returns:
+            True when the metadata dir should be written.
+        """
+        return self.enable_metadata or not self.main.db.is_running_non_stop()
 
     def get_pid_using_port(self, port):
         """
@@ -47,12 +59,16 @@ class MetadataManager:
 
         config_file = self.main.args.config or "config/slips.yaml"
         shutil.copy(config_file, metadata_dir)
-        if getattr(self.main.conf, "isolated_analysis", False) is True:
+        if not self.main.db.is_running_non_stop():
+            # record the settings this run actually used
             captured_config = os.path.join(
                 metadata_dir, os.path.basename(config_file)
             )
+            effective_config = isolated_analysis_config(
+                self.main.conf.config, self.main.args.output
+            )
             with open(captured_config, "w", encoding="utf-8") as target:
-                yaml.safe_dump(self.main.conf.config, target, sort_keys=False)
+                yaml.safe_dump(effective_config, target, sort_keys=False)
 
         if isinstance(getattr(self.main.args, "web_port", None), int):
             captured_config = os.path.join(
@@ -96,7 +112,7 @@ class MetadataManager:
         Add the analysis end date to the metadata file and
         the db for the web interface to display
         """
-        if not self.enable_metadata:
+        if not self._is_metadata_enabled():
             return
 
         end_date = utils.convert_ts_format(end_date, utils.alerts_format)
@@ -209,6 +225,6 @@ class MetadataManager:
         return modified_ips_in_the_last_tw, modified_profiles
 
     def add_metadata_if_enabled(self):
-        if not self.enable_metadata:
+        if not self._is_metadata_enabled():
             return
         self.info_path = self._add_metadata()

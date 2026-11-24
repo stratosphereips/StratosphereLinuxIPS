@@ -1756,6 +1756,7 @@ class ModuleFactory:
 
         conf = Mock()
         conf.web_interface_port = 55000
+        conf.permanent_dir = Mock(return_value="permanent")
         module = WebInterface(
             logger=self.logger,
             output_dir="output",

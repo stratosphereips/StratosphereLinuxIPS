@@ -138,7 +138,8 @@ class WebInterfaceShutdownMixin:
         bind_mode = getattr(self.main.conf, "web_interface_bind", "localhost")
         if not isinstance(bind_mode, str):
             bind_mode = "localhost"
-        if bind_mode != "interface":
+        # file analyses only listen on localhost
+        if bind_mode != "interface" or not self.main.db.is_running_non_stop():
             return "localhost"
         for interface in utils.get_all_interfaces(self.main.args):
             candidate = self.main.db.get_host_ip(interface)

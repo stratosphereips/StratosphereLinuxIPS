@@ -166,16 +166,27 @@ class RunMismatchError(RuntimeError):
 class RunDataReader:
     """Read bounded live and historical data for exactly one Slips run."""
 
-    def __init__(self, redis_port: int, output_dir: str) -> None:
+    # the run's parameters.permanent_dir. the server process is started
+    # without the run's -c, so it can't read this from ConfigParser()
+    permanent_dir: Path = Path("permanent")
+
+    def __init__(
+        self,
+        redis_port: int,
+        output_dir: str,
+        permanent_dir: str = "permanent",
+    ) -> None:
         """
         Initialize run data sources.
 
         Parameters:
             redis_port: Redis port assigned to this run.
             output_dir: Output directory assigned to this run.
+            permanent_dir: parameters.permanent_dir of this run.
         """
         self.redis_port = redis_port
         self.output_dir = Path(output_dir)
+        self.permanent_dir = Path(permanent_dir)
         self.sqlite_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = (
             self.output_dir / "web_interface" / "history.sqlite"
@@ -4192,7 +4203,7 @@ class RunDataReader:
         ]
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
-        trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
+        trust_path = self.permanent_dir / "p2p_trust_runtime" / "trustdb.db"
         trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
         latest_reliability: Dict[str, Dict[str, Any]] = {}
@@ -4740,13 +4751,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--redis-port", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--permanent-dir", default="permanent")
     return parser.parse_args()
 
 
 def main() -> None:
     """Start the single-run server on the configured IPv4 address."""
     args = parse_arguments()
-    reader = RunDataReader(args.redis_port, args.output_dir)
+    reader = RunDataReader(
+        args.redis_port, args.output_dir, args.permanent_dir
+    )
     reader.validate_run_identity()
     server = SlipsHTTPServer(
         (args.bind_address, args.port), RequestHandler, reader
