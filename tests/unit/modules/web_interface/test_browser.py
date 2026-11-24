@@ -2635,6 +2635,8 @@ def test_blocking_only_whitelist_editor_in_chrome() -> None:
             editor.id = 'blocking-test'; document.body.append(editor);
         }""")
         editor = page.locator("#blocking-test")
+        assert editor.get_attribute("open") is None
+        editor.locator("summary").click()
         selects = editor.locator("select")
         selects.nth(2).select_option("blocking")
         assert selects.nth(1).input_value() == "both"
@@ -4766,6 +4768,12 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert .24 < group_pane.bounding_box()["width"] / workspace_width < .26
         assert .24 < records_pane.bounding_box()["width"] / workspace_width < .26
         assert page.locator("#evidence-detail").bounding_box()["width"] > .47 * workspace_width
+        whitelist = page.locator("#evidence-detail .whitelist-editor")
+        assert whitelist.get_attribute("open") is None
+        assert not whitelist.locator(".whitelist-form").is_visible()
+        whitelist.locator("summary").click()
+        assert whitelist.locator(".whitelist-form").is_visible()
+        whitelist.locator("summary").click()
         assert page.locator(".evidence-detail-columns").evaluate("element => getComputedStyle(element).gridTemplateColumns.split(' ').length") == 1
         assert page.locator(".evidence-detail-banner").evaluate("element => getComputedStyle(element).flexDirection") == "column"
         page.set_viewport_size({"width": 2400, "height": 1000})
@@ -5156,6 +5164,8 @@ def test_source_destination_port_whitelist_editor_in_chrome(source: str, encoded
             editor.id = 'port-test'; document.body.append(editor);
         }""", source)
         editor = page.locator("#port-test")
+        assert editor.get_attribute("open") is None
+        editor.locator("summary").click()
         port = editor.locator(".whitelist-dst-port")
         assert port.is_disabled()
         assert "restart" in editor.locator(".whitelist-dst-port-hint").inner_text().lower()
@@ -6462,6 +6472,12 @@ def test_alert_identity_hierarchy_and_review_at_bottom(theme: str, width: int) -
             assert page.locator("#alerts-host-list").evaluate("node => node.scrollWidth <= node.clientWidth")
             assert page.locator("#alerts-detail").evaluate("node => node.lastElementChild.classList.contains('review-editor')")
             assert page.locator("#alerts-detail .investigation-list").inner_text()
+            whitelist = page.locator("#alerts-detail .whitelist-editor")
+            assert whitelist.is_hidden()
+            page.evaluate("byId('alerts-detail-pane').hidden = false")
+            page.locator("#alerts-detail").get_by_role("button", name="Whitelist", exact=True).click()
+            assert whitelist.get_attribute("open") is not None
+            assert whitelist.locator(".whitelist-form").is_visible()
             page.evaluate("() => openAlert(alertFixture)")
             assert page.locator("#drawer-body").evaluate("node => node.lastElementChild.classList.contains('review-editor')")
             assert not errors, errors
@@ -6527,6 +6543,9 @@ def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> 
                 protocol_flows:[{flow:{host:'icanhazip.com:80',uri:'/',smac:'aa:bb:cc:dd:ee:ff'}}]}]);
         }""", theme)
         editor = page.locator("#host-test")
+        assert editor.get_attribute("open") is None
+        assert page.locator("#whitelists-editor .whitelist-editor").get_attribute("open") is None
+        editor.locator("summary").click()
         selects = editor.locator("select")
         assert selects.nth(0).locator("option").evaluate_all("options => options.map(o=>o.value)") == [
             "ip", "domain", "organization", "mac", "uri"

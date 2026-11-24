@@ -3326,6 +3326,7 @@ function renderAlertDetailPane(record) {
   editor.hidden = true;
   whitelist.addEventListener("click", () => {
     editor.hidden = !editor.hidden;
+    editor.open = !editor.hidden;
     whitelist.setAttribute("aria-expanded", String(!editor.hidden));
   });
   container.append(editor, investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"));
@@ -5297,10 +5298,14 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
  * @returns {Element} Editor with its own submit handler.
  */
 function whitelistEditor(kind, record = null, host = null) {
-  const section = document.createElement("section");
+  const section = document.createElement("details");
   section.className = "surface whitelist-editor";
+  const summary = document.createElement("summary");
+  const title = host ? "Whitelist this host" : record
+    ? "Whitelist future matches from this evidence" : "Add a whitelist rule";
+  summary.append(text("span", title));
   section.append(
-    text("h3", host ? "Whitelist this host" : record ? "Whitelist future matches from this evidence" : "Add a whitelist rule"),
+    summary,
     text("p", "Choose an IP, domain / HTTP host, organization, MAC address, or URI path. Existing evidence stays in the record.", "muted"),
   );
   const form = document.createElement("form");
@@ -10781,7 +10786,9 @@ bindFilters("hostAlerts", ["host-alert-search"], loadHostAlerts);
 byId("host-whitelist-action").addEventListener("click", () => {
   if (!state.host) return;
   openDrawer("HOST WHITELIST", state.host.user_name || state.host.ip);
-  byId("drawer-body").append(whitelistEditor("host", null, state.host));
+  const editor = whitelistEditor("host", null, state.host);
+  editor.open = true;
+  byId("drawer-body").append(editor);
 });
 byId("hosts-alerts-only").addEventListener("change", () => {
   resetPage("hosts");
