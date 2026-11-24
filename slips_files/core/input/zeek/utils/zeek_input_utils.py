@@ -5,7 +5,6 @@ import datetime
 import json
 import os
 import shlex
-import signal
 import subprocess
 import threading
 import time
@@ -15,7 +14,6 @@ from re import split
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from slips_files.common.slips_utils import utils
-from modules.supported_module_names import Modules
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 from managers.process_manager.owned_processes import OwnedProcesses
@@ -435,7 +433,11 @@ class ZeekInputUtils:
         """
 
         without_ext = Path(self.input.given_path).stem
-        if self.input.conf.store_zeek_files_in_the_output_dir():
+        # file analyses always keep zeek files in their own output dir
+        if (
+            self.input.conf.store_zeek_files_in_the_output_dir()
+            or not self.is_running_non_stop
+        ):
             zeek_dir = Path(self.input.args.output) / "zeek_files"
         else:
             zeek_dir = Path(f"zeek_files_{without_ext}")

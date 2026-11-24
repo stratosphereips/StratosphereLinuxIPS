@@ -23,7 +23,6 @@ from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config,
     isolated_analysis_output,
 )
 from managers.process_manager.instance_control import (
@@ -153,10 +152,7 @@ class RedisManager:
                 config = yaml.safe_load(source) or {}
             if not isinstance(config, dict):
                 raise ValueError("Invalid Slips configuration")
-            analysis_output = isolated_analysis_output(arguments)
-            other_is_isolated = analysis_output is not None
-            if other_is_isolated:
-                config = isolated_analysis_config(config, analysis_output)
+            other_is_isolated = isolated_analysis_output(arguments) is not None
             parameters = config.get("parameters") or {}
             other_web = config.get("web_interface") or {}
             if not isinstance(parameters, dict) or not isinstance(
@@ -207,8 +203,7 @@ class RedisManager:
         # isolated analyses (-f) reuse the configured permanent dir (redis
         # password, web login) and never write learned data to it
         sharing_is_expected = (
-            getattr(self.main.conf, "isolated_analysis", False) is True
-            or other_is_isolated
+            isolated_analysis_output() is not None or other_is_isolated
         )
         other_permanent = (
             other_cwd / (parameters.get("permanent_dir") or "permanent")
@@ -242,7 +237,8 @@ class RedisManager:
         """Protect history mode from a second run sharing its resources."""
         if getattr(self.main.args, "keep_history", False) is True:
             return
-        if getattr(self.main.conf, "isolated_analysis", False) is True:
+        # runs before redis is up, so tell from the CLI args
+        if isolated_analysis_output() is not None:
             for instance in list_instances(Path("slips.py")):
                 self._assert_history_run_isolated(psutil.Process(instance.pid))
             return
