@@ -377,6 +377,13 @@ using `-m` or a separate `-P` port can run alongside it, as described above.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 
+Relative `-o` and `parameters.permanent_dir` paths are resolved from the
+checkout where Slips starts. A different Git worktree therefore has separate
+detections and saved network names even if the command text is identical.
+To continue one history from another worktree, stop the previous run first,
+then point both paths to the existing output and permanent directories.
+`--keep-history` does not import data from the other worktree.
+
 In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
 raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
 default. It also targets a 512 MiB logical database size. When over that
