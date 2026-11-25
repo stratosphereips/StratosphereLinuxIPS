@@ -11,6 +11,7 @@ import sys
 import time
 import subprocess
 import yaml
+from dataclasses import dataclass
 from typing import Dict, Union
 from pathlib import Path
 
@@ -47,6 +48,18 @@ class UserCancelledErr(Exception):
 
 
 DEFAULT_REDIS_PORT = 6379
+
+
+@dataclass(frozen=True)
+class OtherRunSettings:
+    """What another running Slips uses, read from its command and config."""
+
+    pid: int
+    args: argparse.Namespace
+    cwd: Path
+    parameters: dict
+    web_config: dict
+    web_port: int
 
 
 class RedisManager:
@@ -93,24 +106,7 @@ class RedisManager:
         flows_db = output_dir / "databases" / "flows.sqlite"
         has_history = flows_db.is_file()
         if has_history:
-            metadata = output_dir / "metadata" / "info.txt"
-            if not metadata.is_file():
-                raise SystemExit(
-                    f"--keep-history needs {metadata} to verify the interface."
-                )
-            previous_input = next(
-                (
-                    line.removeprefix("File: ").strip()
-                    for line in metadata.read_text().splitlines()
-                    if line.startswith("File: ")
-                ),
-                "",
-            )
-            if previous_input != args.interface:
-                raise SystemExit(
-                    "--keep-history output belongs to "
-                    f"{previous_input or 'an unknown input'}, not {args.interface}."
-                )
+            self._assert_saved_history_matches_interface(output_dir)
 
         for process in psutil.process_iter(attrs=["pid", "cmdline"]):
             if process.info["pid"] == os.getpid():
@@ -119,6 +115,162 @@ class RedisManager:
             if any(os.path.basename(part) == "slips.py" for part in command):
                 self._assert_history_run_isolated(process)
         return has_history
+
+    def _assert_saved_history_matches_interface(
+        self, output_dir: Path
+    ) -> None:
+        """Refuse to add this interface's traffic to another input's history.
+
+        Parameters:
+            output_dir: Output dir holding the saved history.
+        """
+        metadata = output_dir / "metadata" / "info.txt"
+        if not metadata.is_file():
+            raise SystemExit(
+                f"--keep-history needs {metadata} to verify the interface."
+            )
+        previous_input = next(
+            (
+                line.removeprefix("File: ").strip()
+                for line in metadata.read_text().splitlines()
+                if line.startswith("File: ")
+            ),
+            "",
+        )
+        if previous_input != self.main.args.interface:
+            raise SystemExit(
+                "--keep-history output belongs to "
+                f"{previous_input or 'an unknown input'}, "
+                f"not {self.main.args.interface}."
+            )
+
+    def _read_other_run_settings(
+        self, process: psutil.Process, arguments: tuple[str, ...]
+    ) -> OtherRunSettings:
+        """Read what another Slips run uses from its command and config file.
+
+        Parameters:
+            process: Other Slips process.
+            arguments: Arguments following slips.py in its command.
+
+        Returns:
+            Settings needed to tell whether that run shares our resources.
+        """
+        parser = argparse.ArgumentParser(
+            add_help=False, allow_abbrev=False, exit_on_error=False
+        )
+        parser.add_argument("-m", "--multiinstance", action="store_true")
+        parser.add_argument("-P", "--port")
+        parser.add_argument("-o", "--output")
+        parser.add_argument("-c", "--config", default="config/slips.yaml")
+        parser.add_argument("-cc", "--clearcache", action="store_true")
+        parser.add_argument("-w", "--webinterface", action="store_true")
+        parser.add_argument("--web-port", type=int)
+        other_args, _ = parser.parse_known_args(arguments)
+        cwd = Path(process.cwd())
+        with (cwd / other_args.config).open(encoding="utf-8") as source:
+            config = yaml.safe_load(source) or {}
+        if not isinstance(config, dict):
+            raise ValueError("Invalid Slips configuration")
+        analysis_output = isolated_analysis_output(arguments)
+        if analysis_output is not None:
+            config = isolated_analysis_config(config, analysis_output)
+        parameters = config.get("parameters") or {}
+        web_config = config.get("web_interface") or {}
+        if not isinstance(parameters, dict) or not isinstance(
+            web_config, dict
+        ):
+            raise ValueError("Invalid Slips configuration sections")
+        web_port = (
+            other_args.web_port
+            if other_args.web_port is not None
+            else int(web_config.get("port", 55000))
+        )
+        return OtherRunSettings(
+            pid=process.pid,
+            args=other_args,
+            cwd=cwd,
+            parameters=parameters,
+            web_config=web_config,
+            web_port=web_port,
+        )
+
+    def _assert_redis_port_not_shared(
+        self, current_port: int, other_port: int, other: OtherRunSettings
+    ) -> None:
+        """Reject a run on the same Redis port, unless one picks a free port.
+
+        Parameters:
+            current_port: Redis port of this run.
+            other_port: Redis port of the other run.
+            other: Settings of the other run.
+        """
+        if current_port != other_port:
+            return
+        this_picks_free_port = (
+            self.main.args.multiinstance is True and not self.main.args.port
+        )
+        other_picks_free_port = (
+            other.args.multiinstance and not other.args.port
+        )
+        if this_picks_free_port or other_picks_free_port:
+            return
+        raise SystemExit(
+            "Another Slips run uses the history Redis port "
+            f"{current_port} (PID {other.pid}). "
+            "Use -m or -P <unused-port> for the separate analysis."
+        )
+
+    def _assert_data_dirs_not_shared(self, other: OtherRunSettings) -> None:
+        """Reject a run whose output or permanent dir overlaps with ours.
+
+        Parameters:
+            other: Settings of the other run.
+        """
+        if not self.main.args.output or not other.args.output:
+            raise SystemExit(
+                "Concurrent history runs require separate explicit -o paths."
+            )
+        output = Path(self.main.args.output).resolve()
+        other_output = (other.cwd / other.args.output).resolve()
+        permanent = Path(self.main.conf.permanent_dir()).resolve()
+        other_permanent = (
+            other.cwd / (other.parameters.get("permanent_dir") or "permanent")
+        ).resolve()
+        if (
+            output.is_relative_to(other_output)
+            or other_output.is_relative_to(output)
+            or permanent.is_relative_to(other_output)
+            or other_permanent.is_relative_to(output)
+            or permanent == other_permanent
+        ):
+            raise SystemExit(
+                "Another Slips run shares output or persistent data. "
+                "Use separate -o and parameters.permanent_dir paths."
+            )
+
+    def _assert_web_port_not_shared(self, other: OtherRunSettings) -> None:
+        """Reject a run serving its web interface on our web port.
+
+        Parameters:
+            other: Settings of the other run.
+        """
+        this_has_web = (
+            self.main.args.webinterface is True
+            or self.main.conf.web_interface_enabled()
+        )
+        other_has_web = other.args.webinterface or other.web_config.get(
+            "enabled", False
+        )
+        if (
+            this_has_web
+            and other_has_web
+            and self.main.conf.web_interface_port == other.web_port
+        ):
+            raise SystemExit(
+                "Another Slips run uses this web port. "
+                "Use --web-port <unused-port> for the separate analysis."
+            )
 
     def _assert_history_run_isolated(self, process: psutil.Process) -> None:
         """Reject resources shared with a concurrent history-preserving run.
@@ -135,40 +287,10 @@ class RedisManager:
         arguments = capture_arguments(command)
         if arguments is None:
             return
-        parser = argparse.ArgumentParser(
-            add_help=False, allow_abbrev=False, exit_on_error=False
-        )
-        parser.add_argument("-m", "--multiinstance", action="store_true")
-        parser.add_argument("-P", "--port")
-        parser.add_argument("-o", "--output")
-        parser.add_argument("-c", "--config", default="config/slips.yaml")
-        parser.add_argument("-cc", "--clearcache", action="store_true")
-        parser.add_argument("-w", "--webinterface", action="store_true")
-        parser.add_argument("--web-port", type=int)
         try:
-            other, _ = parser.parse_known_args(arguments)
-            other_cwd = Path(process.cwd())
-            config_path = other_cwd / other.config
-            with config_path.open(encoding="utf-8") as source:
-                config = yaml.safe_load(source) or {}
-            if not isinstance(config, dict):
-                raise ValueError("Invalid Slips configuration")
-            analysis_output = isolated_analysis_output(arguments)
-            if analysis_output is not None:
-                config = isolated_analysis_config(config, analysis_output)
-            parameters = config.get("parameters") or {}
-            other_web = config.get("web_interface") or {}
-            if not isinstance(parameters, dict) or not isinstance(
-                other_web, dict
-            ):
-                raise ValueError("Invalid Slips configuration sections")
-            other_web_port = (
-                other.web_port
-                if other.web_port is not None
-                else int(other_web.get("port", 55000))
-            )
+            other = self._read_other_run_settings(process, arguments)
             current_port = int(self.main.args.port or DEFAULT_REDIS_PORT)
-            other_port = int(other.port or DEFAULT_REDIS_PORT)
+            other_port = int(other.args.port or DEFAULT_REDIS_PORT)
         except (
             OSError,
             psutil.Error,
@@ -182,54 +304,9 @@ class RedisManager:
                 "leaving the existing run untouched."
             ) from error
 
-        if (
-            current_port == other_port
-            and not (
-                self.main.args.multiinstance is True
-                and not self.main.args.port
-            )
-            and not (other.multiinstance and not other.port)
-        ):
-            raise SystemExit(
-                "Another Slips run uses the history Redis port "
-                f"{current_port} (PID {process.pid}). "
-                "Use -m or -P <unused-port> for the separate analysis."
-            )
-
-        if not self.main.args.output or not other.output:
-            raise SystemExit(
-                "Concurrent history runs require separate explicit -o paths."
-            )
-        output = Path(self.main.args.output).resolve()
-        other_output = (other_cwd / other.output).resolve()
-        permanent = Path(self.main.conf.permanent_dir()).resolve()
-        other_permanent = (
-            other_cwd / (parameters.get("permanent_dir") or "permanent")
-        ).resolve()
-        if (
-            output.is_relative_to(other_output)
-            or other_output.is_relative_to(output)
-            or permanent.is_relative_to(other_output)
-            or other_permanent.is_relative_to(output)
-            or permanent == other_permanent
-        ):
-            raise SystemExit(
-                "Another Slips run shares output or persistent data. "
-                "Use separate -o and parameters.permanent_dir paths."
-            )
-
-        if (
-            (
-                self.main.args.webinterface is True
-                or self.main.conf.web_interface_enabled()
-            )
-            and (other.webinterface or other_web.get("enabled", False))
-            and self.main.conf.web_interface_port == other_web_port
-        ):
-            raise SystemExit(
-                "Another Slips run uses this web port. "
-                "Use --web-port <unused-port> for the separate analysis."
-            )
+        self._assert_redis_port_not_shared(current_port, other_port, other)
+        self._assert_data_dirs_not_shared(other)
+        self._assert_web_port_not_shared(other)
 
     def reject_active_history_run(self) -> None:
         """Protect history mode from a second run sharing its resources."""
