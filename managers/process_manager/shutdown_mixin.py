@@ -14,7 +14,7 @@ from datetime import datetime
 from multiprocessing import Process
 from multiprocessing.process import BaseProcess
 from multiprocessing.queues import Queue as MultiprocessingQueue
-from typing import List, Optional, Tuple
+from typing import Callable, List, Optional, Tuple
 
 from modules.supported_module_names import Modules
 from managers.process_manager.owned_processes import OwnedProcesses
@@ -807,6 +807,129 @@ class ShutdownMixin:
             return min(configured, self.INTERRUPT_SHUTDOWN_GRACE_SECONDS)
         return configured
 
+    def _wait_for_modules_to_stop(
+        self,
+        to_kill_first: List[Process],
+        to_kill_last: List[Process],
+        deadline: float,
+    ) -> None:
+        """
+        Keep waiting for the modules to stop until the deadline passes.
+
+        Parameters:
+            to_kill_first: Processes to stop before the final group.
+            to_kill_last: Processes that should stop after the first group.
+            deadline: Monotonic time at which the shutdown wait ends.
+        """
+        while time.monotonic() < deadline:
+            self._remember_shutdown_processes()
+            to_kill_first, to_kill_last = self.shutdown_interactive(
+                to_kill_first, to_kill_last, deadline
+            )
+            if not to_kill_first and not to_kill_last:
+                break
+
+    def _stop_modules_within_deadline(
+        self, deadline: float, timeout: float, print: Callable
+    ) -> str:
+        """
+        Tell the modules to stop and wait for them until the deadline.
+
+        Parameters:
+            deadline: Monotonic time at which the shutdown wait ends.
+            timeout: Seconds the modules were given to stop.
+            print: Print function for the current Slips mode.
+
+        Returns:
+            Why the remaining modules have to be killed, or an empty
+            string when they all stopped in time.
+        """
+        shutdown_reason = ""
+        to_kill_first, to_kill_last = self.get_hitlist_in_order()
+        stop_notified = self._notify_shutdown_event(
+            self.termination_event, deadline
+        )
+        try:
+            if self.core_module_failure or not stop_notified:
+                # dont wait for failed core modules to stop
+                self.kill_all_children(force=True)
+                shutdown_reason = (
+                    "Core module failure."
+                    if self.core_module_failure
+                    else "Worker stop notification failed."
+                )
+                self.force_shutdown_requested = True
+            else:
+                self._wait_for_modules_to_stop(
+                    to_kill_first, to_kill_last, deadline
+                )
+        except KeyboardInterrupt:
+            # either the user wants to kill the remaining modules
+            # (pressed ctrl +c again)
+            # or slips was stuck looping for too long that the OS
+            # sent an automatic sigint to kill slips
+            # pass to kill the remaining modules
+            shutdown_reason = (
+                "User pressed ctr+c or Slips was killed by the OS"
+            )
+            self.shutdown_signal_received = True
+            self.force_shutdown_requested = True
+        if time.monotonic() >= deadline:
+            # getting here means we're killing them bc of the timeout
+            # not getting here means we're killing them bc of double
+            # ctr+c OR they terminated successfully
+            shutdown_reason = (
+                f"Killing modules that did not stop within "
+                f"{timeout:g} seconds."
+            )
+            print(shutdown_reason)
+            self.force_shutdown_requested = True
+        return shutdown_reason
+
+    def _wrap_up_analysis(self, normal_completion: bool) -> float:
+        """
+        Store the results and release what the analysis used, once the
+        modules are stopped.
+
+        Parameters:
+            normal_completion: Whether Slips finished without being forced.
+
+        Returns:
+            Analysis duration in minutes.
+        """
+        analysis_time, end_date = self.get_analysis_time()
+        self.main.metadata_man.set_analysis_end_date(end_date)
+        self._handle_firewall_after_analysis()
+        self._handle_web_interface_after_analysis(normal_completion)
+
+        if not self.is_slips_live_updating_event.is_set():
+            self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
+
+            if self.main.conf.export_labeled_flows():
+                format_ = self.main.conf.export_labeled_flows_to().lower()
+                self.main.db.export_labeled_flows(format_)
+
+            self.main.store_zeek_dir_copy()
+            self.main.delete_zeek_files()
+
+        self.main.profilers_manager.cpu_profiler_release()
+        self.main.profilers_manager.memory_profiler_release()
+
+        self.main.db.close_all_dbs()
+        if not self.is_slips_live_updating_event.is_set():
+            self.main.redis_man.stop_redis_server_after_analysis()
+        return analysis_time
+
+    def _force_stop_after_interrupted_shutdown(self) -> None:
+        """Kill the workers and the web interface when shutdown is cut short."""
+        self.shutdown_signal_received = True
+        self.force_shutdown_requested = True
+        self.children = multiprocessing.active_children()
+        self.kill_all_children(force=True)
+        if self._is_web_interface_enabled():
+            port = int(self.main.conf.web_interface_port)
+            self._stop_web_interface(port)
+
     def shutdown_gracefully(self) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
@@ -843,108 +966,28 @@ class ShutdownMixin:
                 # close all tws
                 self.main.db.check_tw_to_close(close_all=True)
 
-            graceful_shutdown = True
-            shutdown_reason = ""
             flows_count: int = self.main.db.get_flows_count()
             print(
                 f"Total flows read (without altflows): {flows_count}",
                 log_to_logfiles_only=True,
             )
 
-            to_kill_first, to_kill_last = self.get_hitlist_in_order()
-            stop_notified = self._notify_shutdown_event(
-                self.termination_event, deadline
+            shutdown_reason = self._stop_modules_within_deadline(
+                deadline, timeout, print
             )
-
-            try:
-                if self.core_module_failure or not stop_notified:
-                    # dont wait for failed core modules to stop
-                    self.kill_all_children(force=True)
-                    shutdown_reason = (
-                        "Core module failure."
-                        if self.core_module_failure
-                        else "Worker stop notification failed."
-                    )
-                    graceful_shutdown = False
-                    normal_completion = False
-                    self.force_shutdown_requested = True
-                else:
-                    # Wait timeout_seconds for all the processes to finish
-                    while time.monotonic() < deadline:
-                        self._remember_shutdown_processes()
-                        (
-                            to_kill_first,
-                            to_kill_last,
-                        ) = self.shutdown_interactive(
-                            to_kill_first,
-                            to_kill_last,
-                            deadline,
-                        )
-                        if not to_kill_first and not to_kill_last:
-                            break
-            except KeyboardInterrupt:
-                # either the user wants to kill the remaining modules
-                # (pressed ctrl +c again)
-                # or slips was stuck looping for too long that the OS
-                # sent an automatic sigint to kill slips
-                # pass to kill the remaining modules
-                shutdown_reason = (
-                    "User pressed ctr+c or Slips was killed by the OS"
-                )
-                graceful_shutdown = False
-                normal_completion = False
-                self.shutdown_signal_received = True
-                self.force_shutdown_requested = True
-            if time.monotonic() >= deadline:
-                # getting here means we're killing them bc of the timeout
-                # not getting here means we're killing them bc of double
-                # ctr+c OR they terminated successfully
-                shutdown_reason = (
-                    f"Killing modules that did not stop within "
-                    f"{timeout:g} seconds."
-                )
-                print(shutdown_reason)
-                graceful_shutdown = False
-                normal_completion = False
-                self.force_shutdown_requested = True
+            graceful_shutdown = not shutdown_reason
+            normal_completion = normal_completion and graceful_shutdown
 
             self.kill_all_children(force=not graceful_shutdown)
             if self.main.mode == "daemonized":
                 self.main.daemon.delete_pidfile()
 
-            analysis_time, end_date = self.get_analysis_time()
-            self.main.metadata_man.set_analysis_end_date(end_date)
-            self._handle_firewall_after_analysis()
-            self._handle_web_interface_after_analysis(normal_completion)
-
-            if not self.is_slips_live_updating_event.is_set():
-                self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
-
-                if self.main.conf.export_labeled_flows():
-                    format_ = self.main.conf.export_labeled_flows_to().lower()
-                    self.main.db.export_labeled_flows(format_)
-
-                self.main.store_zeek_dir_copy()
-                self.main.delete_zeek_files()
-
-            self.main.profilers_manager.cpu_profiler_release()
-            self.main.profilers_manager.memory_profiler_release()
-
-            self.main.db.close_all_dbs()
-            if not self.is_slips_live_updating_event.is_set():
-                self.main.redis_man.stop_redis_server_after_analysis()
-
+            analysis_time = self._wrap_up_analysis(normal_completion)
             self._print_shutdown_stats(
                 graceful_shutdown, analysis_time, shutdown_reason, print
             )
         except KeyboardInterrupt:
-            self.shutdown_signal_received = True
-            self.force_shutdown_requested = True
-            self.children = multiprocessing.active_children()
-            self.kill_all_children(force=True)
-            if self._is_web_interface_enabled():
-                port = int(self.main.conf.web_interface_port)
-                self._stop_web_interface(port)
+            self._force_stop_after_interrupted_shutdown()
             return False
         finally:
             self._finish_owned_processes()
