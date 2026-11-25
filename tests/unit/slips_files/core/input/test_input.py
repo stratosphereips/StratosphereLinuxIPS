@@ -562,14 +562,14 @@ def test_shutdown_zeek_runtime_kills_pids(pids: list[int]) -> None:
     input_process.zeek_utils.zeek_pids = pids
     owned = input_process.zeek_utils.zeek_processes = Mock()
     ordering = Mock()
-    ordering.attach_mock(owned.stop, "stop")
+    ordering.attach_mock(owned.kill_all, "kill_all")
     ordering.attach_mock(mock_thread.join, "join")
 
     with patch("os.kill") as mock_kill:
         input_process.zeek_utils.shutdown_zeek_runtime()
 
     mock_thread.join.assert_called_once_with(3)
-    assert ordering.mock_calls == [call.stop(grace_seconds=2), call.join(3)]
+    assert ordering.mock_calls == [call.kill_all(grace_seconds=2), call.join(3)]
     assert input_process.zeek_utils.zeek_shutdown_requested
     mock_kill.assert_not_called()
 

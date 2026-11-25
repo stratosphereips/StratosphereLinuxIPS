@@ -25,7 +25,7 @@ def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
     semaphore = SimpleNamespace(_callback=SemLock._cleanup, _pid=-1)
     unrelated = SimpleNamespace(_callback=lambda: None, _pid=-1)
     with patch.dict(util._finalizer_registry, {("daemon-test", 1): semaphore, ("daemon-test", 2): unrelated}):
-        manager.adopt_daemon_ipc()
+        manager.make_daemon_own_inherited_semaphores()
     assert semaphore._pid == os.getpid()
     assert unrelated._pid == -1
 

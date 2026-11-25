@@ -8,7 +8,9 @@ import shutil
 from modules.supported_module_names import Modules
 
 
-def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
+def get_isolated_analysis_output_dir(
+    arguments: list[str] | None = None,
+) -> str | None:
     """Identify an offline analysis with its own output and Redis instance.
 
     Parameters:
@@ -44,7 +46,7 @@ def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
     return str(Path(options.output))
 
 
-def isolated_analysis_config(config: dict, output: str) -> dict:
+def build_isolated_analysis_config(config: dict, output: str) -> dict:
     """Override writable paths for one analysis without editing its source.
 
     Parameters:

@@ -91,7 +91,7 @@ def test_start_zeek_process_stores_pid(
 
     assert result is zeek_process
     assert input_process.zeek_utils.zeek_pids == [4321]
-    owned.remember.assert_called_once_with(4321)
+    owned.track.assert_called_once_with(4321)
     popen.assert_called_once_with(
         ["zeek", "-r", "capture.pcap"],
         stdout=-1,

@@ -23,7 +23,7 @@ import psutil
 import yaml
 
 from managers.process_manager.instance_control import (
-    argument_value,
+    get_argument_value,
     list_instances,
 )
 from slips_files.common.parsers.arg_parser import parse_web_port
@@ -63,9 +63,9 @@ def validate_output(folder: str) -> Path:
     ) as connection:
         connection.execute("SELECT name FROM sqlite_master LIMIT 1").fetchone()
     for instance in list_instances(Path("slips.py")):
-        if argument_value(instance.arguments, "--view") != "—":
+        if get_argument_value(instance.arguments, "--view") != "—":
             continue
-        other = argument_value(instance.arguments, "-o", "--output")
+        other = get_argument_value(instance.arguments, "-o", "--output")
         if other == "—":
             continue
         try:
@@ -127,7 +127,7 @@ def viewer_web_port(
         for line in (metadata / "info.txt").read_text().splitlines():
             if line.startswith("Command: "):
                 candidates.append(
-                    argument_value(shlex.split(line[9:]), "--web-port")
+                    get_argument_value(shlex.split(line[9:]), "--web-port")
                 )
                 break
     except (OSError, ValueError):

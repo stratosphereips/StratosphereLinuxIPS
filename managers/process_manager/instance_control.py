@@ -56,7 +56,7 @@ def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def script_position(command: list[str]) -> int | None:
+def get_slips_script_index(command: list[str]) -> int | None:
     """Locate the executed Python script, excluding code strings and modules.
 
     Parameters:
@@ -92,7 +92,7 @@ def script_position(command: list[str]) -> int | None:
     )
 
 
-def capture_arguments(
+def get_slips_run_arguments(
     command: list[str], include_views: bool = False
 ) -> tuple[str, ...] | None:
     """Separate capture launches from management and unrelated commands.
@@ -104,7 +104,7 @@ def capture_arguments(
     Returns:
         Arguments following slips.py, or None when no capture is being run.
     """
-    position = script_position(command)
+    position = get_slips_script_index(command)
     if position is None:
         return None
     arguments = tuple(command[position + 1 :])
@@ -134,7 +134,7 @@ def capture_arguments(
     return arguments
 
 
-def inspect_instance(
+def get_verified_instance(
     process: psutil.Process, entrypoint: Path
 ) -> RunningInstance | None:
     """Verify a live main process executes this checkout's actual entry point.
@@ -148,8 +148,8 @@ def inspect_instance(
     """
     try:
         command = process.cmdline()
-        position = script_position(command)
-        arguments = capture_arguments(command, include_views=True)
+        position = get_slips_script_index(command)
+        arguments = get_slips_run_arguments(command, include_views=True)
         if position is None or arguments is None or process.pid == os.getpid():
             return None
         script = Path(command[position])
@@ -162,7 +162,7 @@ def inspect_instance(
         for parent in process.parents():
             try:
                 parent_command = parent.cmdline()
-                parent_position = script_position(parent_command)
+                parent_position = get_slips_script_index(parent_command)
                 if parent_position is None:
                     continue
                 parent_script = Path(parent_command[parent_position])
@@ -190,13 +190,14 @@ def list_instances(entrypoint: Path) -> list[RunningInstance]:
         (
             instance
             for process in psutil.process_iter()
-            if (instance := inspect_instance(process, entrypoint)) is not None
+            if (instance := get_verified_instance(process, entrypoint))
+            is not None
         ),
         key=lambda instance: instance.pid,
     )
 
 
-def argument_value(arguments: tuple[str, ...], *names: str) -> str:
+def get_argument_value(arguments: tuple[str, ...], *names: str) -> str:
     """Read an existing launch option for the instance listing.
 
     Parameters:
@@ -221,7 +222,7 @@ def argument_value(arguments: tuple[str, ...], *names: str) -> str:
     return "—"
 
 
-def web_ports_for_instance(instance: RunningInstance) -> list[int]:
+def get_web_ports_of_instance(instance: RunningInstance) -> list[int]:
     """Find HTTP ports actually listening for one verified Slips run.
 
     Parameters:
@@ -234,12 +235,14 @@ def web_ports_for_instance(instance: RunningInstance) -> list[int]:
         main = psutil.Process(instance.pid)
         if main.create_time() != instance.created:
             return []
-        if argument_value(instance.arguments, "--view") != "—":
+        if get_argument_value(instance.arguments, "--view") != "—":
             candidates = [main]
             output = None
         else:
             candidates = main.children(recursive=True)
-            output_arg = argument_value(instance.arguments, "-o", "--output")
+            output_arg = get_argument_value(
+                instance.arguments, "-o", "--output"
+            )
             output = (
                 (Path(main.cwd()) / output_arg).resolve()
                 if output_arg != "—"
@@ -275,7 +278,7 @@ def web_ports_for_instance(instance: RunningInstance) -> list[int]:
                 ):
                     continue
                 if output is not None:
-                    destination = argument_value(
+                    destination = get_argument_value(
                         tuple(command), "--output-dir"
                     )
                     if (Path(process.cwd()) / destination).resolve() != output:
@@ -305,18 +308,18 @@ def print_instances(instances: list[RunningInstance]) -> None:
     for instance in instances:
         args = instance.arguments
         mode = "daemon" if {"-D", "--daemon"}.intersection(args) else "normal"
-        source = argument_value(args, "-i", "--interface")
+        source = get_argument_value(args, "-i", "--interface")
         if source == "—":
-            source = argument_value(
+            source = get_argument_value(
                 args, "-f", "--filepath", "-g", "--growing"
             )
-        output = argument_value(args, "-o", "--output")
-        saved_output = argument_value(args, "--view")
+        output = get_argument_value(args, "-o", "--output")
+        saved_output = get_argument_value(args, "--view")
         if saved_output != "—":
             mode = "view-bg" if mode == "daemon" else "viewer"
             source = "saved results"
             output = saved_output
-        ports = ",".join(map(str, web_ports_for_instance(instance))) or "—"
+        ports = ",".join(map(str, get_web_ports_of_instance(instance))) or "—"
         print(f"{instance.pid:<9} {mode:<9} {ports:<12} {source:<24} {output}")
 
 
@@ -343,7 +346,7 @@ def stop_instances(
                 or process.status() == psutil.STATUS_ZOMBIE
             ):
                 continue
-            if inspect_instance(process, entrypoint) != instance:
+            if get_verified_instance(process, entrypoint) != instance:
                 print(
                     f"PID {instance.pid} changed or cannot be verified; not stopped."
                 )
@@ -427,13 +430,13 @@ def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
         return 1
     try:
         process = psutil.Process(instance.pid)
-        if inspect_instance(process, entrypoint) != instance:
+        if get_verified_instance(process, entrypoint) != instance:
             print(
                 f"PID {instance.pid} changed or cannot be verified; not restarted."
             )
             return 1
         command = process.cmdline()
-        position = script_position(command)
+        position = get_slips_script_index(command)
         directory = process.cwd()
         # macOS can expose Python's base binary instead of its virtualenv.
         command = [sys.executable, *command[1 if position else 0 :]]

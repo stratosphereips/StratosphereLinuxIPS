@@ -23,11 +23,11 @@ from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config,
-    isolated_analysis_output,
+    build_isolated_analysis_config,
+    get_isolated_analysis_output_dir,
 )
 from managers.process_manager.instance_control import (
-    capture_arguments,
+    get_slips_run_arguments,
     list_instances,
 )
 from slips_files.common.output_paths import (
@@ -69,7 +69,7 @@ class RedisManager:
         if port in RedisDB.instances:
             del RedisDB.instances[port]
 
-    def validate_keep_history(self) -> bool:
+    def validate_keep_history_and_find_saved_history(self) -> bool:
         """Validate live-run isolation and identify any history to preserve.
 
         Returns:
@@ -132,7 +132,7 @@ class RedisManager:
             if isinstance(info, dict)
             else process.cmdline()
         )
-        arguments = capture_arguments(command)
+        arguments = get_slips_run_arguments(command)
         if arguments is None:
             return
         parser = argparse.ArgumentParser(
@@ -153,9 +153,11 @@ class RedisManager:
                 config = yaml.safe_load(source) or {}
             if not isinstance(config, dict):
                 raise ValueError("Invalid Slips configuration")
-            analysis_output = isolated_analysis_output(arguments)
+            analysis_output = get_isolated_analysis_output_dir(arguments)
             if analysis_output is not None:
-                config = isolated_analysis_config(config, analysis_output)
+                config = build_isolated_analysis_config(
+                    config, analysis_output
+                )
             parameters = config.get("parameters") or {}
             other_web = config.get("web_interface") or {}
             if not isinstance(parameters, dict) or not isinstance(

@@ -13,7 +13,7 @@ from unittest.mock import (
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
-from slips_files.common.parsers.analysis_config import isolated_analysis_config
+from slips_files.common.parsers.analysis_config import build_isolated_analysis_config
 
 
 def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
     manager.main.args.output = str(output)
     manager.main.args.web_port = 55012
     manager.main.conf.isolated_analysis = True
-    manager.main.conf.config = isolated_analysis_config(original, str(output))
+    manager.main.conf.config = build_isolated_analysis_config(original, str(output))
     manager.main.conf.web_interface_port = 55012
     manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
     manager._add_metadata()

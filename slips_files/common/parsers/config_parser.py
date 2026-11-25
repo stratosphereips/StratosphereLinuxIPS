@@ -20,8 +20,8 @@ from slips_files.common.parsers.arg_parser import (
     get_web_port_override,
 )
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config,
-    isolated_analysis_output,
+    build_isolated_analysis_config,
+    get_isolated_analysis_output_dir,
 )
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
@@ -49,10 +49,10 @@ class ConfigParser(object):
         configfile: str = self.get_config_file()
         self.config = self.read_config_file(configfile)
         self.source_config = self.config
-        analysis_output = isolated_analysis_output()
+        analysis_output = get_isolated_analysis_output_dir()
         self.isolated_analysis = analysis_output is not None
         if self.isolated_analysis:
-            self.config = isolated_analysis_config(
+            self.config = build_isolated_analysis_config(
                 self.config, analysis_output
             )
         web_port = get_web_port_override()

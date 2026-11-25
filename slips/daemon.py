@@ -15,7 +15,7 @@ from exclusiveprocess import (
 import psutil
 
 from managers.process_manager.instance_control import (
-    inspect_instance,
+    get_verified_instance,
     stop_instances,
 )
 
@@ -330,7 +330,7 @@ class Daemon:
                 # Starts the daemon
                 self.daemonize()
                 self.slips.pid = os.getpid()
-                self.slips.proc_man.adopt_daemon_ipc()
+                self.slips.proc_man.make_daemon_own_inherited_semaphores()
 
                 # any code run after daemonizing will be run inside
                 # the daemon and have the same PID as slips.py
@@ -436,7 +436,7 @@ class Daemon:
                     return {"stopped": True, "error": None}
                 entrypoint = Path(__file__).parent.parent / "slips.py"
                 process = psutil.Process(int(self.pid))
-                instance = inspect_instance(process, entrypoint)
+                instance = get_verified_instance(process, entrypoint)
                 if instance is None or not {"-D", "--daemon"}.intersection(
                     instance.arguments
                 ):

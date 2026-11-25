@@ -584,12 +584,12 @@ def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
     old_detection_db = output_dir / "databases" / "flows.sqlite"
     old_detection_db.write_text("previous run")
     main.args.keep_history = True
-    main.redis_man.validate_keep_history = Mock(return_value=True)
+    main.redis_man.validate_keep_history_and_find_saved_history = Mock(return_value=True)
 
     main.prepare_output_dir()
 
     assert old_detection_db.read_text() == "previous run"
-    main.redis_man.validate_keep_history.assert_called_once_with()
+    main.redis_man.validate_keep_history_and_find_saved_history.assert_called_once_with()
 
 
 def test_prepare_output_dir_with_o_flag_creates_dir(

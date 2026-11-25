@@ -757,7 +757,7 @@ class ZeekInputUtils:
         )
         # you have to get the pid before communicate()
         self.zeek_pids.append(zeek.pid)
-        self.zeek_processes.remember(zeek.pid)
+        self.zeek_processes.track(zeek.pid)
         return zeek
 
     def _did_zeek_stop_bc_slips_asked_it_to(
@@ -840,7 +840,7 @@ class ZeekInputUtils:
     def shutdown_zeek_runtime(self) -> None:
         """Flush and stop this input's Zeek processes, then join monitors."""
         self.zeek_shutdown_requested = True
-        self.zeek_processes.stop(grace_seconds=2)
+        self.zeek_processes.kill_all(grace_seconds=2)
         try:
             for zeek_thread in self.zeek_threads:
                 zeek_thread.join(3)

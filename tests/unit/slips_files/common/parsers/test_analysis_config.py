@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config, isolated_analysis_output,
+    build_isolated_analysis_config, get_isolated_analysis_output_dir,
     prepare_analysis_files, validate_analysis_paths,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -34,7 +34,7 @@ def test_isolated_analysis_selection(arguments: list[str], expected: str | None)
         expected: Independent output path, or None for other run types.
     """
     _factory = ModuleFactory()
-    assert isolated_analysis_output(arguments) == expected
+    assert get_isolated_analysis_output_dir(arguments) == expected
 
 
 @pytest.mark.parametrize("extra", [["--clearcache"], ["--keep-history"], ["-P", "6379"]])
@@ -46,7 +46,7 @@ def test_isolated_analysis_rejects_shared_cache_operations(extra: list[str]) -> 
     """
     _factory = ModuleFactory()
     with pytest.raises(SystemExit) as error:
-        isolated_analysis_output(["-m", "-f", "test.pcap", "-o", "output/test", *extra])
+        get_isolated_analysis_output_dir(["-m", "-f", "test.pcap", "-o", "output/test", *extra])
     assert error.value.code == 2
 
 
@@ -63,7 +63,7 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
               "ml_online_model": {"model_load_path": "trained/model.bin", "model_store_path": "live/model.bin"}}
     before = deepcopy(source)
     output = tmp_path / "analysis"
-    effective = isolated_analysis_config(source, str(output))
+    effective = build_isolated_analysis_config(source, str(output))
     assert source == before
     assert effective["parameters"]["permanent_dir"] == str(output / "permanent")
     assert effective["parameters"]["time_window_width"] == 120
@@ -99,7 +99,7 @@ def test_analysis_files_copy_only_credentials_and_whitelist(
     whitelist.write_text("ip,192.0.2.10,src,alerts\n")
     source = {"parameters": {"permanent_dir": str(original)},
               "whitelists": {"local_whitelist_path": str(whitelist)}}
-    effective = isolated_analysis_config(source, str(tmp_path / "analysis"))
+    effective = build_isolated_analysis_config(source, str(tmp_path / "analysis"))
     prepare_analysis_files(source, effective)
     destination = Path(effective["parameters"]["permanent_dir"])
     for name in ("redis_auth.conf", "web_auth.json"):

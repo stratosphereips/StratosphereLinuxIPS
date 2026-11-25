@@ -822,7 +822,7 @@ def test_validate_keep_history_rejects_incompatible_args(
     setattr(manager.main.args, argument, value)
 
     with pytest.raises(SystemExit, match="--keep-history requires"):
-        manager.validate_keep_history()
+        manager.validate_keep_history_and_find_saved_history()
 
 
 def test_existing_history_still_requires_metadata(tmp_path: Path) -> None:
@@ -841,7 +841,7 @@ def test_existing_history_still_requires_metadata(tmp_path: Path) -> None:
         db=None, port=None, is_slips_started_by_an_update=False,
     )
     with pytest.raises(SystemExit, match="verify the interface"):
-        manager.validate_keep_history()
+        manager.validate_keep_history_and_find_saved_history()
     assert database.read_bytes() == b"preserve existing history"
 
 
@@ -867,7 +867,7 @@ def test_validate_keep_history_accepts_matching_stopped_run(
     manager.main.args.is_slips_started_by_an_update = False
 
     with patch("managers.redis_manager.psutil.process_iter", return_value=[]):
-        assert manager.validate_keep_history() is True
+        assert manager.validate_keep_history_and_find_saved_history() is True
 
 
 def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
@@ -890,7 +890,7 @@ def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
     manager.main.args.is_slips_started_by_an_update = False
 
     with pytest.raises(SystemExit, match="output belongs to en1"):
-        manager.validate_keep_history()
+        manager.validate_keep_history_and_find_saved_history()
 
 
 @pytest.mark.parametrize("has_history", [False, True])
@@ -923,7 +923,7 @@ def test_validate_keep_history_rejects_running_slips(
         "managers.redis_manager.psutil.process_iter", return_value=[active]
     ):
         with pytest.raises(SystemExit, match="history Redis port"):
-            manager.validate_keep_history()
+            manager.validate_keep_history_and_find_saved_history()
 
 
 @pytest.mark.parametrize("history_starting", [False, True])
@@ -966,7 +966,7 @@ def test_shared_config_works_with_automatic_file_isolation(
         command.extend(["-i", "eth0", "-o", str(live_output), "--keep-history"])
     active = Mock(info={"pid": 123, "cmdline": command})
     active.cwd.return_value = str(tmp_path)
-    validate = manager.validate_keep_history if history_starting else manager.reject_active_history_run
+    validate = manager.validate_keep_history_and_find_saved_history if history_starting else manager.reject_active_history_run
     with patch("managers.redis_manager.psutil.process_iter", return_value=[active]), patch(
         "managers.redis_manager.list_instances", return_value=[SimpleNamespace(pid=123)]
     ), patch("managers.redis_manager.psutil.Process", return_value=active):
@@ -1015,7 +1015,7 @@ def test_history_start_ignores_management_and_other_programs(
     management = Mock(info={"pid": 75171, "cmdline": command})
     management.cwd.return_value = str(tmp_path)
     with patch("managers.redis_manager.psutil.process_iter", return_value=[management]):
-        assert manager.validate_keep_history() is has_history
+        assert manager.validate_keep_history_and_find_saved_history() is has_history
     management.cwd.assert_not_called()
 
 
@@ -1115,7 +1115,7 @@ def test_history_run_concurrency_isolation(
     active = Mock(info={"pid": 123, "cmdline": command})
     active.cwd.return_value = str(tmp_path)
     validate = (
-        manager.validate_keep_history if history_starting
+        manager.validate_keep_history_and_find_saved_history if history_starting
         else manager.reject_active_history_run
     )
 

@@ -58,14 +58,14 @@ def test_detached_descendant_is_stopped_after_parent_exit(method: str, parent_ex
         worker.start()
         assert receiver.poll(20)
         detached = psutil.Process(receiver.recv())
-        owned.remember(worker.pid)
+        owned.track(worker.pid)
         assert detached.pid in owned.processes
         if parent_exited:
             finish.set()
             worker.join(5)
             assert not worker.is_alive()
         before = time.monotonic()
-        owned.stop(grace_seconds=.05)
+        owned.kill_all(grace_seconds=.05)
         assert time.monotonic() - before < 5
         worker.join(2)
         assert not worker.is_alive()
@@ -73,7 +73,7 @@ def test_detached_descendant_is_stopped_after_parent_exit(method: str, parent_ex
         assert outsider.poll() is None
         assert factory.logger is not None
     finally:
-        owned.stop()
+        owned.kill_all()
         if worker.is_alive():
             worker.kill()
         worker.join(5)
@@ -88,16 +88,16 @@ def test_web_exclusion_is_temporary_and_non_owned_roots_are_rejected() -> None:
     """Retain only the selected web process until final cleanup."""
     factory = ModuleFactory()
     owned = OwnedProcesses()
-    owned.remember(os.getpid())
-    owned.remember(os.getppid())
-    owned.remember(1)
+    owned.track(os.getpid())
+    owned.track(os.getppid())
+    owned.track(1)
     assert owned.processes == {}
     web = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(90)"])
     try:
-        owned.remember(web.pid)
-        owned.stop(frozenset({web.pid}))
+        owned.track(web.pid)
+        owned.kill_all(frozenset({web.pid}))
         assert web.poll() is None
-        owned.stop()
+        owned.kill_all()
         assert web.wait(3) is not None
         assert factory.logger is not None
     finally:
@@ -114,7 +114,7 @@ def test_refresh_retains_late_descendants() -> None:
     parent.is_running.return_value = True
     parent.children.return_value = [child]
     owned.processes[parent.pid] = parent
-    owned.refresh()
+    owned.track_new_descendants()
     assert owned.processes[child.pid] is child
     assert factory.logger is not None
 
@@ -136,10 +136,10 @@ def test_cleanup_checks_identity_and_reports_survivors(running: bool) -> None:
     with patch.object(owned, "_wait_for_exit", return_value=[process] if running else []):
         if running:
             with pytest.raises(RuntimeError, match="123"):
-                owned.stop()
+                owned.kill_all()
             process.send_signal.assert_called_once_with(signal.SIGKILL)
         else:
-            owned.stop()
+            owned.kill_all()
             process.send_signal.assert_not_called()
     assert factory.logger is not None
 
@@ -160,9 +160,9 @@ def test_only_owned_real_zeek_is_stopped(tmp_path: Path) -> None:
         for _ in range(2):
             processes.append(subprocess.Popen([binary, "-r", "-"], cwd=tmp_path,
                 stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
-        owned.remember(processes[0].pid)
+        owned.track(processes[0].pid)
         assert all(process.poll() is None for process in processes)
-        owned.stop(grace_seconds=.1)
+        owned.kill_all(grace_seconds=.1)
         assert processes[0].wait(3) is not None
         assert processes[1].poll() is None
         assert factory.logger is not None

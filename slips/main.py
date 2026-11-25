@@ -215,7 +215,7 @@ class Main:
             return
 
         if getattr(self.args, "keep_history", False) is True:
-            if self.redis_man.validate_keep_history():
+            if self.redis_man.validate_keep_history_and_find_saved_history():
                 os.chmod(self.args.output, 0o777)
                 return
             print(
