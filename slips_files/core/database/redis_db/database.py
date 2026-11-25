@@ -338,18 +338,6 @@ class RedisDB(
             }
         )
 
-        # -s for saving the db
-        if cls.args.save:
-            cls._options.update(
-                {
-                    # save the db after 30 sec if at least 500 keys changed
-                    "save": "30 500",
-                    # AOF is now enabled. Redis will write each operation to the
-                    # AOF file.
-                    "appendonly": "yes",
-                }
-            )
-
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():
                 f.write(f"{option} {val}\n")

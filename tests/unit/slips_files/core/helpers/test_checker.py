@@ -94,7 +94,6 @@ def test_check_given_flags_root_user(monkeypatch):
     checker.main.args.interface = None
     checker.main.args.filepath = None
     checker.main.args.input_module = None
-    checker.main.args.save = False
     checker.main.args.db = False
     checker.main.args.verbose = 0
     checker.main.args.debug = 0

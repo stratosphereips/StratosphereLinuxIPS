@@ -19,42 +19,31 @@ from slips_files.common.input_type import InputType
 
 
 @pytest.mark.parametrize(
-    "redis_port, redis_pid, is_daemon, save_db, expected_output",
+    "redis_port, redis_pid, is_daemon, expected_output",
     [
         # Testcase 1: Normal case
         (
             32768,
             1234,
             False,
-            False,
-            "Date,input_info,32768,1234,output_dir,output_dir,os_pid,False,False\n",
+            "Date,input_info,32768,1234,output_dir,output_dir,os_pid,False\n",
         ),
         # Testcase 2: Daemon mode
         (
             32769,
             9101,
             True,
-            False,
-            "Date,input_info,32769,9101,output_dir,output_dir,os_pid,True,False\n",
-        ),
-        # Testcase 3: Save DB
-        (
-            32770,
-            1122,
-            False,
-            True,
-            "Date,input_info,32770,1122,output_dir,output_dir,os_pid,False,True\n",
+            "Date,input_info,32769,9101,output_dir,output_dir,os_pid,True\n",
         ),
     ],
 )
 def test_log_redis_server_pid_normal_ports(
-    redis_port, redis_pid, is_daemon, save_db, expected_output, mock_db
+    redis_port, redis_pid, is_daemon, expected_output, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.input_information = "input_info"
     redis_manager.main.args.output = "output_dir"
     redis_manager.main.args.daemon = is_daemon
-    redis_manager.main.args.save = save_db
     redis_manager.remove_old_logline = Mock()
 
     with (
@@ -113,18 +102,16 @@ def test_should_keep_redis_server_after_analysis(
 
 
 @pytest.mark.parametrize(
-    "save, webinterface, expected",
+    "webinterface, expected",
     [
-        (False, False, True),
-        (False, True, False),
-        (True, True, True),
+        (False, True),
+        (True, False),
     ],
 )
 def test_should_save_redis_db_after_analysis(
-    save, webinterface, expected, mock_db
+    webinterface, expected, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
-    redis_manager.main.args.save = save
     redis_manager.main.args.webinterface = webinterface
 
     result = redis_manager._should_save_redis_db_after_analysis()
@@ -537,9 +524,9 @@ def test_remove_server_from_log(
         # Testcase 1: Normal case with multiple servers
         (
             "Date, File or interface, Used port, Server PID, Output Zeek Dir, "
-            "Logs Dir, Slips PID, Is Daemon, Save the DB"
+            "Logs Dir, Slips PID, Is Daemon"
             "\n2024/11/25 15:11:50.571184,dataset/test6-malicious.suricata.json,"
-            "32768,16408,dir/zeek_files,dir,16398,False,False",
+            "32768,16408,dir/zeek_files,dir,16398,False",
             {
                 "16408": {
                     "file_or_interface": "dataset/test6-malicious.suricata.json",
@@ -547,7 +534,6 @@ def test_remove_server_from_log(
                     "output_dir": "dir",
                     "pid": "16408",
                     "port": "32768",
-                    "save_the_db": "False",
                     "slips_pid": "16398",
                     "timestamp": "2024/11/25 15:11:50.571184",
                     "zeek_dir": "dir/zeek_files",

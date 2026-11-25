@@ -88,7 +88,6 @@ class Checker:
         mutually_exclusive_flags = [
             self.main.args.interface,  # -i
             self.main.args.access_point,  # -ap
-            self.main.args.save,  # -s
             self.main.args.db,  # -d
             self.main.args.filepath,  # -f
             self.main.args.input_module,  # -im
@@ -100,7 +99,7 @@ class Checker:
 
         if mutually_exclusive_flag_count > 1:
             print(
-                "Only one of the flags -i, -ap, -s, -d, or -f is allowed. "
+                "Only one of the flags -i, -ap, -d, or -f is allowed. "
                 "Stopping Slips."
             )
             self.main.terminate_slips()
@@ -125,8 +124,8 @@ class Checker:
             self.main.terminate_slips()
 
     def _check_if_root_is_required(self):
-        if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
-            print("Saving and loading the database requires root privileges.")
+        if self.main.args.db and os.getuid() != 0:
+            print("Loading the database requires root privileges.")
             self.main.terminate_slips()
             return
         if (

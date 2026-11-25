@@ -331,13 +331,6 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Store Slips logs in the given folder.",
         )
         self.add_argument(
-            "-s",
-            "--save",
-            action="store_true",
-            required=False,
-            help="Save the analysed file db to disk.",
-        )
-        self.add_argument(
             "-d",
             "--db",
             action="store",

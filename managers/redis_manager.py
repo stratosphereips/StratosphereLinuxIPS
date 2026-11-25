@@ -289,9 +289,6 @@ class RedisManager:
         Returns:
             True when Slips is not keeping Redis open for the web interface.
         """
-        if self.main.args.save:
-            return True
-
         return not self._is_web_interface_enabled()
 
     def decide_on_saving_and_killing_the_redis_db(self) -> bool:
@@ -368,8 +365,7 @@ class RedisManager:
                         "# Once a server is killed, it will be removed from "
                         "this file.\n\n"
                         "Date, File or interface, Used port, Server PID,"
-                        " Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, "
-                        "Save the DB\n"
+                        " Output Zeek Dir, Logs Dir, Slips PID, Is Daemon\n"
                     )
 
                 db = getattr(self.main, "db", None)
@@ -382,7 +378,7 @@ class RedisManager:
                     f"{now},{self.main.input_information},{redis_port},"
                     f"{redis_pid},{zeek_dir},{self.main.args.output},"
                     f"{os.getpid()},"
-                    f"{bool(self.main.args.daemon)},{self.main.args.save}\n"
+                    f"{bool(self.main.args.daemon)}\n"
                 )
         except PermissionError:
             # last run was by root, change the file ownership to non-root
@@ -615,7 +611,6 @@ class RedisManager:
                             output_dir,
                             slips_pid,
                             is_daemon,
-                            save_the_db,
                         ) = line
 
                         self.open_servers_pids[pid] = {
@@ -627,7 +622,6 @@ class RedisManager:
                             "output_dir": output_dir,
                             "slips_pid": slips_pid,
                             "is_daemon": is_daemon,
-                            "save_the_db": save_the_db,
                         }
                     except ValueError:
                         # sometimes slips can't get the server pid and logs "False"
