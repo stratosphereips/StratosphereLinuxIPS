@@ -212,7 +212,15 @@ Each Slips run needs Redis. By default Slips starts and uses Redis on port 6379:
 
 To run several instances at the same time, use `-m`. Each instance then gets
 its own Redis server on a free port between 32768 and 32850 (or the port you
-choose with `-P <port>`). All instances still share the cache in port 6379,
+choose with `-P <port>`). Slips picks the port in `get_redis_port()`:
+
+| How Slips runs | Redis port for DB 0 |
+| --- | --- |
+| Live traffic (`-i`, `-g`) or any run without `-m` | 6379 |
+| `-m` (for example `-m -f file.pcap`) | First free port from 32768 to 32850 |
+| `-P <port>` | The port you give |
+
+All instances still share the cache in port 6379,
 DB 1. Each run's output goes to `output/<filename>_<timestamp>/`.
 
 - Slips starts the Redis servers it needs automatically.
@@ -253,8 +261,11 @@ Slips keeps this analysis separate from the live one automatically:
 
 | What | Live capture | PCAP analysis |
 | --- | --- | --- |
-| Redis | Port 6379, DB 0 | Its own Redis port |
-| Saved data and learned state | `permanent/` | Nothing is written to `permanent/`; learned state stays in the analysis output |
+| Redis | Port 6379, DB 0 | Its own Redis port (32768-32850) |
+| Host identity DB | `permanent/host_profiles/hosts.sqlite` | `<output>/host_profiles/hosts.sqlite` |
+| Regex generator store | `permanent/databases/regex_store/` | `<output>/regex_generator/` |
+| T Cell store | `<output>/t_cell/` (or `permanent/` if you set `persistent_store_dir`) | `<output>/t_cell/` |
+| Threat intelligence feed downloads | `permanent/remote_data_files/` | The same folder |
 | Whitelist | Your whitelist | The same whitelist (a copy is kept in `<output>/metadata/`) |
 | Redis and web passwords | Yours | The same files in `permanent/`, so the same login works |
 | Zeek files | As configured | Kept inside the analysis output |

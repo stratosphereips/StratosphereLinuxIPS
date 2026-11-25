@@ -12,6 +12,8 @@ from dataclasses import dataclass
 
 import psutil
 
+from slips_files.common.parsers.arg_parser import create_instance_parser
+
 RESTART_STOP_TIMEOUT_SECONDS = 300
 
 
@@ -22,38 +24,6 @@ class RunningInstance:
     pid: int
     created: float
     arguments: tuple[str, ...]
-
-
-def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register instance commands in the full and lightweight CLI parsers.
-
-    Parameters:
-        parser: Parser receiving the management options.
-    """
-    commands = parser.add_mutually_exclusive_group()
-    commands.add_argument(
-        "--list-instances",
-        action="store_true",
-        help="List running Slips instances from this checkout without "
-        "starting a capture or connecting to Redis.",
-    )
-    commands.add_argument(
-        "--stop",
-        nargs="?",
-        const="auto",
-        metavar="PID|all",
-        help="Gracefully stop a Slips instance in any mode from this checkout. "
-        "Omit PID when only one is running, or use all to stop every instance.",
-    )
-    commands.add_argument(
-        "--restart",
-        nargs="?",
-        const="auto",
-        metavar="PID",
-        help="Stop a running daemon and relaunch it with its original "
-        "arguments. Omit PID when only one daemon is running. Use the same "
-        "Python environment that started it.",
-    )
 
 
 def script_position(command: list[str]) -> int | None:
@@ -298,9 +268,9 @@ def print_instances(instances: list[RunningInstance]) -> None:
         instances: Verified main processes.
     """
     if not instances:
-        print("No accessible running Slips instances from this checkout.")
+        print("No accessible running Slips instances.")
         return
-    print("Slips instances from this checkout:")
+    print("Running Slips instances:")
     print(f"{'PID':<9} {'MODE':<9} {'WEB PORT':<12} {'INPUT':<24} OUTPUT")
     for instance in instances:
         args = instance.arguments
@@ -397,7 +367,7 @@ def stop_instances(
                 pids = ", ".join(str(process.pid) for process in alive)
                 print(
                     f"Shutdown in progress ({elapsed:.0f}s); waiting for PID(s) {pids}. "
-                    "Waiting for workers and final state saving to finish.",
+                    "Waiting for workers to finish.",
                     flush=True,
                 )
                 next_report = elapsed + 10
@@ -480,8 +450,7 @@ def handle_instance_command(arguments: list[str]) -> int | None:
         for arg in arguments
     ):
         return None
-    parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
-    add_instance_arguments(parser)
+    parser = create_instance_parser()
     options = parser.parse_args(arguments)
     if options.stop not in {None, "auto", "all"}:
         if not options.stop.isdecimal() or int(options.stop) <= 0:

@@ -44,6 +44,89 @@ def get_web_port_override(arguments: list[str] | None = None) -> int | None:
     return parser.parse_known_args(arguments)[0].web_port
 
 
+def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register instance commands in the full and lightweight CLI parsers.
+
+    The three commands stay mutually exclusive in every parser using them.
+
+    Parameters:
+        parser: Parser receiving the management options.
+    """
+    commands = parser.add_mutually_exclusive_group()
+    commands.add_argument(
+        "--list-instances",
+        action="store_true",
+        help="List running Slips instances from this checkout without "
+        "starting a capture or connecting to Redis.",
+    )
+    commands.add_argument(
+        "--stop",
+        nargs="?",
+        const="auto",
+        metavar="PID|all",
+        help="Gracefully stop a Slips instance in any mode from this checkout. "
+        "Omit PID when only one is running, or use all to stop every instance.",
+    )
+    commands.add_argument(
+        "--restart",
+        nargs="?",
+        const="auto",
+        metavar="PID",
+        help="Stop a running daemon and relaunch it with its original "
+        "arguments. Omit PID when only one daemon is running. Use the same "
+        "Python environment that started it.",
+    )
+
+
+def create_instance_parser() -> argparse.ArgumentParser:
+    """Build the lightweight parser used before Slips opens any database.
+
+    Returns:
+        Parser holding only the mutually exclusive instance commands.
+    """
+    parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
+    add_instance_arguments(parser)
+    return parser
+
+
+def create_isolated_analysis_parser() -> argparse.ArgumentParser:
+    """Build the parser that detects isolated offline analyses.
+
+    Returns:
+        Parser knowing only the options that decide isolation.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("-m", "--multiinstance", action="store_true")
+    parser.add_argument("-f", "--filepath")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("-i", "--interface")
+    parser.add_argument("-g", "--growing")
+    parser.add_argument("-P", "--port")
+    parser.add_argument("-c", "--config")
+    parser.add_argument("-cc", "--clearcache", action="store_true")
+    parser.add_argument("--keep-history", action="store_true")
+    return parser
+
+
+def create_run_conflict_parser() -> argparse.ArgumentParser:
+    """Build the parser reading another run's shared-resource options.
+
+    Returns:
+        Parser that raises argparse.ArgumentError instead of exiting.
+    """
+    parser = argparse.ArgumentParser(
+        add_help=False, allow_abbrev=False, exit_on_error=False
+    )
+    parser.add_argument("-m", "--multiinstance", action="store_true")
+    parser.add_argument("-P", "--port")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("-c", "--config", default="config/slips.yaml")
+    parser.add_argument("-cc", "--clearcache", action="store_true")
+    parser.add_argument("-w", "--webinterface", action="store_true")
+    parser.add_argument("--web-port", type=int)
+    return parser
+
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self.options = []
@@ -277,10 +360,6 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help="Kill all unused redis servers",
         )
-        from managers.process_manager.instance_control import (
-            add_instance_arguments,
-        )
-
         add_instance_arguments(self)
         self.add_argument(
             "-m",

@@ -195,7 +195,8 @@ class Daemon:
                         pid = int(result["message"])
                     elif result["status"] == "ready":
                         print(
-                            f"Slips daemon started. [PID {result['message']}] Logs: {self.logsfile}",
+                            f"Slips daemon started. [PID {result['message']}] \n"
+                            f"Logs: {self.logsfile}",
                             flush=True,
                         )
                         return 0

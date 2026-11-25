@@ -22,6 +22,9 @@ from slips_files.core.database.redis_db.redis_auth import (
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
+from slips_files.common.parsers.arg_parser import (
+    create_run_conflict_parser,
+)
 from slips_files.common.parsers.analysis_config import (
     isolated_analysis_output,
 )
@@ -134,16 +137,7 @@ class RedisManager:
         arguments = capture_arguments(command)
         if arguments is None:
             return
-        parser = argparse.ArgumentParser(
-            add_help=False, allow_abbrev=False, exit_on_error=False
-        )
-        parser.add_argument("-m", "--multiinstance", action="store_true")
-        parser.add_argument("-P", "--port")
-        parser.add_argument("-o", "--output")
-        parser.add_argument("-c", "--config", default="config/slips.yaml")
-        parser.add_argument("-cc", "--clearcache", action="store_true")
-        parser.add_argument("-w", "--webinterface", action="store_true")
-        parser.add_argument("--web-port", type=int)
+        parser = create_run_conflict_parser()
         try:
             other, _ = parser.parse_known_args(arguments)
             other_cwd = Path(process.cwd())

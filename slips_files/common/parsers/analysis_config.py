@@ -1,8 +1,11 @@
 """Keep offline multi-instance analyses separate from live runtime data."""
 
-import argparse
 from copy import deepcopy
 from pathlib import Path
+
+from slips_files.common.parsers.arg_parser import (
+    create_isolated_analysis_parser,
+)
 
 
 def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
@@ -14,16 +17,7 @@ def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
     Returns:
         Output directory for an isolated analysis, or None for other runs.
     """
-    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    parser.add_argument("-m", "--multiinstance", action="store_true")
-    parser.add_argument("-f", "--filepath")
-    parser.add_argument("-o", "--output")
-    parser.add_argument("-i", "--interface")
-    parser.add_argument("-g", "--growing")
-    parser.add_argument("-P", "--port")
-    parser.add_argument("-c", "--config")
-    parser.add_argument("-cc", "--clearcache", action="store_true")
-    parser.add_argument("--keep-history", action="store_true")
+    parser = create_isolated_analysis_parser()
     options, _ = parser.parse_known_args(arguments)
     if not (
         options.multiinstance

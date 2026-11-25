@@ -1,6 +1,5 @@
 """Verify scoped discovery and graceful shutdown without touching live runs."""
 
-import argparse
 import builtins
 import json
 import os
@@ -17,7 +16,10 @@ import psutil
 import pytest
 
 from managers.process_manager import instance_control as control
-from slips_files.common.parsers.arg_parser import ArgumentParser
+from slips_files.common.parsers.arg_parser import (
+    ArgumentParser,
+    create_instance_parser,
+)
 from tests.module_factory import ModuleFactory
 
 
@@ -399,8 +401,7 @@ def test_management_rejects_invalid_commands(arguments: list[str]) -> None:
 def test_management_help_and_capture_passthrough() -> None:
     """Expose the same controls in help while leaving ordinary capture alone."""
     _factory = ModuleFactory()
-    parser = argparse.ArgumentParser()
-    control.add_instance_arguments(parser)
+    parser = create_instance_parser()
     full_parser = ArgumentParser(add_help=False)
     with patch.object(sys, "argv", ["slips.py", "--list-instances"]):
         assert full_parser.parse_arguments().list_instances

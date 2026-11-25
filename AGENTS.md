@@ -86,6 +86,8 @@ These rules MUST be followed:
 - ConfigParser() should only have value read from slips.yaml. not custom ones added and changed by slips at runtime. you can use redis for custom runtime values instead.
 - Add or modify unit tests only when they verify meaningful functionality, business logic, or non-trivial edge cases.
 - Avoid trivial, redundant, or implementation-detail tests; remove existing tests that provide no meaningful behavioral coverage.
+- .add_argument() should only be called from arg_parser. don't call it from functions somewhere else then import it in arg_parser.py. all args should be hardcoded in arg_parser.py.
+- never check for arguments using their hardcoded names e.g ""--stopdaemon"}" in self.args, always use their attributes instead e.g. self.args.stopdaemon.
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.
