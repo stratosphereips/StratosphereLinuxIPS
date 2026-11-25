@@ -1,4 +1,5 @@
-"""Keep offline multi-instance analyses separate from live runtime data."""
+"""Keep analyses of files, run next to other Slips instances, from mixing
+with the data of live runs."""
 
 from copy import deepcopy
 from pathlib import Path
@@ -11,13 +12,18 @@ from slips_files.common.parsers.arg_parser import (
 def get_isolated_analysis_output_dir(
     arguments: list[str] | None = None,
 ) -> str | None:
-    """Identify an offline analysis with its own output and Redis instance.
+    """Check if this is an isolated file analysis, and get its output directory.
+
+    An isolated analysis reads a file (not an interface), is started with
+    --multiinstance and its own output directory, and gets its own Redis
+    server so it doesn't share data with other runs.
 
     Parameters:
-        arguments: CLI arguments, or None to read the current process arguments.
+        arguments: Command-line arguments. If None, the arguments of the
+            current process are used.
 
     Returns:
-        Output directory for an isolated analysis, or None for other runs.
+        The output directory, or None if this isn't an isolated analysis.
     """
     parser = create_isolated_analysis_parser()
     options, _ = parser.parse_known_args(arguments)
@@ -38,22 +44,26 @@ def get_isolated_analysis_output_dir(
 
 
 def build_isolated_analysis_config(config: dict, output: str) -> dict:
-    """Build the settings an isolated analysis actually runs with.
+    """Build the config that an isolated analysis runs with.
 
-    ConfigParser keeps only what slips.yaml says. Code that reads one of
-    the settings below checks db.is_running_non_stop() and applies the
-    same override for file analyses; this function only records them in
-    the metadata dir. Keep both in sync. Every path setting
-    (permanent dir, whitelist, feed downloads, persistent stores) is left as
-    configured; modules that must not write into the live permanent dir
-    during a file analysis choose their own output-dir path in code.
+    ConfigParser only reads slips.yaml, so it doesn't know about the
+    overrides below. The code that reads these settings checks
+    db.is_running_non_stop() and applies the same override for file
+    analyses. This function only records them in the metadata dir, so
+    keep both in sync.
+
+    Path settings (permanent dir, whitelist, feed downloads, persistent
+    stores) are left as configured. Modules that must not write into the
+    live permanent dir during a file analysis pick their own output
+    directory in code.
 
     Parameters:
-        config: Source configuration to reuse.
-        output: Independent analysis output directory.
+        config: The config to copy.
+        output: The output directory of the analysis.
 
     Returns:
-        Configuration with private runtime data and a localhost web listener.
+        A copy of the config that keeps its runtime data in the output
+        directory and serves the web interface on localhost only.
     """
     result = deepcopy(config)
     overrides = {
@@ -72,13 +82,16 @@ def build_isolated_analysis_config(config: dict, output: str) -> dict:
 def validate_analysis_paths(
     config: dict, output: str, config_path: str, input_path: str
 ) -> None:
-    """Reject outputs whose normal cleanup could damage source data.
+    """Stop the run if its output directory could end up deleting source data.
+
+    Slips empties the output directory when it starts, so it must not
+    contain (or be inside) the config, the input or the permanent data.
 
     Parameters:
-        config: Original configuration containing shared source paths.
-        output: Directory that startup will reset.
-        config_path: Configuration file being reused.
-        input_path: Capture or log directory being analyzed.
+        config: The config, used to find the permanent dir and whitelist.
+        output: The output directory that Slips will empty.
+        config_path: The config file in use.
+        input_path: The file or directory being analyzed.
     """
     destination = Path(output).resolve()
     permanent = Path(

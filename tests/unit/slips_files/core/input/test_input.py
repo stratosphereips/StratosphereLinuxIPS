@@ -531,7 +531,7 @@ def test_close_all_handles():
     [[123, 321], []],
 )
 def test_shutdown_zeek_runtime_kills_pids(pids: list[int]) -> None:
-    """Stop registered identities before joining Zeek monitor threads.
+    """Stop the registered Zeek processes before joining the Zeek monitor threads.
 
     Parameters:
         pids: Legacy PID list, which must never be used to send signals.

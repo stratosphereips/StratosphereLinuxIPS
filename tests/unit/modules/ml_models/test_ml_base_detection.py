@@ -174,7 +174,7 @@ def test_get_trained_models_dir(
 
 @pytest.mark.parametrize("filename", ["model.bin", "scaler.bin", "pca.bin"])
 def test_get_trained_artifact_path(base_module, filename: str) -> None:
-    """Place every trained file inside the run's models dir."""
+    """Put every trained file in the models dir of the run."""
     _module_factory = ModuleFactory()
     base_module.get_trained_models_dir = Mock(
         return_value="output_test/dummy_ml/models"

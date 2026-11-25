@@ -320,8 +320,8 @@ def test_start_updates_slips_pid():
     daemon.slips.start.assert_called_once()
 
 
-def daemon_semaphore_worker(event: object, marker: str) -> None:
-    """Use a semaphore created before detachment inside a spawn worker.
+def run_daemon_semaphore_worker(event: object, marker: str) -> None:
+    """Use, in a spawned worker, a semaphore created before the daemon detached.
 
     Parameters:
         event: Named semaphore that must survive the original parent's exit.
@@ -331,8 +331,8 @@ def daemon_semaphore_worker(event: object, marker: str) -> None:
     Path(marker).write_text("worker ran")
 
 
-def daemon_startup_probe(folder: str, scenario: str) -> None:
-    """Run the real double fork without touching Slips databases or captures.
+def run_daemon_startup_probe(folder: str, scenario: str) -> None:
+    """Do the real double fork of the daemon, without touching any Slips database.
 
     Parameters:
         folder: Isolated log and state directory.
@@ -354,7 +354,7 @@ def daemon_startup_probe(folder: str, scenario: str) -> None:
     event = multiprocessing.get_context("spawn").Event()
 
     def run() -> None:
-        """Start an isolated spawn worker, acknowledge readiness, and wait."""
+        """Start a spawned worker, tell the terminal the daemon is ready, and wait."""
         if scenario == "startup_exception":
             raise RuntimeError("intentional startup failure")
         if scenario == "early_exit":
@@ -363,7 +363,7 @@ def daemon_startup_probe(folder: str, scenario: str) -> None:
         deadline = time.monotonic() + 10
         while not (location / "launch-worker").exists() and time.monotonic() < deadline:
             time.sleep(.05)
-        child = multiprocessing.get_context("spawn").Process(target=daemon_semaphore_worker,
+        child = multiprocessing.get_context("spawn").Process(target=run_daemon_semaphore_worker,
             args=(event, str(location / "worker-ran")))
         child.start()
         event.set()
@@ -384,16 +384,16 @@ def daemon_startup_probe(folder: str, scenario: str) -> None:
 
 @pytest.mark.parametrize("scenario", ["spawn", "pid_directory", "startup_exception", "early_exit"])
 def test_real_daemon_reports_startup_and_preserves_spawn_semaphores(tmp_path: Path, scenario: str) -> None:
-    """Verify real fork/spawn behavior and terminal feedback on startup errors.
+    """Check the real fork/spawn behavior, and what the terminal prints when startup fails.
 
     Parameters:
         tmp_path: Isolated state directory; live Slips data is never opened.
         scenario: Successful startup or a failure to report to the terminal.
     """
     factory = ModuleFactory()
-    entrypoint = tmp_path / "slips.py"
-    entrypoint.write_text("from tests.unit.slips.test_daemon import daemon_startup_probe\nimport sys\nif __name__ == '__main__':\n    daemon_startup_probe(sys.argv[1],sys.argv[2])\n")
-    command = [sys.executable, "-c", "import runpy,sys; script=sys.argv.pop(1); runpy.run_path(script,run_name='__main__')", str(entrypoint), str(tmp_path), scenario]
+    slips_script = tmp_path / "slips.py"
+    slips_script.write_text("from tests.unit.slips.test_daemon import run_daemon_startup_probe\nimport sys\nif __name__ == '__main__':\n    run_daemon_startup_probe(sys.argv[1],sys.argv[2])\n")
+    command = [sys.executable, "-c", "import runpy,sys; script=sys.argv.pop(1); runpy.run_path(script,run_name='__main__')", str(slips_script), str(tmp_path), scenario]
     pid_path = tmp_path / "state" / "slips_daemon.lock"
     try:
         # The pre-fork resource tracker can retain a terminal descriptor;
@@ -429,7 +429,7 @@ def test_real_daemon_reports_startup_and_preserves_spawn_semaphores(tmp_path: Pa
 
 
 def test_daemon_logs_are_preserved(tmp_path: Path) -> None:
-    """Keep old error and normal log contents when opening daemon streams.
+    """Keep the old contents of the error and normal logs when opening the daemon streams.
 
     Parameters:
         tmp_path: Directory containing an earlier run's logs.
@@ -445,10 +445,10 @@ def test_daemon_logs_are_preserved(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("is_daemon", [False, True])
 def test_stop_daemon_uses_verified_instance_shutdown(is_daemon: bool) -> None:
-    """Use the shared stop flow only for a verified daemon identity.
+    """Only stop a process if it really is the daemon from the PID file.
 
     Parameters:
-        is_daemon: Whether the PID really belongs to a daemon from this checkout.
+        is_daemon: Whether the PID really belongs to a daemon from this Slips folder.
     """
     daemon = ModuleFactory().create_daemon_object()
     daemon.pid = 12345
@@ -462,7 +462,7 @@ def test_stop_daemon_uses_verified_instance_shutdown(is_daemon: bool) -> None:
 
 @pytest.mark.parametrize("value,expected", [("", None), ("unfinished", None), ("0", None), ("-1", None), ("12345", 12345)])
 def test_read_pidfile_rejects_invalid_or_incomplete_data(tmp_path: Path, value: str, expected: int | None) -> None:
-    """Treat an incomplete PID file as absent rather than a startup crash.
+    """Treat a half-written PID file as missing, instead of crashing on startup.
 
     Parameters:
         tmp_path: Isolated PID file directory.
@@ -477,7 +477,7 @@ def test_read_pidfile_rejects_invalid_or_incomplete_data(tmp_path: Path, value: 
 
 @pytest.mark.parametrize("status,expected", [("ready", 0), ("error", 1), ("eof", 1)])
 def test_startup_pipe_reports_success_failure_and_unexpected_exit(status: str, expected: int) -> None:
-    """Return failure when detachment succeeds but the daemon never starts.
+    """Fail if the daemon detaches but never finishes starting.
 
     Parameters:
         status: Final startup message, or an unexpected closed pipe.
@@ -493,7 +493,7 @@ def test_startup_pipe_reports_success_failure_and_unexpected_exit(status: str, e
 
 @pytest.mark.parametrize("alive", [True, False])
 def test_startup_wait_distinguishes_background_initialization_from_exit(alive: bool, capsys: pytest.CaptureFixture) -> None:
-    """A wait timeout leaves a live daemon running and reports a dead daemon as failure.
+    """If waiting times out, leave a live daemon running and report a dead one as failed.
 
     Parameters:
         alive: Whether the detached PID remains alive after the wait.
@@ -515,7 +515,7 @@ def test_startup_wait_distinguishes_background_initialization_from_exit(alive: b
 
 
 def test_late_startup_confirmation_is_logged_after_terminal_disconnect(tmp_path: Path) -> None:
-    """Keep a startup confirmation in the log after the terminal stops waiting.
+    """Still write the startup message to the log after the terminal stopped waiting.
 
     Parameters:
         tmp_path: Isolated directory for the daemon log.

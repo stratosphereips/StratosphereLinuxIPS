@@ -88,6 +88,7 @@ These rules MUST be followed:
 - Avoid trivial, redundant, or implementation-detail tests; remove existing tests that provide no meaningful behavioral coverage.
 - .add_argument() should only be called from arg_parser. don't call it from functions somewhere else then import it in arg_parser.py. all args should be hardcoded in arg_parser.py.
 - never check for arguments using their hardcoded names e.g ""--stopdaemon"}" in self.args, always use their attributes instead e.g. self.args.stopdaemon.
+- all function names must start with a verb unless absolutely necessary
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.

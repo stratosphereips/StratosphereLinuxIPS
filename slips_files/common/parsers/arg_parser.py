@@ -9,13 +9,13 @@ import textwrap
 
 
 def parse_web_port(value: str) -> int:
-    """Validate a web listener port supplied on the command line.
+    """Check that the web port given on the command line is valid.
 
     Parameters:
-        value: Requested TCP port.
+        value: The port the user typed.
 
     Returns:
-        Integer port from 1 to 65535, or an argparse error for invalid input.
+        The port as a number from 1 to 65535. Anything else is an argparse error.
     """
     try:
         port = int(value)
@@ -31,13 +31,13 @@ def parse_web_port(value: str) -> int:
 
 
 def get_web_port_override(arguments: list[str] | None = None) -> int | None:
-    """Read the port override while allowing unrelated module arguments.
+    """Read --web-port from the command line, ignoring all other arguments.
 
     Parameters:
         arguments: Command-line arguments, or None to read sys.argv.
 
     Returns:
-        Requested web port, or None when the option is absent.
+        The web port, or None if --web-port wasn't given.
     """
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--web-port", type=parse_web_port)
@@ -45,26 +45,26 @@ def get_web_port_override(arguments: list[str] | None = None) -> int | None:
 
 
 def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
-    """Register instance commands in the full and lightweight CLI parsers.
+    """Add --list-instances, --stop and --restart to a parser.
 
-    The three commands stay mutually exclusive in every parser using them.
+    Only one of the three can be used at a time.
 
     Parameters:
-        parser: Parser receiving the management options.
+        parser: The parser to add the options to.
     """
     commands = parser.add_mutually_exclusive_group()
     commands.add_argument(
         "--list-instances",
         action="store_true",
-        help="List running Slips instances from this checkout without "
-        "starting a capture or connecting to Redis.",
+        help="List running Slips instances from this Slips folder without "
+        "starting a run or connecting to Redis.",
     )
     commands.add_argument(
         "--stop",
         nargs="?",
         const="auto",
         metavar="PID|all",
-        help="Gracefully stop a Slips instance in any mode from this checkout. "
+        help="Gracefully stop a Slips instance in any mode from this Slips folder. "
         "Omit PID when only one is running, or use all to stop every instance.",
     )
     commands.add_argument(
@@ -79,10 +79,11 @@ def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def create_instance_parser() -> argparse.ArgumentParser:
-    """Build the lightweight parser used before Slips opens any database.
+    """Build a small parser that only knows --list-instances, --stop and
+    --restart. It is used before Slips opens any database.
 
     Returns:
-        Parser holding only the mutually exclusive instance commands.
+        The parser.
     """
     parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
     add_instance_arguments(parser)
@@ -90,12 +91,13 @@ def create_instance_parser() -> argparse.ArgumentParser:
 
 
 def create_launch_parser() -> argparse.ArgumentParser:
-    """Build the parser naming the options of a running Slips launch.
+    """Build a parser that knows every option of slips.py.
 
-    Only the spellings matter: it is never used to parse a command line.
+    It is only used to look up how each option can be spelled when reading
+    the command line of other Slips processes, never to parse our own.
 
     Returns:
-        Parser holding the options read from other runs' arguments.
+        The parser.
     """
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("-D", "--daemon", action="store_true")
@@ -115,10 +117,12 @@ def create_launch_parser() -> argparse.ArgumentParser:
 
 
 def create_web_server_parser() -> argparse.ArgumentParser:
-    """Build the parser naming the options of the web interface server.
+    """Build a parser that knows the options of the web interface server.
+
+    It is used to read the command line of a running web server.
 
     Returns:
-        Parser holding the options read from a running web server.
+        The parser.
     """
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("--output-dir")
@@ -126,10 +130,11 @@ def create_web_server_parser() -> argparse.ArgumentParser:
 
 
 def create_isolated_analysis_parser() -> argparse.ArgumentParser:
-    """Build the parser that detects isolated offline analyses.
+    """Build a parser that knows only the options that decide if a run is an
+    isolated file analysis.
 
     Returns:
-        Parser knowing only the options that decide isolation.
+        The parser.
     """
     parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
     parser.add_argument("-m", "--multiinstance", action="store_true")
@@ -145,10 +150,11 @@ def create_isolated_analysis_parser() -> argparse.ArgumentParser:
 
 
 def create_run_conflict_parser() -> argparse.ArgumentParser:
-    """Build the parser reading another run's shared-resource options.
+    """Build a parser that reads the options another run shares with us
+    (Redis port, output dir, web port...).
 
     Returns:
-        Parser that raises argparse.ArgumentError instead of exiting.
+        The parser. It raises argparse.ArgumentError instead of exiting.
     """
     parser = argparse.ArgumentParser(
         add_help=False, allow_abbrev=False, exit_on_error=False

@@ -145,7 +145,7 @@ class Main:
         )
 
     def store_zeek_dir_copy(self) -> None:
-        """Preserve Zeek logs when they are stored outside the run output."""
+        """Copy the Zeek logs to the output dir when they are stored somewhere else."""
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:

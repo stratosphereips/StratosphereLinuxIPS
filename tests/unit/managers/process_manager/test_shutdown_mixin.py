@@ -18,7 +18,7 @@ from tests.module_factory import ModuleFactory
 
 @pytest.mark.parametrize("unread", [False, True])
 def test_shutdown_queue_cleanup_cannot_hold_interpreter_open(unread: bool) -> None:
-    """Exit after workers stop even when IPC feeder pipes still contain unread data.
+    """Exit after the workers stop, even if unread data is left in the queue pipes.
 
     Parameters:
         unread: Whether dead consumers left more data than a pipe can hold.
@@ -46,7 +46,7 @@ print("closed")
 
 
 def abandon_event_lock(event: object, ready: object) -> None:
-    """Leave a shared event lock held to reproduce an interrupted worker.
+    """Take the lock of a shared event and never release it, like a worker killed mid-way.
 
     Parameters:
         event: Stop event whose condition becomes unusable.
@@ -58,7 +58,7 @@ def abandon_event_lock(event: object, ready: object) -> None:
 
 
 def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
-    """Reproduce the real semaphore deadlock and enforce the shared deadline."""
+    """Reproduce the real semaphore deadlock, and check that shutdown still stops at the deadline."""
     manager = ModuleFactory().create_process_manager_obj()
     context = multiprocessing.get_context("spawn")
     event = context.Event()
@@ -92,7 +92,7 @@ def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
 
 @pytest.mark.parametrize("failed", [False, True])
 def test_shutdown_notification_reports_failure_and_reuses_one_thread(failed: bool) -> None:
-    """Notify each event once, retaining failures instead of losing thread errors.
+    """Set each event once, and keep the errors raised in the helper threads.
 
     Parameters:
         failed: Whether signalling raises an exception.
@@ -267,7 +267,7 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
 def test_interrupt_caps_module_shutdown_wait(
     interrupted: bool, expected_seconds: int
 ) -> None:
-    """Keep a long normal wait while bounding Ctrl-C shutdown.
+    """Wait long on a normal shutdown, but cap the wait after Ctrl-C.
 
     Parameters:
         interrupted: Whether Ctrl-C requested shutdown.
@@ -281,7 +281,7 @@ def test_interrupt_caps_module_shutdown_wait(
 
 
 def test_interrupt_wait_uses_remaining_global_deadline() -> None:
-    """Do not wait three seconds for every pending module after Ctrl-C."""
+    """After Ctrl-C, don't wait 3 seconds for each module that is still running."""
     process_manager = ModuleFactory().create_process_manager_obj()
     children = [Mock(name="first"), Mock(name="second")]
     for child in children:
@@ -298,7 +298,7 @@ def test_interrupt_wait_uses_remaining_global_deadline() -> None:
 
 
 def test_forced_child_cleanup_skips_another_grace_wait() -> None:
-    """Start killing children immediately when the grace period expires."""
+    """Kill the children as soon as the grace period is over."""
     process_manager = ModuleFactory().create_process_manager_obj()
     child = Mock(pid=123, name="test_module")
     child.is_alive.return_value = True
@@ -318,7 +318,7 @@ def test_forced_child_cleanup_skips_another_grace_wait() -> None:
 
 @pytest.mark.parametrize("recorded_stopped", [False, True])
 def test_child_cleanup_does_not_depend_on_redis_metadata(recorded_stopped: bool) -> None:
-    """Reap an owned live child even after Redis or stopped status loses its PID.
+    """Kill a child we started even if Redis or the stopped message lost its PID.
 
     Parameters:
         recorded_stopped: Whether the module already reported completion.
@@ -921,7 +921,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
 
 @pytest.mark.parametrize("interrupted", [False, True])
 def test_failed_stop_notification_always_reaps_workers(interrupted: bool) -> None:
-    """Keep failed or interrupted notification out of unbounded child joins.
+    """Never wait forever for children when the stop signal failed or was interrupted.
 
     Parameters:
         interrupted: Whether a second Ctrl-C interrupts the event notification.
@@ -954,7 +954,7 @@ def test_failed_stop_notification_always_reaps_workers(interrupted: bool) -> Non
 def test_kill_all_children_only_kills_running_processes(
     still_alive: bool,
 ) -> None:
-    """Reap exited children and force-kill only children still running.
+    """Clean up children that exited, and force-kill only the ones still running.
 
     Parameters:
         still_alive: Whether the child survived the initial join.
@@ -1006,7 +1006,7 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
 
 
 def test_shutdown_exception_still_kills_tracked_processes() -> None:
-    """Run final cleanup even when a shutdown operation fails unexpectedly."""
+    """Still do the final cleanup if a shutdown step fails with an unexpected error."""
     manager = ModuleFactory().create_process_manager_obj()
     manager._generate_plots = Mock(side_effect=RuntimeError("failed plot"))
     manager._kill_tracked_processes = Mock()
@@ -1018,7 +1018,7 @@ def test_shutdown_exception_still_kills_tracked_processes() -> None:
 
 
 def test_final_process_cleanup_cannot_be_interrupted_by_ctrl_c() -> None:
-    """Restore SIGINT handling only after the verified cleanup completes."""
+    """Put the SIGINT handler back only after the cleanup is done."""
     manager = ModuleFactory().create_process_manager_obj()
     owned = manager._tracked_processes = Mock()
     previous = signal.getsignal(signal.SIGINT)
@@ -1194,7 +1194,7 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
 
 @pytest.mark.parametrize("finished", [False, True])
 def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
-    """Keep stdin live until EOF, then allow normal input/profiler completion.
+    """Keep waiting while stdin is open, and finish normally once it ends.
 
     Parameters:
         finished: Whether the input process has signalled end of input.

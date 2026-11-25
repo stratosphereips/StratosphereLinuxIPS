@@ -1,4 +1,4 @@
-"""Verify independent file analyses without copying live configuration files."""
+"""Tests for isolated file analyses: runs on a file that keep their own data."""
 
 from copy import deepcopy
 from pathlib import Path
@@ -26,11 +26,11 @@ from tests.module_factory import ModuleFactory
     (["--list-instances"], None),
 ])
 def test_isolated_analysis_selection(arguments: list[str], expected: str | None) -> None:
-    """Enable automatic file isolation only for the complete CLI combination.
+    """A run is isolated only if it has all of -m, -f and -o and no -i or -g.
 
     Parameters:
-        arguments: Arguments supplied by the main process or a worker.
-        expected: Independent output path, or None for other run types.
+        arguments: The command-line arguments of the run.
+        expected: The output directory, or None if the run is not isolated.
     """
     _factory = ModuleFactory()
     assert get_isolated_analysis_output_dir(arguments) == expected
@@ -38,10 +38,10 @@ def test_isolated_analysis_selection(arguments: list[str], expected: str | None)
 
 @pytest.mark.parametrize("extra", [["--clearcache"], ["--keep-history"], ["-P", "6379"]])
 def test_isolated_analysis_rejects_shared_cache_operations(extra: list[str]) -> None:
-    """Reject shared destructive operations before configuration has side effects.
+    """Options that touch shared data are rejected in an isolated analysis.
 
     Parameters:
-        extra: Options incompatible with independent file analysis.
+        extra: The option that can't be used with an isolated analysis.
     """
     _factory = ModuleFactory()
     with pytest.raises(SystemExit) as error:
@@ -50,10 +50,10 @@ def test_isolated_analysis_rejects_shared_cache_operations(extra: list[str]) -> 
 
 
 def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> None:
-    """Keep detection parameters and read models while separating writable state.
+    """Detection settings stay as they are; only the data locations change.
 
     Parameters:
-        tmp_path: Separate analysis output.
+        tmp_path: Output folder of the analysis.
     """
     _factory = ModuleFactory()
     source = {"parameters": {"permanent_dir": "live", "time_window_width": 120},
@@ -75,10 +75,10 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
 
 
 def test_isolated_configuration_never_creates_a_permanent_dir(tmp_path: Path) -> None:
-    """Reuse the source permanent dir, whitelist and feed downloads in place.
+    """The permanent dir, whitelist and feed download paths are left as configured.
 
     Parameters:
-        tmp_path: Separate analysis output.
+        tmp_path: Output folder of the analysis.
     """
     _factory = ModuleFactory()
     source = {"parameters": {"permanent_dir": "live"},
@@ -98,12 +98,12 @@ def test_isolated_configuration_never_creates_a_permanent_dir(tmp_path: Path) ->
 
 @pytest.mark.parametrize("output", [".", "live", "live/nested", "config", "input", "input/nested", "rules", "analysis"])
 def test_analysis_paths_protect_original_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str) -> None:
-    """Reject destructive output relationships before creating any files.
+    """An output dir that could delete source data is rejected, and nothing is created.
 
     Parameters:
-        tmp_path: Source configuration, input and state paths.
-        monkeypatch: Relative path resolution inside the fixture.
-        output: Requested output directory.
+        tmp_path: Folder holding the config, input and permanent dir.
+        monkeypatch: Used to make relative paths resolve inside tmp_path.
+        output: The output directory the user asked for.
     """
     _factory = ModuleFactory()
     monkeypatch.chdir(tmp_path)
@@ -119,11 +119,11 @@ def test_analysis_paths_protect_original_files(tmp_path: Path, monkeypatch: pyte
 
 
 def test_each_process_reconstructs_same_analysis_configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Reconstruct the same private paths without rewriting argv or source YAML.
+    """Every process reads the same config, without changing argv or slips.yaml.
 
     Parameters:
-        tmp_path: Reused source configuration and selected output.
-        monkeypatch: Command line and configuration singleton isolation.
+        tmp_path: Folder holding the config file and the output dir.
+        monkeypatch: Used to set the command line and reset ConfigParser.
     """
     _factory = ModuleFactory()
     source = tmp_path / "slips.yaml"
@@ -137,7 +137,7 @@ def test_each_process_reconstructs_same_analysis_configuration(tmp_path: Path, m
         monkeypatch.setattr(ConfigParser, "_instance", None)
         conf = ConfigParser()
         configurations.append(conf.config)
-        # conf only holds slips.yaml, runtime values live in redis
+        # the config only has what slips.yaml says; runtime values live in Redis
         assert conf.config == original
         assert not hasattr(conf, "isolated_analysis")
         assert conf.web_interface_port == 55012
@@ -148,7 +148,7 @@ def test_each_process_reconstructs_same_analysis_configuration(tmp_path: Path, m
 
 
 def test_remote_feeds_default_to_a_dir_inside_permanent() -> None:
-    """Download feeds inside the permanent dir unless a path is configured."""
+    """Feeds are downloaded into the permanent dir unless a path is configured."""
     _factory = ModuleFactory()
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {"parameters": {"permanent_dir": "live"}}
@@ -160,10 +160,10 @@ def test_remote_feeds_default_to_a_dir_inside_permanent() -> None:
 
 
 def test_isolated_configuration_leaves_store_settings_untouched(tmp_path: Path) -> None:
-    """Choose store paths in the modules, not by rewriting the settings.
+    """The store settings are not changed; the modules pick their own paths.
 
     Parameters:
-        tmp_path: Separate analysis output.
+        tmp_path: Output folder of the analysis.
     """
     _factory = ModuleFactory()
     source = {"regex_generator": {"persistent_store_dir": "databases/regex_store"},
@@ -176,12 +176,12 @@ def test_isolated_configuration_leaves_store_settings_untouched(tmp_path: Path) 
 @pytest.mark.parametrize("isolated", [False, True])
 @pytest.mark.parametrize("storage_class", ["regex", "t_cell"])
 def test_file_analysis_ignores_the_persistent_store(tmp_path: Path, isolated: bool, storage_class: str) -> None:
-    """Keep what a file analysis learns out of the live permanent dir.
+    """A file analysis must not write into the permanent dir of live runs.
 
     Parameters:
-        tmp_path: Output dir of the analysis.
+        tmp_path: Output folder of the analysis.
         isolated: Whether the run is an isolated file analysis.
-        storage_class: Which store resolves its directory.
+        storage_class: Which store to test.
     """
     from unittest.mock import Mock
     from slips_files.core.database.sqlite_db.regex_generator_db import (

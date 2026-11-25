@@ -18,7 +18,7 @@ from tests.module_factory import ModuleFactory
 def test_explicit_source_credentials_bypass_other_cached_password(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: str | None,
 ) -> None:
-    """Read the selected source credentials before copying an analysis login.
+    """Read the credentials of the source config before copying them for an analysis.
 
     Parameters:
         tmp_path: Original credential file for the shared Redis cache.

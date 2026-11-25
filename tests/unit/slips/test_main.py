@@ -313,7 +313,7 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
 def test_store_zeek_dir_copy_preserves_logs_already_in_output(
     tmp_path: Path, source_kind: str
 ) -> None:
-    """Skip copying an output directory onto itself, including aliases.
+    """Don't copy an output dir onto itself, even when reached through another path.
 
     Parameters:
         tmp_path: Isolated run directory containing existing Zeek logs.
@@ -470,7 +470,7 @@ def test_prepare_output_dir_with_o_flag_deletes_files_preserve_slips(
 def test_keep_history_supports_first_start_and_later_restart(
     tmp_path: Path, initial_state: str
 ) -> None:
-    """Use one command to initialize an output and later retain its history.
+    """Use the same command to create an output dir and, later, to keep its history.
 
     Parameters:
         tmp_path: Isolated output directory.

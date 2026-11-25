@@ -71,10 +71,10 @@ def ensure_redis_password(conf_path: str | None = None) -> str:
     rest just read the file the winner created.
 
     Parameters:
-        conf_path: Optional source credential file when preparing an isolated run.
+        conf_path: Credentials file to copy from, when preparing an isolated run.
 
     Returns:
-        Password read from or created in the requested credential file.
+        The password, read from the file or created in it.
     """
     global _cached_password
     if _cached_password and conf_path is None:

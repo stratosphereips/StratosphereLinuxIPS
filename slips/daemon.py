@@ -77,7 +77,7 @@ class Daemon:
             f.write(f"{text}\n")
 
     def create_std_streams(self):
-        """Create daemon log streams without truncating saved run history."""
+        """Create the daemon log streams, keeping the contents of old logs."""
         if self.slips.args.is_slips_started_by_an_update:
             return
 
@@ -132,10 +132,10 @@ class Daemon:
             self.print("Either Daemon stopped normally or an error occurred.")
 
     def _report_startup(self, status: str, message: str) -> None:
-        """Send bounded startup status to the original terminal process.
+        """Tell the terminal that started the daemon how its startup is going.
 
         Parameters:
-            status: Starting, ready, or error status.
+            status: "starting", "ready" or "error".
             message: PID or short failure description for the terminal.
         """
         if self._startup_write_fd is None:
@@ -156,7 +156,7 @@ class Daemon:
                 self._startup_write_fd = None
 
     def notify_started(self) -> None:
-        """Tell the terminal that the daemon has started its core workers."""
+        """Tell the terminal that the daemon has started its main processes."""
         self.print(f"Slips daemon core workers started. [PID {os.getpid()}]")
         self._report_startup("ready", str(os.getpid()))
 
@@ -164,7 +164,7 @@ class Daemon:
         """Tell the terminal that the daemon died before it finished starting.
 
         Returns:
-            Failing exit status for the terminal command.
+            1, the exit code for the failed command.
         """
         print(
             f"Slips daemon exited before startup completed. See {self.stderr}",
@@ -180,7 +180,7 @@ class Daemon:
             result: Final startup message, with its status and message.
 
         Returns:
-            Zero for a ready daemon, one for a failed startup.
+            0 if the daemon is ready, 1 if its startup failed.
         """
         if result["status"] == "ready":
             print(
@@ -197,13 +197,13 @@ class Daemon:
         return 1
 
     def _announce_unconfirmed_startup(self, pid: Optional[int]) -> int:
-        """Tell the terminal what is known once the startup wait ran out.
+        """Tell the terminal what we know after waiting for startup timed out.
 
         Parameters:
             pid: Daemon PID if it was reported during the wait.
 
         Returns:
-            Zero when the daemon is still running, one when it is gone.
+            0 if the daemon is still running, 1 if it is gone.
         """
         if pid and self.is_pid_running(pid):
             print(
@@ -217,13 +217,16 @@ class Daemon:
         return self._announce_early_exit()
 
     def _wait_for_startup(self, descriptor: int) -> int:
-        """Wait for startup feedback without mistaking a fork for success.
+        """Wait until the daemon says it started, failed, or the wait times out.
+
+        The first fork alone doesn't mean the daemon started.
 
         Parameters:
             descriptor: Read end of the daemon startup pipe.
 
         Returns:
-            Terminal command exit status; a live slow startup returns zero.
+            The exit code for the command. A daemon that is alive but
+            still starting gives 0.
         """
         deadline = time.monotonic() + 30
         pending = b""
@@ -443,10 +446,10 @@ class Daemon:
         return True
 
     def stop(self) -> dict[str, object]:
-        """Stop the verified daemon through the shared instance controller.
+        """Stop the daemon using the same code as the --stop command.
 
         Returns:
-            Whether the daemon and its observed workers stopped, or an error.
+            Whether the daemon and its workers stopped, or an error.
         """
         try:
             with Lock(name=self.daemon_stop_lock):
@@ -459,17 +462,17 @@ class Daemon:
                     self.slips.proc_man.cleanup_failed_startup()
                     self.delete_pidfile()
                     return {"stopped": True, "error": None}
-                entrypoint = Path(__file__).parent.parent / "slips.py"
+                slips_script = Path(__file__).parent.parent / "slips.py"
                 process = psutil.Process(int(self.pid))
-                instance = get_verified_instance(process, entrypoint)
+                instance = get_verified_instance(process, slips_script)
                 if instance is None or not {"-D", "--daemon"}.intersection(
                     instance.arguments
                 ):
                     return {
                         "stopped": False,
-                        "error": "The PID file does not identify this checkout's Slips daemon.",
+                        "error": "The PID file does not identify a Slips daemon from this Slips folder.",
                     }
-                stopped = stop_instances([instance], entrypoint) == 0
+                stopped = stop_instances([instance], slips_script) == 0
                 if stopped and self.read_pidfile() == instance.pid:
                     self.delete_pidfile()
                 return {

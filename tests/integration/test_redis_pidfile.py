@@ -1,4 +1,4 @@
-"""Verify real Redis startup writes and removes the correct PID files."""
+"""Test that Redis servers write a PID file on start and remove it on stop."""
 
 import shutil
 import time
@@ -23,13 +23,15 @@ def test_redis_pidfiles_are_writable_and_isolated(
     integration_port_factory: Callable[[str], int],
     starter: str,
 ) -> None:
-    """Start two real servers without a system PID file or elevated privileges.
+    """Two real Redis servers each get their own PID file, without root.
+
+    Neither server uses a system-wide PID file.
 
     Parameters:
-        tmp_path: Isolated Redis configuration, log, and data directory.
-        monkeypatch: Restore Redis class settings after the test.
-        integration_port_factory: Allocate ports separate from running Slips.
-        starter: Production config writer or integration-test startup helper.
+        tmp_path: Folder for the Redis config, logs and data.
+        monkeypatch: Restores the RedisDB settings after the test.
+        integration_port_factory: Gives ports that a running Slips isn't using.
+        starter: How to start Redis: the way Slips does it, or the test helper.
     """
     factory = ModuleFactory()
     if shutil.which("redis-server") is None:

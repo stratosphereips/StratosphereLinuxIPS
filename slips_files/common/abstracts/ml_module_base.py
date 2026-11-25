@@ -141,7 +141,7 @@ class MLBaseDetection(IModule, ABC):
         self.init_log_file()
 
     def get_trained_models_dir(self) -> str:
-        """Pick where this run keeps the models it trains.
+        """Get the dir where this run keeps the models it trains.
 
 
         if slips is running with -f, models get stored in their
@@ -160,13 +160,13 @@ class MLBaseDetection(IModule, ABC):
         return os.path.join(module_dir, TRAINED_MODELS_DIRNAME)
 
     def get_trained_artifact_path(self, filename: str) -> str:
-        """Build the path of one trained file inside the models dir.
+        """Get the path of a trained file inside the models dir.
 
         Parameters:
             filename: Name of the trained file, e.g. model.bin.
 
         Returns:
-            Path where training stores that file.
+            Path where that file is stored after training.
         """
         return os.path.join(self.get_trained_models_dir(), filename)
 

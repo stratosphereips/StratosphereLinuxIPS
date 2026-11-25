@@ -1,4 +1,4 @@
-"""Exercise shutdown with real detached descendants and unrelated processes."""
+"""Tests for stopping the processes Slips started, using real subprocesses."""
 
 import multiprocessing
 import os
@@ -18,12 +18,15 @@ from managers.process_manager.owned_processes import OwnedProcesses
 from tests.module_factory import ModuleFactory
 
 
-def detached_worker(connection: Any, finish: Any) -> None:
-    """Start a stubborn separate-session subprocess and wait for release.
+def run_detached_worker(connection: Any, finish: Any) -> None:
+    """Start a subprocess that ignores SIGTERM and lives in its own session.
+
+    Then wait until the test says it can exit.
 
     Parameters:
-        connection: Pipe reporting the detached subprocess identity.
-        finish: Event permitting the worker to exit before its subprocess.
+        connection: Pipe used to send the subprocess PID to the test.
+        finish: Event the test sets when this worker may exit (while the
+            subprocess keeps running).
     """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     child = subprocess.Popen(
@@ -40,17 +43,17 @@ def detached_worker(connection: Any, finish: Any) -> None:
 @pytest.mark.parametrize("method", ["spawn", "forkserver"])
 @pytest.mark.parametrize("parent_exited", [False, True])
 def test_detached_descendant_is_stopped_after_parent_exit(method: str, parent_exited: bool) -> None:
-    """Keep detached descendants in scope after their parent disappears.
+    """A subprocess is still killed after the worker that started it has exited.
 
     Parameters:
-        method: Multiprocessing startup mechanism.
-        parent_exited: Exit the worker before performing forced cleanup.
+        method: How multiprocessing starts the worker.
+        parent_exited: Whether the worker exits before we kill everything.
     """
     factory = ModuleFactory()
     context = multiprocessing.get_context(method)
     receiver, sender = context.Pipe(duplex=False)
     finish = context.Event()
-    worker = context.Process(target=detached_worker, args=(sender, finish))
+    worker = context.Process(target=run_detached_worker, args=(sender, finish))
     owned = OwnedProcesses()
     outsider = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(90)"], start_new_session=True)
     detached = None
@@ -85,7 +88,7 @@ def test_detached_descendant_is_stopped_after_parent_exit(method: str, parent_ex
 
 
 def test_web_exclusion_is_temporary_and_non_owned_roots_are_rejected() -> None:
-    """Retain only the selected web process until final cleanup."""
+    """kill_all can spare chosen PIDs, and PIDs we did not start are not tracked."""
     factory = ModuleFactory()
     owned = OwnedProcesses()
     owned.track(os.getpid())
@@ -107,7 +110,7 @@ def test_web_exclusion_is_temporary_and_non_owned_roots_are_rejected() -> None:
 
 
 def test_refresh_retains_late_descendants() -> None:
-    """Record a subprocess created after its worker was first registered."""
+    """A subprocess started after its worker was tracked is tracked too."""
     factory = ModuleFactory()
     owned = OwnedProcesses()
     parent, child = Mock(pid=123), Mock(pid=456)
@@ -121,10 +124,10 @@ def test_refresh_retains_late_descendants() -> None:
 
 @pytest.mark.parametrize("running", [False, True])
 def test_cleanup_checks_identity_and_reports_survivors(running: bool) -> None:
-    """Never signal a reused PID or claim an unkillable process stopped.
+    """A reused PID is not signaled, and a process that survives SIGKILL is reported.
 
     Parameters:
-        running: Whether the retained identity still represents a live process.
+        running: Whether the tracked process is still alive.
     """
     factory = ModuleFactory()
     owned = OwnedProcesses()
@@ -145,10 +148,10 @@ def test_cleanup_checks_identity_and_reports_survivors(running: bool) -> None:
 
 
 def test_only_owned_real_zeek_is_stopped(tmp_path: Path) -> None:
-    """Stop a real Zeek waiting for PCAP input while another Zeek survives.
+    """Only the Zeek that Slips started is stopped; another Zeek keeps running.
 
     Parameters:
-        tmp_path: Isolated Zeek log directory, without live capture data.
+        tmp_path: Folder where Zeek writes its logs.
     """
     factory = ModuleFactory()
     binary = shutil.which("zeek") or shutil.which("bro")
@@ -174,18 +177,19 @@ def test_only_owned_real_zeek_is_stopped(tmp_path: Path) -> None:
             process.stdin.close()
 
 
-def shutdown_coordinator(connection: Any, double_interrupt: bool) -> None:
-    """Run the real shutdown coordinator with isolated services and workers.
+def run_shutdown_coordinator(connection: Any, double_interrupt: bool) -> None:
+    """Run the real Slips shutdown code in its own process, with a fake worker.
 
     Parameters:
-        connection: Pipe reporting the worker tree to the test.
-        double_interrupt: Interrupt the normal wait with another Ctrl-C.
+        connection: Pipe used to report the worker PIDs to the test.
+        double_interrupt: Whether to press Ctrl-C a second time while
+            it is waiting for the modules to finish.
     """
     manager = ModuleFactory().create_process_manager_obj()
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
     finish = context.Event()
-    worker = context.Process(target=detached_worker, args=(sender, finish), name="shutdown-probe")
+    worker = context.Process(target=run_detached_worker, args=(sender, finish), name="shutdown-probe")
     worker.start()
     assert receiver.poll(20)
     detached_pid = receiver.recv()
@@ -215,15 +219,16 @@ def shutdown_coordinator(connection: Any, double_interrupt: bool) -> None:
 
 @pytest.mark.parametrize("double_interrupt", [False, True])
 def test_ctrl_c_reaps_modules_and_detached_subprocesses(double_interrupt: bool) -> None:
-    """Verify Ctrl-C reaches the coordinator's final verified cleanup.
+    """Ctrl-C ends with every module and subprocess stopped.
 
     Parameters:
-        double_interrupt: Also interrupt the coordinator's grace-period wait.
+        double_interrupt: Whether Ctrl-C is pressed a second time while
+            the shutdown is waiting for the modules to finish.
     """
     factory = ModuleFactory()
     context = multiprocessing.get_context("spawn")
     receiver, sender = context.Pipe(duplex=False)
-    coordinator = context.Process(target=shutdown_coordinator, args=(sender, double_interrupt))
+    coordinator = context.Process(target=run_shutdown_coordinator, args=(sender, double_interrupt))
     tree = []
     try:
         coordinator.start()

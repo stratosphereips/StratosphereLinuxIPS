@@ -766,7 +766,7 @@ def test_get_redis_port_started_by_update(args_port, expected_port, mock_db):
 def test_validate_keep_history_rejects_incompatible_args(
     tmp_path: Path, argument: str, value: Any
 ) -> None:
-    """Refuse history mode when it cannot identify one live run.
+    """Refuse --keep-history when it can't tell which run is live.
 
     Parameters:
         tmp_path: Temporary output path.
@@ -792,7 +792,7 @@ def test_validate_keep_history_rejects_incompatible_args(
 
 
 def test_existing_history_still_requires_metadata(tmp_path: Path) -> None:
-    """Reject unverifiable existing history without treating it as a fresh run.
+    """Refuse history that can't be checked, instead of treating it as a fresh run.
 
     Parameters:
         tmp_path: Existing output with an unverified database.
@@ -814,7 +814,7 @@ def test_existing_history_still_requires_metadata(tmp_path: Path) -> None:
 def test_validate_keep_history_accepts_matching_stopped_run(
     tmp_path: Path,
 ) -> None:
-    """Allow one stopped interface run with its existing SQLite history.
+    """Allow a stopped run on the same interface to continue with its saved SQLite history.
 
     Parameters:
         tmp_path: Temporary output path.
@@ -837,7 +837,7 @@ def test_validate_keep_history_accepts_matching_stopped_run(
 
 
 def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
-    """Do not append a different interface's detections to saved history.
+    """Don't add the detections of a different interface to saved history.
 
     Parameters:
         tmp_path: Temporary output path.
@@ -863,7 +863,7 @@ def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
 def test_validate_keep_history_rejects_running_slips(
     tmp_path: Path, has_history: bool
 ) -> None:
-    """Do not mix retained history with a concurrent Slips process.
+    """Don't mix saved history with another Slips process running at the same time.
 
     Parameters:
         tmp_path: Temporary output path.
@@ -897,7 +897,7 @@ def test_validate_keep_history_rejects_running_slips(
 def test_shared_config_works_with_automatic_file_isolation(
     tmp_path: Path, history_starting: bool, collision: str | None,
 ) -> None:
-    """Compare effective file-analysis paths regardless of startup order.
+    """Compare the paths of file analyses, whichever run started first.
 
     Parameters:
         tmp_path: Shared source config and separate output directories.
@@ -932,7 +932,7 @@ def test_shared_config_works_with_automatic_file_isolation(
     active = Mock(info={"pid": 123, "cmdline": command})
     active.cwd.return_value = str(tmp_path)
     validate = manager.validate_keep_history_and_find_saved_history if history_starting else manager.reject_active_history_run
-    # the current run is told apart from its own CLI args (redis isn't up)
+    # redis isn't up yet, so recognize our own run from the CLI args
     own_argv = (
         ["slips.py", "-i", "eth0", "-o", str(live_output), "--keep-history"]
         if history_starting
@@ -967,7 +967,7 @@ def test_shared_config_works_with_automatic_file_isolation(
 def test_history_start_ignores_management_and_other_programs(
     tmp_path: Path, has_history: bool, command: list[str],
 ) -> None:
-    """Do not mistake the waiting restart command for a live capture.
+    """Don't take a waiting --restart command for a running Slips.
 
     Parameters:
         tmp_path: Private output directory, without live databases.
@@ -993,7 +993,7 @@ def test_history_start_ignores_management_and_other_programs(
 
 
 def test_active_history_run_blocks_second_instance() -> None:
-    """Refuse a normal Slips launch while another run keeps history."""
+    """Refuse a normal run while another run keeps history."""
     manager = ModuleFactory().create_redis_manager_obj()
     manager.main.args = SimpleNamespace(
         keep_history=False, port=None, multiinstance=False
@@ -1021,7 +1021,7 @@ def test_active_history_run_blocks_second_instance() -> None:
 def test_history_run_concurrency_isolation(
     tmp_path: Path, history_starting: bool, collision: str | None
 ) -> None:
-    """Allow concurrent analysis only with independent writable resources.
+    """Allow runs at the same time only if they share no files or ports.
 
     Parameters:
         tmp_path: Temporary run and configuration directory.
@@ -1107,7 +1107,7 @@ def test_history_run_concurrency_isolation(
 def test_history_isolation_uses_other_runs_cli_web_port(
     tmp_path: Path, current_port: int, other_cli_port: int,
 ) -> None:
-    """Compare effective ports instead of a reused configuration's default.
+    """Compare the ports actually used, not the default of a reused config.
 
     Parameters:
         tmp_path: Isolated output and configuration locations.
@@ -1138,7 +1138,7 @@ def test_history_isolation_uses_other_runs_cli_web_port(
 def test_explicit_redis_port_takes_precedence_for_history_isolation(
     multiinstance: bool, port: str
 ) -> None:
-    """Do not let -m bypass an explicitly shared Redis port.
+    """Don't let -m skip the check when the same Redis port is given explicitly.
 
     Parameters:
         multiinstance: Whether -m accompanies the explicit port.
@@ -1166,10 +1166,10 @@ def test_explicit_redis_port_takes_precedence_for_history_isolation(
     "configuration",
     ["[broken", "- not-a-mapping", "parameters: invalid", "web_interface:\n  port: invalid"],
 )
-def test_history_run_refuses_unverifiable_configuration(
+def test_history_run_refuses_unreadable_configuration(
     tmp_path: Path, configuration: str
 ) -> None:
-    """Leave an existing capture alone when its resources cannot be read.
+    """Leave the other run alone when its settings can't be read.
 
     Parameters:
         tmp_path: Temporary configuration directory.

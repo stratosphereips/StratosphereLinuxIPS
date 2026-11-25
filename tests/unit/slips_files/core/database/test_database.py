@@ -1785,7 +1785,7 @@ def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | N
 
 
 def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
-    """Clear active Redis data even when config disables normal flushing.
+    """Clear the Redis data of the current run even if flushing is disabled in the config.
 
     Parameters:
         monkeypatch: Restores RedisDB class settings and argv.
@@ -1985,7 +1985,7 @@ def test_setup_config_file_owns_port_specific_pidfile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
     redis_port: int, output_name: str,
 ) -> None:
-    """Override a template PID path with a writable path for this run and port.
+    """Replace the PID path of the template with one this run can write to.
 
     Parameters:
         tmp_path: Isolated configuration and output directory.
@@ -2019,7 +2019,7 @@ def test_setup_config_file_owns_port_specific_pidfile(
 def test_load_redis_database_keeps_a_separate_pidfile(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The restore server must not overwrite another Redis server's PID file.
+    """The restored server must not overwrite the PID file of another Redis server.
 
     Parameters:
         tmp_path: Isolated backup and Redis output directory.

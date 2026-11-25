@@ -54,7 +54,7 @@ class RemoteFeedUpdaterMixin:
         )
 
     @contextlib.contextmanager
-    def _feed_file_lock(self, file_name: str):
+    def _lock_feed_file(self, file_name: str):
         """
         Block until no other Slips process is writing or parsing this feed
         file in the shared download dir.
@@ -83,7 +83,7 @@ class RemoteFeedUpdaterMixin:
         """
         file_name = link_to_download.split("/")[-1]
         try:
-            with self._feed_file_lock(file_name):
+            with self._lock_feed_file(file_name):
                 return self._update_ti_file_locked(link_to_download)
         except Exception:
             self.print(

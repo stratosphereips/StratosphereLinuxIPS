@@ -57,7 +57,7 @@ class ShutdownMixin:
             queue.close()
 
     def cleanup_failed_startup(self) -> None:
-        """Stop and reap this run's workers after an incomplete startup."""
+        """Stop this run's workers after Slips failed to finish starting."""
         self.children = multiprocessing.active_children()
         self._track_children_and_descendants()
         self._kill_tracked_processes()

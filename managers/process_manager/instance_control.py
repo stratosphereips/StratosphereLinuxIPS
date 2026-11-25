@@ -1,4 +1,4 @@
-"""Find, stop and restart Slips runs without opening their databases."""
+"""List, stop and restart running Slips instances, without opening their databases."""
 
 import argparse
 import os
@@ -24,14 +24,16 @@ NOT_SET = "—"
 WEB_SERVER_MODULE = "modules.web_interface.server"
 
 
-def option_spellings(parser: argparse.ArgumentParser) -> SimpleNamespace:
-    """Name every option spelling of a parser by its attribute.
+def _get_option_spellings(parser: argparse.ArgumentParser) -> SimpleNamespace:
+    """Map each option of a parser to all the ways it can be typed.
+
+    For example, the daemon option maps to ("-D", "--daemon").
 
     Parameters:
-        parser: Parser defining the options.
+        parser: Parser that defines the options.
 
     Returns:
-        Namespace mapping each option's attribute name to its spellings.
+        Namespace with one attribute per option, holding its spellings.
     """
     return SimpleNamespace(
         **{
@@ -44,8 +46,8 @@ def option_spellings(parser: argparse.ArgumentParser) -> SimpleNamespace:
 
 # ARGS.daemon is ("-D", "--daemon"), FLAG.daemon is "--daemon" and
 # PREFIXES.stop is ("--stop=",).
-ARGS = option_spellings(create_launch_parser())
-WEB_ARGS = option_spellings(create_web_server_parser())
+ARGS = _get_option_spellings(create_launch_parser())
+WEB_ARGS = _get_option_spellings(create_web_server_parser())
 FLAG = SimpleNamespace(
     **{dest: names[-1] for dest, names in vars(ARGS).items()}
 )
@@ -67,21 +69,29 @@ MANAGEMENT_ARGS = COMMAND_ARGS | {
 
 @dataclass(frozen=True)
 class RunningInstance:
-    """Identify a main process by PID, creation time and capture arguments."""
+    """A running Slips process.
+
+    The start time is stored next to the PID so we can tell if the PID was
+    reused by another process later.
+    """
 
     pid: int
     created: float
     arguments: tuple[str, ...]
 
 
-def get_slips_script_index(command: list[str]) -> int | None:
-    """Locate the executed Python script, excluding code strings and modules.
+def _get_slips_script_index(command: list[str]) -> int | None:
+    """Find where slips.py is in a command line.
+
+    Commands that only mention slips.py, like `python -c "..."` or
+    `python -m ...`, don't count.
 
     Parameters:
-        command: Process argument vector.
+        command: The process's command line, split into words.
 
     Returns:
-        Slips script position, or None for a different program.
+        Position of slips.py in the command, or None if the command
+        doesn't run slips.py.
     """
     if not command:
         return None
@@ -113,16 +123,21 @@ def get_slips_script_index(command: list[str]) -> int | None:
 def get_slips_run_arguments(
     command: list[str], include_views: bool = False
 ) -> tuple[str, ...] | None:
-    """Separate capture launches from management and unrelated commands.
+    """Get the arguments of a command that starts a Slips run.
+
+    Commands that only manage Slips (--stop, --list-instances, --help...)
+    and commands unrelated to Slips return None.
 
     Parameters:
-        command: Process argument vector.
-        include_views: Include saved viewers for process discovery and stopping.
+        command: The process's command line, split into words.
+        include_views: Also accept runs that only open saved results.
+            Needed when listing and stopping instances.
 
     Returns:
-        Arguments following slips.py, or None when no capture is being run.
+        The arguments after slips.py, or None if the command doesn't
+        start a run.
     """
-    position = get_slips_script_index(command)
+    position = _get_slips_script_index(command)
     if position is None:
         return None
     arguments = tuple(command[position + 1 :])
@@ -139,40 +154,42 @@ def get_slips_run_arguments(
 
 
 def get_verified_instance(
-    process: psutil.Process, entrypoint: Path
+    process: psutil.Process, slips_script: Path
 ) -> RunningInstance | None:
-    """Verify a live main process executes this checkout's actual entry point.
+    """Check that a process is a Slips instance started from this Slips folder.
 
     Parameters:
-        process: Candidate process.
-        entrypoint: Slips entry point for this checkout.
+        process: The process to check.
+        slips_script: Path of the slips.py in this Slips folder.
 
     Returns:
-        Verified process identity, or None for another or inaccessible process.
+        The running instance, or None if the process is not Slips, runs
+        the slips.py of another folder, is a worker of another Slips
+        instance, is dead, or can't be inspected.
     """
     try:
         command = process.cmdline()
-        position = get_slips_script_index(command)
+        position = _get_slips_script_index(command)
         arguments = get_slips_run_arguments(command, include_views=True)
         if position is None or arguments is None or process.pid == os.getpid():
             return None
         script = Path(command[position])
         if not script.is_absolute():
             script = Path(process.cwd()) / script
-        if script.resolve() != entrypoint.resolve():
+        if script.resolve() != slips_script.resolve():
             return None
         if process.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}:
             return None
         for parent in process.parents():
             try:
                 parent_command = parent.cmdline()
-                parent_position = get_slips_script_index(parent_command)
+                parent_position = _get_slips_script_index(parent_command)
                 if parent_position is None:
                     continue
                 parent_script = Path(parent_command[parent_position])
                 if not parent_script.is_absolute():
                     parent_script = Path(parent.cwd()) / parent_script
-                if parent_script.resolve() == entrypoint.resolve():
+                if parent_script.resolve() == slips_script.resolve():
                     return None
             except (psutil.Error, OSError):
                 continue
@@ -182,46 +199,45 @@ def get_verified_instance(
 
 
 def is_daemon(arguments: tuple[str, ...]) -> bool:
-    """Tell whether a launch asked for daemon mode.
+    """Tell if the arguments ask for daemon mode (-D).
 
     Parameters:
-        arguments: Arguments following slips.py.
-
-    Returns:
-        True when any daemon option spelling is present.
+        arguments: The arguments after slips.py.
     """
     return any(arg in ARGS.daemon for arg in arguments)
 
 
-def list_instances(entrypoint: Path) -> list[RunningInstance]:
-    """Find accessible Slips main processes from one checkout.
+def list_instances(slips_script: Path) -> list[RunningInstance]:
+    """Find the running Slips instances started from this Slips folder.
 
     Parameters:
-        entrypoint: Entry point to match independently of process working dirs.
+        slips_script: Path of the slips.py in this Slips folder. Processes
+            are matched on it, wherever they were started from.
 
     Returns:
-        Verified instances in PID order, excluding this management command.
+        The instances sorted by PID, without the process running this
+        command.
     """
     return sorted(
         (
             instance
             for process in psutil.process_iter()
-            if (instance := get_verified_instance(process, entrypoint))
+            if (instance := get_verified_instance(process, slips_script))
             is not None
         ),
         key=lambda instance: instance.pid,
     )
 
 
-def get_argument_value(arguments: tuple[str, ...], *names: str) -> str:
-    """Read an existing launch option for the instance listing.
+def _get_argument_value(arguments: tuple[str, ...], *names: str) -> str:
+    """Read the value of one option from the arguments of a run.
 
     Parameters:
-        arguments: Arguments following slips.py.
-        names: Short and long spellings of one option.
+        arguments: The arguments after slips.py.
+        names: All spellings of the option, e.g. "-o" and "--output".
 
     Returns:
-        Option value, or a dash when it was omitted.
+        The option's value, or a dash if the option wasn't given.
     """
     for index, argument in enumerate(arguments):
         for name in names:
@@ -238,26 +254,28 @@ def get_argument_value(arguments: tuple[str, ...], *names: str) -> str:
     return NOT_SET
 
 
-def get_web_server_candidates(
+def _get_web_server_candidates(
     main: psutil.Process, instance: RunningInstance
 ) -> tuple[list[psutil.Process], Path | None]:
-    """Collect the processes that may serve the web pages of one Slips run.
+    """Collect the processes that may be serving the web interface of a run.
 
     Parameters:
-        main: Live main process of the run.
-        instance: Main process identity and original launch arguments.
+        main: The run's main process.
+        instance: The run's main process and the arguments it was started with.
 
     Returns:
-        Candidate processes, and the run's output dir when it was given.
+        The candidate processes, and the run's output directory (None if
+        it wasn't given).
     """
-    if get_argument_value(instance.arguments, *ARGS.view) != NOT_SET:
+    if _get_argument_value(instance.arguments, *ARGS.view) != NOT_SET:
         return [main], None
     candidates = main.children(recursive=True)
-    output_arg = get_argument_value(instance.arguments, *ARGS.output)
+    output_arg = _get_argument_value(instance.arguments, *ARGS.output)
     if output_arg == NOT_SET:
         return candidates, None
     output = (Path(main.cwd()) / output_arg).resolve()
-    # The launcher may have exited while its page stays open.
+    # The process that started the web server may have exited while the
+    # server keeps running, so look at all processes on the machine.
     candidates.extend(
         process
         for process in psutil.process_iter(["cmdline"])
@@ -266,18 +284,19 @@ def get_web_server_candidates(
     return candidates, output
 
 
-def is_web_server_of_instance(
+def _is_web_server_of_instance(
     process: psutil.Process, instance: RunningInstance, output: Path | None
 ) -> bool:
-    """Tell whether a process is the web server started for one Slips run.
+    """Tell if a process is the web server that a Slips run started.
 
     Parameters:
-        process: Candidate process.
-        instance: Main process identity of the run.
-        output: Output dir of the run, or None to skip matching it.
+        process: The process to check.
+        instance: The run's main process.
+        output: The run's output directory. If None, it isn't compared.
 
     Returns:
-        True for a web server started by this run for its output dir.
+        True if the process is the web server, was started after the run,
+        and serves the same output directory.
     """
     command = process.cmdline()
     runs_web_server = any(
@@ -288,18 +307,15 @@ def is_web_server_of_instance(
         return False
     if output is None:
         return True
-    destination = get_argument_value(tuple(command), *WEB_ARGS.output_dir)
+    destination = _get_argument_value(tuple(command), *WEB_ARGS.output_dir)
     return (Path(process.cwd()) / destination).resolve() == output
 
 
-def get_listening_tcp_ports(process: psutil.Process) -> set[int]:
-    """Find the TCP ports a process is listening on.
+def _get_listening_tcp_ports(process: psutil.Process) -> set[int]:
+    """Get the TCP ports a process is accepting connections on.
 
     Parameters:
-        process: Process to inspect.
-
-    Returns:
-        Local ports of its listening TCP sockets.
+        process: The process to inspect.
     """
     return {
         connection.laddr.port
@@ -308,20 +324,21 @@ def get_listening_tcp_ports(process: psutil.Process) -> set[int]:
     }
 
 
-def get_web_ports_of_instance(instance: RunningInstance) -> list[int]:
-    """Find HTTP ports actually listening for one verified Slips run.
+def _get_web_ports_of_instance(instance: RunningInstance) -> list[int]:
+    """Find the ports where the web interface of a Slips run is listening.
 
     Parameters:
-        instance: Main process identity and original launch arguments.
+        instance: The run's main process and the arguments it was started with.
 
     Returns:
-        Sorted open web ports, empty when absent or inaccessible.
+        The open web ports in order. Empty if there are none or the
+        processes can't be inspected.
     """
     try:
         main = psutil.Process(instance.pid)
         if main.create_time() != instance.created:
             return []
-        candidates, output = get_web_server_candidates(main, instance)
+        candidates, output = _get_web_server_candidates(main, instance)
     except (psutil.Error, OSError):
         return []
 
@@ -332,20 +349,20 @@ def get_web_ports_of_instance(instance: RunningInstance) -> list[int]:
             continue
         inspected.add(process.pid)
         try:
-            if process.pid == main.pid or is_web_server_of_instance(
+            if process.pid == main.pid or _is_web_server_of_instance(
                 process, instance, output
             ):
-                ports.update(get_listening_tcp_ports(process))
+                ports.update(_get_listening_tcp_ports(process))
         except (psutil.Error, OSError):
             continue
     return sorted(ports)
 
 
-def print_instances(instances: list[RunningInstance]) -> None:
-    """Show enough launch information to select the intended capture.
+def _print_instances(instances: list[RunningInstance]) -> None:
+    """Print a table of running instances so the user can pick one.
 
     Parameters:
-        instances: Verified main processes.
+        instances: The running Slips instances.
     """
     if not instances:
         print("No accessible running Slips instances.")
@@ -355,33 +372,35 @@ def print_instances(instances: list[RunningInstance]) -> None:
     for instance in instances:
         args = instance.arguments
         mode = "daemon" if is_daemon(args) else "normal"
-        source = get_argument_value(args, *ARGS.interface)
+        source = _get_argument_value(args, *ARGS.interface)
         if source == NOT_SET:
-            source = get_argument_value(args, *ARGS.filepath, *ARGS.growing)
-        output = get_argument_value(args, *ARGS.output)
-        saved_output = get_argument_value(args, *ARGS.view)
+            source = _get_argument_value(args, *ARGS.filepath, *ARGS.growing)
+        output = _get_argument_value(args, *ARGS.output)
+        saved_output = _get_argument_value(args, *ARGS.view)
         if saved_output != NOT_SET:
             mode = "view-bg" if mode == "daemon" else "viewer"
             source = "saved results"
             output = saved_output
         ports = (
-            ",".join(map(str, get_web_ports_of_instance(instance))) or NOT_SET
+            ",".join(map(str, _get_web_ports_of_instance(instance))) or NOT_SET
         )
         print(f"{instance.pid:<9} {mode:<9} {ports:<12} {source:<24} {output}")
 
 
-def signal_instance_to_stop(
-    instance: RunningInstance, entrypoint: Path
+def _signal_instance_to_stop(
+    instance: RunningInstance, slips_script: Path
 ) -> tuple[list[psutil.Process], bool]:
-    """Ask one main process to shut down, once it is verified again.
+    """Ask one instance to shut down (SIGTERM), after checking again that
+    it is still the same process.
 
     Parameters:
-        instance: Selected identity from discovery.
-        entrypoint: Entry point required again immediately before signaling.
+        instance: The instance to stop.
+        slips_script: Path of the slips.py in this Slips folder.
 
     Returns:
-        The signaled main process with its workers, and whether the stop
-        was refused. An already stopped run gives no processes and False.
+        The instance and its workers (the processes to wait for), and
+        whether the stop was refused. If the instance already exited,
+        returns no processes and False.
     """
     try:
         process = psutil.Process(instance.pid)
@@ -390,7 +409,7 @@ def signal_instance_to_stop(
             or process.status() == psutil.STATUS_ZOMBIE
         ):
             return [], False
-        if get_verified_instance(process, entrypoint) != instance:
+        if get_verified_instance(process, slips_script) != instance:
             print(
                 f"PID {instance.pid} changed or cannot be verified; not stopped."
             )
@@ -409,17 +428,17 @@ def signal_instance_to_stop(
         return [], True
 
 
-def get_running_processes(
+def _get_running_processes(
     processes: list[psutil.Process],
 ) -> list[psutil.Process]:
-    """Keep the processes that are still executing.
+    """Keep only the processes that are still running.
 
     Parameters:
-        processes: Processes that were asked to stop.
+        processes: The processes that were asked to stop.
 
     Returns:
-        Processes that are neither gone nor zombies. A process that
-        cannot be inspected counts as running.
+        The processes that are not gone or zombies. A process we're not
+        allowed to inspect is assumed to be running.
     """
     running = []
     for process in processes:
@@ -436,24 +455,24 @@ def get_running_processes(
     return running
 
 
-def wait_for_processes_to_stop(
+def _wait_for_processes_to_stop(
     processes: list[psutil.Process], timeout: float
 ) -> list[psutil.Process]:
-    """Wait for signaled processes to exit, reporting progress every 10s.
+    """Wait for processes to exit, printing progress every 10 seconds.
 
     Parameters:
-        processes: Main processes and workers that were asked to stop.
-        timeout: Maximum wait in seconds shared by all of them.
+        processes: The instances and workers that were asked to stop.
+        timeout: Maximum seconds to wait for all of them together.
 
     Returns:
-        Processes still running once the wait is over.
+        The processes that are still running when the time is up.
     """
     alive = processes
     deadline = time.monotonic() + timeout
     remaining = timeout
     next_report = 10.0
     while True:
-        alive = get_running_processes(alive)
+        alive = _get_running_processes(alive)
         if not alive or remaining <= 0:
             break
         interval = min(5.0, remaining)
@@ -476,27 +495,31 @@ def wait_for_processes_to_stop(
 
 
 def stop_instances(
-    instances: list[RunningInstance], entrypoint: Path, timeout: float = 45
+    instances: list[RunningInstance], slips_script: Path, timeout: float = 45
 ) -> int:
-    """Signal verified main processes and wait for their normal cleanup.
+    """Ask instances to shut down and wait for them to clean up.
+
+    Nothing is force-killed.
 
     Parameters:
-        instances: Selected identities from discovery.
-        entrypoint: Entry point required again immediately before signaling.
-        timeout: Shared maximum wait in seconds for main processes and workers.
+        instances: The instances to stop.
+        slips_script: Path of the slips.py in this Slips folder.
+        timeout: Maximum seconds to wait for all instances and their
+            workers together.
 
     Returns:
-        Zero after complete shutdown; one for changed, denied or unfinished runs.
+        0 if everything stopped. 1 if a stop was refused (the process
+        changed or permission was denied) or something is still running.
     """
     waiting: dict[int, psutil.Process] = {}
     failed = False
     for instance in instances:
-        signaled, refused = signal_instance_to_stop(instance, entrypoint)
+        signaled, refused = _signal_instance_to_stop(instance, slips_script)
         waiting.update((process.pid, process) for process in signaled)
         failed = failed or refused
     if not waiting:
         return int(failed)
-    alive = wait_for_processes_to_stop(list(waiting.values()), timeout)
+    alive = _wait_for_processes_to_stop(list(waiting.values()), timeout)
     if alive:
         pids = ", ".join(str(process.pid) for process in alive)
         print(
@@ -507,30 +530,32 @@ def stop_instances(
     return int(failed)
 
 
-def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
-    """Stop a verified daemon completely, then repeat its launch command.
+def _restart_instance(instance: RunningInstance, slips_script: Path) -> int:
+    """Stop a daemon completely, then start it again with the same arguments.
 
     Parameters:
-        instance: Selected daemon identity and original capture arguments.
-        entrypoint: Entry point required before stopping the daemon.
+        instance: The daemon to restart.
+        slips_script: Path of the slips.py in this Slips folder.
 
     Returns:
-        Launcher exit status, or one if inspection, shutdown or launch fails.
+        The exit code of the new launch, or 1 if reading the daemon,
+        stopping it or starting it again failed.
     """
     if not is_daemon(instance.arguments):
         print(f"PID {instance.pid} is not a Slips daemon; not restarted.")
         return 1
     try:
         process = psutil.Process(instance.pid)
-        if get_verified_instance(process, entrypoint) != instance:
+        if get_verified_instance(process, slips_script) != instance:
             print(
                 f"PID {instance.pid} changed or cannot be verified; not restarted."
             )
             return 1
         command = process.cmdline()
-        position = get_slips_script_index(command)
+        position = _get_slips_script_index(command)
         directory = process.cwd()
-        # macOS can expose Python's base binary instead of its virtualenv.
+        # On macOS the command can show Python's base binary instead of the
+        # virtualenv's, so use the Python that is running this command.
         command = [sys.executable, *command[1 if position else 0 :]]
     except (psutil.Error, OSError) as error:
         print(
@@ -539,7 +564,7 @@ def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
         return 1
     if (
         stop_instances(
-            [instance], entrypoint, timeout=RESTART_STOP_TIMEOUT_SECONDS
+            [instance], slips_script, timeout=RESTART_STOP_TIMEOUT_SECONDS
         )
         != 0
     ):
@@ -556,52 +581,52 @@ def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
         return 1
 
 
-def is_positive_pid(value: str) -> bool:
-    """Tell whether a command-line value can be a PID.
+def _is_positive_pid(value: str) -> bool:
+    """Tell if a command-line value is a valid PID (a number above zero).
 
     Parameters:
-        value: Value given to a management option.
-
-    Returns:
-        True for a decimal number above zero.
+        value: The value given to --stop or --restart.
     """
     return value.isdecimal() and int(value) > 0
 
 
-def parse_instance_command(arguments: list[str]) -> argparse.Namespace:
-    """Parse a management command, exiting on a malformed PID.
+def _parse_instance_command(arguments: list[str]) -> argparse.Namespace:
+    """Parse the arguments of a list, stop or restart command.
+
+    Exits with an error message if the PID is invalid.
 
     Parameters:
-        arguments: Command-line arguments without the executable name.
+        arguments: The command-line arguments, without the program name.
 
     Returns:
-        Parsed management options.
+        The parsed options.
     """
     parser = create_instance_parser()
     options = parser.parse_args(arguments)
-    if options.stop not in {None, "auto", "all"} and not is_positive_pid(
+    if options.stop not in {None, "auto", "all"} and not _is_positive_pid(
         options.stop
     ):
         parser.error(f"{FLAG.stop} expects a positive PID or all")
-    if options.restart not in {None, "auto"} and not is_positive_pid(
+    if options.restart not in {None, "auto"} and not _is_positive_pid(
         options.restart
     ):
         parser.error(f"{FLAG.restart} expects a positive daemon PID")
     return options
 
 
-def restart_selected_daemon(
-    instances: list[RunningInstance], target: str, entrypoint: Path
+def _restart_selected_daemon(
+    instances: list[RunningInstance], target: str, slips_script: Path
 ) -> int:
-    """Restart the one daemon a restart command points at.
+    """Restart the daemon that the user asked for.
 
     Parameters:
-        instances: Verified instances from this checkout.
-        target: Daemon PID, or "auto" for the only running daemon.
-        entrypoint: Entry point required before stopping the daemon.
+        instances: The running instances from this Slips folder.
+        target: The daemon's PID, or "auto" to pick the only running daemon.
+        slips_script: Path of the slips.py in this Slips folder.
 
     Returns:
-        Launcher exit status, or one when no single daemon matches.
+        The exit code of the new launch, or 1 if there isn't exactly
+        one matching daemon.
     """
     daemons = [
         instance
@@ -611,28 +636,29 @@ def restart_selected_daemon(
     ]
     if not daemons:
         print(
-            "No matching running Slips daemon from this checkout to restart."
+            "No matching running Slips daemon from this Slips folder to restart."
         )
         return 1
     if len(daemons) > 1:
         print(f"More than one daemon is running. Use {FLAG.restart} PID.")
         return 1
-    return restart_instance(daemons[0], entrypoint)
+    return _restart_instance(daemons[0], slips_script)
 
 
-def stop_selected_instances(
-    instances: list[RunningInstance], target: str, entrypoint: Path
+def _stop_selected_instances(
+    instances: list[RunningInstance], target: str, slips_script: Path
 ) -> int:
-    """Stop the instances a stop command points at.
+    """Stop the instances that the user asked for.
 
     Parameters:
-        instances: Verified instances from this checkout.
-        target: Instance PID, "all", or "auto" for the only running one.
-        entrypoint: Entry point required again immediately before signaling.
+        instances: The running instances from this Slips folder.
+        target: An instance's PID, "all", or "auto" to pick the only
+            running instance.
+        slips_script: Path of the slips.py in this Slips folder.
 
     Returns:
-        Zero after complete shutdown; one when the target is unclear,
-        missing or did not stop.
+        0 if everything stopped. 1 if the target is unclear, not found,
+        or didn't stop.
     """
     if not instances:
         return 0 if target in {"auto", "all"} else 1
@@ -651,20 +677,23 @@ def stop_selected_instances(
     )
     if not selected:
         print(
-            f"PID {target} is not an accessible Slips instance from this checkout."
+            f"PID {target} is not an accessible Slips instance from this Slips folder."
         )
         return 1
-    return stop_instances(selected, entrypoint)
+    return stop_instances(selected, slips_script)
 
 
 def handle_instance_command(arguments: list[str]) -> int | None:
-    """Handle management before capture, config, logs or Redis initialization.
+    """Run the list, stop or restart command, if the user typed one.
+
+    This runs before the config, logs and Redis are set up, so the
+    commands work while other instances are running.
 
     Parameters:
-        arguments: Command-line arguments without the executable name.
+        arguments: The command-line arguments, without the program name.
 
     Returns:
-        Management exit status, or None for a normal Slips invocation.
+        The exit code, or None if this is a normal Slips run.
     """
     if any(arg in ARGS.stop_daemon for arg in arguments):
         argparse.ArgumentParser(prog="slips.py").error(
@@ -676,12 +705,14 @@ def handle_instance_command(arguments: list[str]) -> int | None:
         for arg in arguments
     ):
         return None
-    options = parse_instance_command(arguments)
-    entrypoint = Path(__file__).resolve().parents[2] / "slips.py"
-    instances = list_instances(entrypoint)
-    print_instances(instances)
+    options = _parse_instance_command(arguments)
+    slips_script = Path(__file__).resolve().parents[2] / "slips.py"
+    instances = list_instances(slips_script)
+    _print_instances(instances)
     if options.list_instances:
         return 0
     if options.restart is not None:
-        return restart_selected_daemon(instances, options.restart, entrypoint)
-    return stop_selected_instances(instances, options.stop, entrypoint)
+        return _restart_selected_daemon(
+            instances, options.restart, slips_script
+        )
+    return _stop_selected_instances(instances, options.stop, slips_script)

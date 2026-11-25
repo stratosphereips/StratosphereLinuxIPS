@@ -54,7 +54,7 @@ DEFAULT_REDIS_PORT = 6379
 
 @dataclass(frozen=True)
 class OtherRunSettings:
-    """What another running Slips uses, read from its command and config."""
+    """The settings of another running Slips, read from its command line and config."""
 
     pid: int
     args: argparse.Namespace
@@ -86,10 +86,12 @@ class RedisManager:
             del RedisDB.instances[port]
 
     def validate_keep_history_and_find_saved_history(self) -> bool:
-        """Validate live-run isolation and identify any history to preserve.
+        """Check that --keep-history can be used now, and whether there is
+        saved history to keep.
 
         Returns:
-            True for existing SQLite history, False for a fresh run.
+            True if the output dir already has saved history (SQLite),
+            False if this is a fresh run.
         """
         args = self.main.args
         if (
@@ -157,7 +159,7 @@ class RedisManager:
             arguments: Arguments following slips.py in its command.
 
         Returns:
-            Settings needed to tell whether that run shares our resources.
+            The settings we compare with ours to see if the run shares them.
         """
         other_args, _ = create_run_conflict_parser().parse_known_args(
             arguments
@@ -272,7 +274,7 @@ class RedisManager:
             )
 
     def _assert_history_run_isolated(self, process: psutil.Process) -> None:
-        """Reject resources shared with a concurrent history-preserving run.
+        """Stop this run if it would share anything with another --keep-history run.
 
         Parameters:
             process: Other Slips process, with cached PID and command line.
@@ -308,7 +310,7 @@ class RedisManager:
         self._assert_web_port_not_shared(other)
 
     def reject_active_history_run(self) -> None:
-        """Protect history mode from a second run sharing its resources."""
+        """Stop this run if it would clash with a running --keep-history run."""
         if getattr(self.main.args, "keep_history", False) is True:
             return
         # runs before redis is up, so tell from the CLI args

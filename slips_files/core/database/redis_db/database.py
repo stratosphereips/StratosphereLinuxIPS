@@ -242,13 +242,15 @@ class RedisDB(
 
     @classmethod
     def _get_pid_file_path(cls, redis_port: Optional[int] = None) -> str:
-        """Locate a writable, port-specific PID file beside the Redis logs.
+        """Get the path of the PID file of the Redis server on a port.
+
+        It is placed next to the Redis logs, in a dir we can write to.
 
         Parameters:
-            redis_port: Server port, defaulting to this instance's port.
+            redis_port: Redis port. Defaults to this instance's port.
 
         Returns:
-            PID file path resolved before Redis changes its working directory.
+            Absolute path of the PID file (Redis changes its working dir later).
         """
         port = cls.redis_port if redis_port is None else redis_port
         return cls._absolute_path(
@@ -296,7 +298,7 @@ class RedisDB(
 
     @classmethod
     def _setup_config_file(cls) -> None:
-        """Write per-run Redis paths and options from the template."""
+        """Fill the Redis config template with this run's paths and options."""
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
@@ -391,9 +393,9 @@ class RedisDB(
             return False
 
         if getattr(cls.args, "keep_history", False) is True:
-            # Historical detections live in the retained SQLite run database.
-            # Redis DB 0 contains active process and time-window state and must
-            # start fresh even when deletePrevdb is disabled in the config.
+            # Old detections are kept in the SQLite db of the run. Redis db 0
+            # holds the state of the current run (processes, timewindows),
+            # so it has to start empty even if deletePrevdb is off.
             return cls.flush_db
 
         return cls.config_flush_db and cls.flush_db

@@ -13,7 +13,7 @@ from tests.module_factory import ModuleFactory
 
 
 def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
-    """Clean inherited semaphore names without changing unrelated callbacks."""
+    """Clean up the inherited semaphores without touching other cleanup callbacks."""
     manager = ModuleFactory().create_process_manager_obj()
     semaphore = SimpleNamespace(_callback=SemLock._cleanup, _pid=-1)
     unrelated = SimpleNamespace(_callback=lambda: None, _pid=-1)
@@ -25,7 +25,7 @@ def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
 
 @pytest.mark.parametrize("mode", ["normal", "daemonized"])
 def test_startup_notifies_terminal_only_for_daemon(mode: str) -> None:
-    """Send readiness after core process startup only to the daemon launcher.
+    """Tell only the terminal that launched the daemon that it is ready, once the main processes started.
 
     Parameters:
         mode: Foreground or daemon capture mode.

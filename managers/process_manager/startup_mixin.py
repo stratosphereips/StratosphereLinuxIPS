@@ -28,7 +28,7 @@ class StartupMixin:
     """Provide helpers that construct and start child processes."""
 
     def make_daemon_own_inherited_semaphores(self) -> None:
-        """Make the surviving daemon own cleanup of its inherited semaphores."""
+        """Make the daemon, which survives the forks, clean up the semaphores it inherited."""
         for finalizer in list(util._finalizer_registry.values()):
             if finalizer._callback is SemLock._cleanup:
                 finalizer._pid = os.getpid()

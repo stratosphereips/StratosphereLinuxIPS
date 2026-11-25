@@ -16,7 +16,7 @@ from tests.module_factory import ModuleFactory
 
 
 def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
-    """Show the effective private paths without changing the reused YAML.
+    """Write the paths the run really used, without changing the original YAML.
 
     Parameters:
         tmp_path: Original config and independent run output.
