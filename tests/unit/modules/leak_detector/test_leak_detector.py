@@ -72,55 +72,22 @@ def test_pre_main(
     assert leak_detector.find_matches.call_count == expected_find_matches_call
 
 
-def test_main(mock_db):
-    leak_detector = ModuleFactory().create_leak_detector_obj()
-    result = leak_detector.main()
-    assert result == 1
-
-
 @pytest.mark.parametrize(
-    "input_json, mock_json_loads_return, " "expected_output",
+    "input_json, expected_output",
     [
-        (
-            # Testcase1: Valid JSON with extra characters
-            '{"some": "data"}Killed',
-            {"some": "data"},
-            {"some": "data"},
-        ),
-        (
-            # Testcase2: Valid JSON without extra characters
-            '{"some": "data"}',
-            {"some": "data"},
-            {"some": "data"},
-        ),
-        (
-            # Testcase3: Invalid JSON, JSONDecodeError raised
-            "Invalid JSON",
-            json.JSONDecodeError("Expecting ',' delimiter", "", 0),
-            False,
-        ),
+        # Testcase1: Truncated JSON with extra characters from tshark
+        ('[{"some": "data"Killed', [{"some": "data"}]),
+        # Testcase2: Truncated JSON without extra characters
+        ('[{"some": "data"', [{"some": "data"}]),
+        # Testcase3: Invalid JSON, JSONDecodeError raised
+        ("Invalid JSON", False),
     ],
 )
-@patch("json.loads")
-def test_fix_json_packet(
-    mock_json_loads,
-    mock_db,
-    input_json,
-    mock_json_loads_return,
-    expected_output,
-):
+def test_fix_json_packet(mock_db, input_json, expected_output):
     """Tests the fix_json_packet method of LeakDetector."""
-
-    mock_json_loads.side_effect = (
-        mock_json_loads_return
-        if isinstance(mock_json_loads_return, Exception)
-        else lambda x: mock_json_loads_return
-    )
-
     leak_detector = ModuleFactory().create_leak_detector_obj()
-    result = leak_detector.fix_json_packet(input_json)
 
-    assert result == expected_output
+    assert leak_detector.fix_json_packet(input_json) == expected_output
 
 
 @pytest.mark.parametrize(

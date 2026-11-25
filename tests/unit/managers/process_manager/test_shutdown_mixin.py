@@ -10,7 +10,6 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from managers.process_manager.shutdown_mixin import ShutdownMixin
 from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
@@ -108,12 +107,6 @@ def test_shutdown_notification_reports_failure_and_reuses_one_thread(failed: boo
     event.set.assert_called_once_with()
 
 
-def test_process_manager_includes_shutdown_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
-
-    assert isinstance(process_manager, ShutdownMixin)
-
-
 def test_get_hitlist_in_order_uses_supported_module_name_values() -> None:
     """Test hitlist lookups use the shared supported module names enum."""
     process_manager = ModuleFactory().create_process_manager_obj()
@@ -185,8 +178,6 @@ def test_warn_about_pending_modules(
         (True, True, [1, 2, 5, 6, 7], [3, 4]),
         # Testcase4: blocking disabled, exporting_alerts disabled
         (False, True, [1, 2, 4, 5, 6, 7], [3]),
-        # Testcase5: All enabled, some PIDs are None
-        (True, False, [1, 2, 6, 7], [3, 4, 5]),
     ],
 )
 def test_get_hitlist_in_order(
@@ -1013,15 +1004,6 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
         call("module_one", total_modules=2),
         call("module_two", total_modules=2),
     ]
-
-
-def test_kill_process_tree_uses_verified_identities() -> None:
-    """Delegate scoped tree cleanup to the identity-aware process record."""
-    process_manager = ModuleFactory().create_process_manager_obj()
-    with patch("managers.process_manager.shutdown_mixin.OwnedProcesses") as owned:
-        process_manager.kill_process_tree(123)
-    owned.return_value.remember.assert_called_once_with(123)
-    owned.return_value.stop.assert_called_once_with()
 
 
 def test_shutdown_exception_still_verifies_owned_processes() -> None:

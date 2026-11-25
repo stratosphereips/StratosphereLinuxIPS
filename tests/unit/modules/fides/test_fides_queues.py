@@ -24,16 +24,6 @@ def simplex_queue(mock_db, mock_channels):
     )
 
 
-def test_initialization(simplex_queue, mock_db, mock_channels):
-    assert simplex_queue.db == mock_db
-    assert simplex_queue._RedisSimplexQueue__send == "send_channel"
-    assert simplex_queue._RedisSimplexQueue__receive == "receive_channel"
-    assert (
-        simplex_queue._RedisSimplexQueue__pub
-        == mock_channels["receive_channel"]
-    )
-
-
 def test_send(simplex_queue, mock_db):
     simplex_queue.send("test_message")
     mock_db.publish.assert_called_once_with("send_channel", "test_message")

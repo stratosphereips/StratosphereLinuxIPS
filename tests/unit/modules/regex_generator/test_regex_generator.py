@@ -1,9 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-import re
 import time
 from unittest.mock import Mock
+
+import pytest
 
 from modules.regex_generator.regex_generator import (
     PROMPT_VERSION,
@@ -536,43 +537,34 @@ def test_extract_regex_from_llm_text_rejects_invalid_payloads(tmp_path):
     )
 
 
-def test_extract_regex_from_llm_text_accepts_raw_regex_line(tmp_path):
+@pytest.mark.parametrize(
+    "llm_text, expected_regex",
+    [
+        # raw regex line
+        (
+            r"^xqz[a-z0-9]{8,12}\.invalid$",
+            r"^xqz[a-z0-9]{8,12}\.invalid$",
+        ),
+        # fenced json
+        ('```json\n{"regex":"^abc$","rationale":"ok"}\n```', "^abc$"),
+        # json object embedded in surrounding text
+        (
+            'Here is the result: {"regex":"^abc$","rationale":"ok"}',
+            "^abc$",
+        ),
+    ],
+)
+def test_extract_regex_from_llm_text_accepts_supported_formats(
+    tmp_path, llm_text, expected_regex
+):
     regex_generator = ModuleFactory().create_regex_generator_obj(
         store_dir=str(tmp_path / "regex_generator")
     )
 
-    regex, error = regex_generator._extract_regex_from_llm_text(
-        r"^xqz[a-z0-9]{8,12}\.invalid$"
-    )
+    regex, error = regex_generator._extract_regex_from_llm_text(llm_text)
 
     assert error is None
-    assert regex == r"^xqz[a-z0-9]{8,12}\.invalid$"
-
-
-def test_extract_regex_from_llm_text_accepts_fenced_json(tmp_path):
-    regex_generator = ModuleFactory().create_regex_generator_obj(
-        store_dir=str(tmp_path / "regex_generator")
-    )
-
-    regex, error = regex_generator._extract_regex_from_llm_text(
-        '```json\n{"regex":"^abc$","rationale":"ok"}\n```'
-    )
-
-    assert error is None
-    assert regex == "^abc$"
-
-
-def test_extract_regex_from_llm_text_accepts_embedded_json_object(tmp_path):
-    regex_generator = ModuleFactory().create_regex_generator_obj(
-        store_dir=str(tmp_path / "regex_generator")
-    )
-
-    regex, error = regex_generator._extract_regex_from_llm_text(
-        'Here is the result: {"regex":"^abc$","rationale":"ok"}'
-    )
-
-    assert error is None
-    assert regex == "^abc$"
+    assert regex == expected_regex
 
 
 def test_validate_regex_rejects_unsupported_or_too_broad_patterns(tmp_path):
@@ -946,26 +938,6 @@ def test_partial_benign_match_can_be_accepted_below_strength_threshold(
     assert accepted
     assert accepted[0]["regex"] == r"google"
     storage.close()
-
-
-def test_match_strength_scores_full_specific_match_higher_than_partial_match(
-    tmp_path,
-):
-    regex_generator = ModuleFactory().create_regex_generator_obj(
-        store_dir=str(tmp_path / "regex_generator")
-    )
-    full_score = regex_generator._compute_match_strength(
-        re.compile(r"^google\.com$"),
-        "google.com",
-        regex_generator._measure_regex_specificity(r"^google\.com$"),
-    )
-    partial_score = regex_generator._compute_match_strength(
-        re.compile(r"google"),
-        "google.com",
-        regex_generator._measure_regex_specificity(r"google"),
-    )
-
-    assert full_score > partial_score
 
 
 def test_rejected_regexes_are_not_persisted_by_default(tmp_path):

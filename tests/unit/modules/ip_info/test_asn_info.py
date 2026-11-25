@@ -58,17 +58,7 @@ def test_get_asn_info_from_geolite(ip_address, expected_asn_info):
             },
             {"asn": {"number": "AS13335", "org": "CLOUDFLARENET, US"}},
         ),
-        # Testcase 3: Cache hit, return cached data
-        (
-            "8.8.8.8",
-            {
-                "asn_description": "GOOGLE, US",
-                "asn_cidr": "8.8.8.0/24",
-                "asn": "15169",
-            },
-            {"asn": {"number": "AS15169", "org": "GOOGLE, US"}},
-        ),
-        # Testcase 4: IP with lookup failure
+        # Testcase 3: IP with lookup failure
         (
             "192.168.1.1",
             None,
@@ -267,21 +257,6 @@ def test_get_asn_online(
                     "asn": {
                         "number": "AS12345",
                         "org": "Test Org",
-                        "timestamp": 1625097600,
-                    }
-                },
-            ),
-        ),
-        # Testcase 2: Existing ASN info (still overwritten, no merge)
-        (
-            "10.0.0.1",
-            {"asn": {"number": "AS67890", "org": "Another Org"}},
-            (
-                "10.0.0.1",
-                {
-                    "asn": {
-                        "number": "AS67890",
-                        "org": "Another Org",
                         "timestamp": 1625097600,
                     }
                 },

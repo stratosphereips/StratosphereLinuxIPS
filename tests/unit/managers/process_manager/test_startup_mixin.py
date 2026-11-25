@@ -8,15 +8,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from managers.process_manager.startup_mixin import StartupMixin
 from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
-
-
-def test_process_manager_includes_startup_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
-
-    assert isinstance(process_manager, StartupMixin)
 
 
 def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
@@ -265,19 +258,8 @@ def test_start_evidence_process(output_dir, redis_port):
         )
 
 
-@pytest.mark.parametrize(
-    "local_files, ti_feeds",
-    [  # Testcase1: Update both
-        (True, True),
-        # Testcase2: Update local only
-        (True, False),
-        # Testcase3: Update TI only
-        (False, True),
-        # Testcase4: Don't update
-        (False, False),
-    ],
-)
-def test_start_feeds_update_manager(local_files, ti_feeds):
+def test_start_feeds_update_manager():
+    local_files, ti_feeds = True, False
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.args.output = "output"
     process_manager.main.bloom_filters_man = Mock()

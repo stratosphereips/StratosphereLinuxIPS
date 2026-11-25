@@ -70,18 +70,8 @@ def test_log_redis_server_pid_normal_ports(
         redis_manager.remove_old_logline.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "redis_port, redis_pid, db_path",
-    [
-        # Testcase 1: Normal case
-        (32850, 1234, "/path/to/db1.rdb"),
-        # Testcase 2: Different port and PID
-        (32851, 5678, "/path/to/db2.rdb"),
-        # Testcase 3: Another variation
-        (32852, 9101, "/path/to/db3.rdb"),
-    ],
-)
-def test_load_redis_db(redis_port, redis_pid, db_path, mock_db):
+def test_load_redis_db(mock_db):
+    redis_port, redis_pid, db_path = 32850, 1234, "/path/to/db1.rdb"
     redis_manager = ModuleFactory().create_redis_manager_obj()
     redis_manager.main.args.db = db_path
 
@@ -403,18 +393,8 @@ def test_clear_redis_cache_database(mock_db):
         assert result
 
 
-@pytest.mark.parametrize(
-    "port",
-    [
-        # Testcase 1: Using the starting port of slips range
-        32768,
-        # Testcase 2: Another port within slips range
-        32769,
-        # Testcase 3: One more port for good measure
-        32770,
-    ],
-)
-def test_print_port_in_use(port, mock_db):
+def test_print_port_in_use(mock_db):
+    port = 32768
     redis_manager = ModuleFactory().create_redis_manager_obj()
 
     with patch("builtins.print") as mock_print:
@@ -951,7 +931,6 @@ def test_shared_config_works_with_automatic_file_isolation(
         multiinstance=True, port=None, keep_history=False, webinterface=True)
     manager.main.args = live_args if history_starting else analysis_args
     manager.main.conf = Mock(web_interface_port=55000 if history_starting else analysis_web)
-    manager.main.conf.isolated_analysis = not history_starting
     manager.main.conf.web_interface_enabled.return_value = True
     # an isolated analysis reuses the live permanent dir
     manager.main.conf.permanent_dir.return_value = str(tmp_path / "live-state")
@@ -967,9 +946,17 @@ def test_shared_config_works_with_automatic_file_isolation(
     active = Mock(info={"pid": 123, "cmdline": command})
     active.cwd.return_value = str(tmp_path)
     validate = manager.validate_keep_history if history_starting else manager.reject_active_history_run
+    # the current run is told apart from its own CLI args (redis isn't up)
+    own_argv = (
+        ["slips.py", "-i", "eth0", "-o", str(live_output), "--keep-history"]
+        if history_starting
+        else ["slips.py", "-m", "-f", "test.pcap", "-o", str(analysis_output)]
+    )
     with patch("managers.redis_manager.psutil.process_iter", return_value=[active]), patch(
         "managers.redis_manager.list_instances", return_value=[SimpleNamespace(pid=123)]
-    ), patch("managers.redis_manager.psutil.Process", return_value=active):
+    ), patch("managers.redis_manager.psutil.Process", return_value=active), patch(
+        "sys.argv", own_argv
+    ):
         if collision:
             with pytest.raises(SystemExit):
                 validate()

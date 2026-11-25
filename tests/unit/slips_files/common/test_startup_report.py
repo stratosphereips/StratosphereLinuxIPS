@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import patch
 
+import pytest
+
 from slips_files.common.startup_report import format_started_line
 
 
@@ -57,45 +59,23 @@ def test_format_started_line_right_aligns_progress_digits():
     assert "[ 1/19]" in line
 
 
-def test_format_started_line_colors_core_category_electric_lime():
+@pytest.mark.parametrize(
+    "category, color_func",
+    [
+        ("core", "electric_lime"),
+        ("worker", "neon_teal"),
+        ("module", "leaf_green"),
+    ],
+)
+def test_format_started_line_colors_by_category(category, color_func):
     with patch(
-        "slips_files.common.startup_report.electric_lime",
-        side_effect=lambda txt: f"electric_lime({txt})",
+        f"slips_files.common.startup_report.{color_func}",
+        side_effect=lambda txt: f"{color_func}({txt})",
     ), patch(
         "slips_files.common.startup_report.grey",
         side_effect=lambda txt: f"grey({txt})",
     ):
-        line = format_started_line("profiler", 1, 19, 1, "d", category="core")
+        line = format_started_line("name", 1, 19, 1, "d", category=category)
 
-    assert "electric_lime([profiler]" in line
-    assert "electric_lime(d)" in line
-
-
-def test_format_started_line_colors_worker_category_neon_teal():
-    with patch(
-        "slips_files.common.startup_report.neon_teal",
-        side_effect=lambda txt: f"neon_teal({txt})",
-    ), patch(
-        "slips_files.common.startup_report.grey",
-        side_effect=lambda txt: f"grey({txt})",
-    ):
-        line = format_started_line(
-            "profiler_worker_2", 1, 19, 1, "d", category="worker"
-        )
-
-    assert "neon_teal([profiler_worker_2]" in line
-    assert "neon_teal(d)" in line
-
-
-def test_format_started_line_colors_module_category_leaf_green():
-    with patch(
-        "slips_files.common.startup_report.leaf_green",
-        side_effect=lambda txt: f"leaf_green({txt})",
-    ), patch(
-        "slips_files.common.startup_report.grey",
-        side_effect=lambda txt: f"grey({txt})",
-    ):
-        line = format_started_line("arp", 1, 19, 1, "d", category="module")
-
-    assert "leaf_green([arp]" in line
-    assert "leaf_green(d)" in line
+    assert f"{color_func}([name]" in line
+    assert f"{color_func}(d)" in line

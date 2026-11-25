@@ -1,10 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
-import random
-import binascii
-import base64
-import os
 from unittest.mock import Mock
 
 from slips_files.common.slips_utils import utils
@@ -70,87 +66,6 @@ def test_check_excludes_p2p_related_uids_from_evidence():
     assert vertical_ps.set_evidence_vertical_portscan.call_count == 2
     for call_args in vertical_ps.set_evidence_vertical_portscan.call_args_list:
         assert call_args.args[0]["uid"] == ["scan-flow-2"]
-
-
-def get_random_uid():
-    return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode("utf-8")
-
-
-def not_enough_dports_to_reach_the_threshold():
-    """
-    returns a dict with conns to dport that are not enough
-    to reach the minimum dports to trigger the first scan
-    """
-    module = ModuleFactory().create_vertical_portscan_obj()
-
-    # get a random list of ints(ports) that are below the threshold
-    # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        0, module.minimum_dports_to_set_evidence - 1
-    )
-
-    ip: str = "8.8.8.8"
-    res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
-
-    # Generate x random integers and append them to the list
-    for _ in range(amount_of_dports):
-        random_port = random.randint(0, 65535)
-        res[ip]["dstports"].update({random_port: 1})
-
-    # Return the list of random integers
-    return res
-
-
-def enough_dports_to_reach_the_threshold():
-    """
-    returns conns to dport that are not enough
-    to reach the minimum dports to trigger the first scan
-    """
-    module = ModuleFactory().create_vertical_portscan_obj()
-
-    # get a random list of ints(ports) that are below the threshold
-    # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        module.minimum_dports_to_set_evidence, 100
-    )
-
-    ip: str = "8.8.8.8"
-    res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
-
-    # Generate x random integers and append them to the list
-    for _ in range(amount_of_dports):
-        random_port = random.randint(0, 65535)
-        res[ip]["dstports"].update({random_port: 1})
-
-    # Return the list of random integers
-    return res
-
-
-def not_enough_dports_to_combine_1_evidence():
-    """
-    returns dports that are not enough to combine an evidence
-    any number of dports within the range threshold -> threshold +15 is ok
-    here, aka won't be enough
-    :param key:
-    """
-    module = ModuleFactory().create_vertical_portscan_obj()
-
-    # get a random list of ints(ports) that are below the threshold
-    # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(
-        module.minimum_dports_to_set_evidence, 100
-    )
-
-    ip: str = "8.8.8.8"
-    res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
-
-    # Generate x random integers and append them to the list
-    for _ in range(amount_of_dports):
-        random_port = random.randint(0, 65535)
-        res[ip]["dstports"].update({random_port: 1})
-
-    # Return the list of random integers
-    return res
 
 
 @pytest.mark.parametrize(

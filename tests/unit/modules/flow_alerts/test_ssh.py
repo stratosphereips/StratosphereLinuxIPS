@@ -157,8 +157,7 @@ async def test_analyze_no_message():
     ssh.check_successful_ssh.assert_not_called()
 
 
-@pytest.mark.parametrize("auth_success", ["true", "false"])
-async def test_analyze_with_message(auth_success):
+async def test_analyze_with_message():
     ssh = ModuleFactory().create_ssh_analyzer_obj()
     ssh.check_successful_ssh = get_mock_coro(True)
     flow = SSH(

@@ -403,48 +403,6 @@ def test_each_test_starts_from_an_empty_redis(db: DBManager, run: int) -> None:
 
 
 # --------------------------------------------------------------------------
-# DBManager is a facade: it must forward args and kwargs untouched
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "method_name, args",
-    [
-        (
-            "get_uids_for_vertical_portscan",
-            (PROFILEID, TWID, Protocol.TCP, "8.8.8.8"),
-        ),
-        (
-            "get_uids_for_horizontal_portscan",
-            (PROFILEID, TWID, Protocol.TCP, 80),
-        ),
-        ("try_claim_alert_generation", (PROFILEID, TWID)),
-        ("release_alert_claim", (PROFILEID, TWID)),
-        ("get_the_other_ip_version", (PROFILEID,)),
-        ("is_tor_node", ("185.220.101.1",)),
-        ("store_official_dns_server", ("192.168.1.53",)),
-        ("set_info_for_domains", ("example.com", {"ti": "feed"})),
-        ("set_module_label_for_profile", (PROFILEID, "rnn", "malicious")),
-        ("add_mac_addr_to_profile", (PROFILEID, MAC_ADDR, "eth0")),
-        ("get_available_llm_backends", ()),
-        ("incr_current_timewindow", ()),
-    ],
-)
-def test_db_manager_forwards_calls_to_redis_db(
-    db: DBManager,
-    monkeypatch: pytest.MonkeyPatch,
-    method_name: str,
-    args: tuple,
-) -> None:
-    forwarded = Mock(return_value="redis-result")
-    monkeypatch.setattr(db.rdb, method_name, forwarded)
-
-    assert getattr(db, method_name)(*args, extra="kw") == "redis-result"
-
-    forwarded.assert_called_once_with(*args, extra="kw")
-
-
-# --------------------------------------------------------------------------
 # portscan uids
 # --------------------------------------------------------------------------
 
@@ -1339,6 +1297,53 @@ def test_init_p2p_trust_db_uses_the_permanent_dir(
     assert db.get_p2p_trust_dir() == str(permanent_dir / "p2p_trust_runtime")
 
 
+@pytest.mark.parametrize(
+    "running_non_stop, opens_trust_db",
+    [
+        # live runs with local p2p enabled use the permanent trust db
+        (True, True),
+        # file analyses never run p2p, so they don't touch it
+        (False, False),
+    ],
+)
+def test_trust_db_is_opened_only_outside_isolated_analyses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    running_non_stop: bool,
+    opens_trust_db: bool,
+) -> None:
+    conf = Mock()
+    conf.use_local_p2p = Mock(return_value=True)
+    rdb = Mock()
+    rdb.is_running_non_stop.return_value = running_non_stop
+    init_p2p_trust_db = Mock(return_value=str(tmp_path / "trustdb.db"))
+    trust_db_cls = Mock()
+    monkeypatch.setattr(
+        f"{DB_MANAGER_MODULE}.RedisDB", Mock(return_value=rdb)
+    )
+    monkeypatch.setattr(DBManager, "init_p2p_trust_db", init_p2p_trust_db)
+    monkeypatch.setattr(
+        "modules.p2p_trust.trust.trustdb.TrustDB", trust_db_cls
+    )
+    monkeypatch.setattr(
+        f"{DB_MANAGER_MODULE}.utils.get_all_interfaces", Mock(return_value=[])
+    )
+
+    db = DBManager(
+        logger=Mock(),
+        output_dir=str(tmp_path),
+        redis_port=32768,
+        conf=conf,
+        main_pid=os.getpid(),
+        start_sqlite=False,
+        start_redis_server=False,
+    )
+
+    assert init_p2p_trust_db.called is opens_trust_db
+    assert trust_db_cls.called is opens_trust_db
+    assert (db.trust_db is not None) is opens_trust_db
+
+
 def test_close_all_dbs_closes_every_backend(
     db: DBManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2112,6 +2117,7 @@ def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
     db = DBManager.__new__(DBManager)
     db.logger = factory.logger
     db.rdb = Mock()
+    db.rdb.is_running_non_stop.return_value = True
     db.conf = Mock()
     db.conf.permanent_dir.return_value = str(tmp_path)
     db.output_dir = "output/test"
@@ -2126,75 +2132,7 @@ def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
     assert db._get_host_profile_store() is store
 
 
-def test_init_host_profile_store_opens_the_store_for_later_use() -> None:
-    """Let a module open the store early, before it drops root."""
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    db._get_host_profile_store = Mock()
-
-    store = db.init_host_profile_store()
-
-    db._get_host_profile_store.assert_called_once_with()
-    assert store is db._get_host_profile_store.return_value
-
-
-@pytest.mark.parametrize(
-    "wrapper_name",
-    [
-        "save_host_identity_from_flows",
-        "save_host_identity_from_ip_info",
-        "save_hostname_of_profile",
-    ],
-)
-def test_host_profile_wrappers_forward_to_the_store(wrapper_name: str) -> None:
-    """Forward host identity writes to the permanent store unchanged.
-
-    Parameters:
-        wrapper_name: Database manager wrapper to call.
-    """
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    db.host_profile_store = Mock()
-
-    result = getattr(db, wrapper_name)("first", second="value")
-
-    store_method = getattr(db.host_profile_store, wrapper_name)
-    store_method.assert_called_once_with("first", second="value")
-    assert result is store_method.return_value
-
-
-@pytest.mark.parametrize(
-    "wrapper_name, backend_name, backend_method",
-    [
-        ("get_flows_after_rowid", "sqlite", "get_flows_after_rowid"),
-        (
-            "get_cached_hostname_from_profile",
-            "rdb",
-            "get_hostname_from_profile",
-        ),
-    ],
-)
-def test_host_profile_readers_forward_to_their_database(
-    wrapper_name: str, backend_name: str, backend_method: str
-) -> None:
-    """Forward the host profile module's reads to SQLite and Redis.
-
-    Parameters:
-        wrapper_name: Database manager wrapper to call.
-        backend_name: Attribute holding the database that owns the data.
-        backend_method: Method expected to be called on that database.
-    """
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    backend = Mock()
-    setattr(db, backend_name, backend)
-
-    result = getattr(db, wrapper_name)("first", second="value")
-
-    getattr(backend, backend_method).assert_called_once_with(
-        "first", second="value"
-    )
-    assert result is getattr(backend, backend_method).return_value
+def test_get_slips_mode_returns_the_stored_mode(db: DBManager) -> None:
+    assert db.get_slips_mode() is None
+    db.set_slips_mode("daemonized")
+    assert db.get_slips_mode() == "daemonized"

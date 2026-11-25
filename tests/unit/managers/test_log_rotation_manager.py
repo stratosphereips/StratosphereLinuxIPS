@@ -16,15 +16,6 @@ from tests.module_factory import ModuleFactory
 MANAGER = "managers.log_rotation_manager"
 
 
-def test_init_reads_the_policy_and_does_not_rotate_yet() -> None:
-    """Read the policy and stay idle until start() is called."""
-    manager = ModuleFactory().create_log_rotation_manager_obj()
-
-    assert manager.detection_history_policy["enabled"] is True
-    assert manager.is_running is False
-    assert manager.last_rotation_time == 0.0
-
-
 @pytest.mark.parametrize("is_history_enabled", [True, False])
 def test_start_follows_the_detection_history_policy(
     is_history_enabled: bool,

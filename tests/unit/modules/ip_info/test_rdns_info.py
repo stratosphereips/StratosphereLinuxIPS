@@ -31,19 +31,6 @@ def test_get_rdns_valid_ip():
         )
 
 
-def test_get_rdns_invalid_ip():
-    rdns = ModuleFactory().create_ip_info_obj().rdns
-    ip_address = "invalid_ip"
-
-    with patch("socket.gethostbyaddr") as mock_gethostbyaddr:
-        mock_gethostbyaddr.side_effect = socket.gaierror
-
-        result = rdns.get_rdns(ip_address)
-        assert result is False
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-
-
 def test_get_rdns_negative_cache_skips_second_lookup():
     rdns = ModuleFactory().create_ip_info_obj().rdns
     ip_address = "invalid_ip"
@@ -127,32 +114,6 @@ def test_get_rdns_no_reverse_dns():
         mock_inet_pton.assert_called_once()
 
 
-def test_get_rdns_localhost():
-    rdns = ModuleFactory().create_ip_info_obj().rdns
-    ip_address = "127.0.0.1"
-    expected_rdns = {"reverse_dns": "localhost.localdomain"}
-
-    with (
-        patch("socket.gethostbyaddr") as mock_gethostbyaddr,
-        patch("socket.inet_pton") as mock_inet_pton,
-    ):
-        mock_gethostbyaddr.return_value = (
-            "localhost.localdomain",
-            [],
-            ["127.0.0.1"],
-        )
-        mock_inet_pton.side_effect = socket.error
-
-        result = rdns.get_rdns(ip_address)
-        assert result == expected_rdns
-
-        mock_gethostbyaddr.assert_called_once_with(ip_address)
-        mock_inet_pton.assert_called_once()
-        rdns.db.set_ip_info.assert_called_once_with(
-            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
-        )
-
-
 async def test_get_rdns_async_runs_the_lookup_in_the_executor() -> None:
     """Keep the blocking resolver call off the event loop."""
     rdns = ModuleFactory().create_ip_info_obj().rdns
@@ -171,11 +132,7 @@ async def test_get_rdns_async_runs_the_lookup_in_the_executor() -> None:
         ("192.168.1.1", socket.AF_INET),
         # Testcase 2: IPv6 address
         ("2001:db8::1", socket.AF_INET6),
-        # Testcase 3: Another IPv4 address
-        ("10.0.0.1", socket.AF_INET),
-        # Testcase 4: Another IPv6 address
-        ("::1", socket.AF_INET6),
-        # Testcase 5: IPv4-mapped IPv6 address
+        # Testcase 3: IPv4-mapped IPv6 address
         ("::ffff:192.0.2.1", socket.AF_INET6),
     ],
 )

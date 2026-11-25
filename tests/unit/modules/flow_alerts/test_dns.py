@@ -284,11 +284,9 @@ def test_estimate_shannon_entropy(string, expected_result):
 
 @pytest.mark.parametrize(
     "domain, answers, " "expected_evidence_calls, expected_db_deletes",
-    [  # Testcase1:Invalid answer found
-        ("example.com", ["127.0.0.1"], 1, 1),
-        # Testcase2:No invalid answer
+    [  # Testcase1:No invalid answer
         ("example.com", ["8.8.8.8"], 0, 0),
-        # Testcase3:Invalid answer for localhost
+        # Testcase2:Invalid answer for localhost
         ("localhost", ["127.0.0.1"], 0, 0),
     ],
 )

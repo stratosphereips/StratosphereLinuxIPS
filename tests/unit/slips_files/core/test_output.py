@@ -270,21 +270,18 @@ def test_create_logfile_new():
             mock_file_success().close.assert_called_once()
 
 
-def test_create_logfile_permission_error():
+@pytest.mark.parametrize(
+    "path, error",
+    [
+        ("/root/restricted.log", PermissionError),
+        ("/mnt/full_disk/file.log", IOError),
+    ],
+)
+def test_create_logfile_propagates_unrecoverable_errors(path, error):
     output = ModuleFactory().create_output_obj()
-    path = "/root/restricted.log"
 
-    with patch("builtins.open", side_effect=PermissionError):
-        with pytest.raises(PermissionError):
-            output.create_logfile(path)
-
-
-def test_create_logfile_disk_full():
-    output = ModuleFactory().create_output_obj()
-    path = "/mnt/full_disk/file.log"
-
-    with patch("builtins.open", side_effect=IOError):
-        with pytest.raises(IOError):
+    with patch("builtins.open", side_effect=error):
+        with pytest.raises(error):
             output.create_logfile(path)
 
 

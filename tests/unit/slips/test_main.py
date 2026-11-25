@@ -181,21 +181,6 @@ def test_setup_print_levels(
 
 
 @pytest.mark.parametrize(
-    "mode, daemon, expected_mode, expected_daemon_type",
-    [  # Test Case 1: Interactive mode, no daemon
-        ("interactive", None, "interactive", type(None)),
-        # Test Case 2: Daemonized mode, daemon object provided
-        ("daemonized", MagicMock(), "daemonized", MagicMock),
-    ],
-)
-def test_set_mode(mode, daemon, expected_mode, expected_daemon_type):
-    main = ModuleFactory().create_main_obj()
-    main.set_mode(mode, daemon)
-    assert main.mode == expected_mode
-    assert isinstance(main.daemon, expected_daemon_type)
-
-
-@pytest.mark.parametrize(
     "txt, expected_content",
     [  # Test Case 1: Log a simple message
         ("Test log", "Test log\n"),
@@ -212,49 +197,6 @@ def test_log(txt, expected_content):
         main.log(txt)
 
     mock_open_file.return_value.write.assert_called_once_with(expected_content)
-
-
-@pytest.mark.parametrize(
-    "text, verbose, debug, log_to_logfiles_only, expected_notification",
-    [  # Test Case 1: Standard print, notify observers
-        (
-            "Test print",
-            1,
-            0,
-            False,
-            {
-                "from": "Main",
-                "txt": "Test print",
-                "verbose": 1,
-                "debug": 0,
-                "log_to_logfiles_only": False,
-            },
-        ),
-        # Test Case 2: Debug message, notify observers with specific flags
-        (
-            "Debug message",
-            2,
-            1,
-            True,
-            {
-                "from": "Main",
-                "txt": "Debug message",
-                "verbose": 2,
-                "debug": 1,
-                "log_to_logfiles_only": True,
-            },
-        ),
-    ],
-)
-def test_print(
-    text, verbose, debug, log_to_logfiles_only, expected_notification
-):
-    main = ModuleFactory().create_main_obj()
-    main.name = "main"
-    main.printer = Mock()
-    main.printer.print = Mock()
-    main.print(text, verbose, debug, log_to_logfiles_only)
-    main.printer.print.assert_called_once()
 
 
 @pytest.mark.parametrize(
@@ -567,29 +509,6 @@ def test_keep_history_supports_first_start_and_later_restart(
         saved = connection.execute("SELECT value FROM saved").fetchone()
         assert saved[0] == "previous evidence"
     assert (output / "errors.log").read_text() == "preserved log"
-
-
-def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
-    """Keep previous SQLite data when history mode is requested.
-
-    Parameters:
-        tmp_path: Temporary path provided by pytest.
-    """
-    main = ModuleFactory().create_main_obj()
-    main.args = MagicMock()
-    main.args.output = str(tmp_path / "previous_run")
-    main.args.is_slips_started_by_an_update = False
-    output_dir = Path(main.args.output)
-    (output_dir / "databases").mkdir(parents=True)
-    old_detection_db = output_dir / "databases" / "flows.sqlite"
-    old_detection_db.write_text("previous run")
-    main.args.keep_history = True
-    main.redis_man.validate_keep_history = Mock(return_value=True)
-
-    main.prepare_output_dir()
-
-    assert old_detection_db.read_text() == "previous run"
-    main.redis_man.validate_keep_history.assert_called_once_with()
 
 
 def test_prepare_output_dir_with_o_flag_creates_dir(

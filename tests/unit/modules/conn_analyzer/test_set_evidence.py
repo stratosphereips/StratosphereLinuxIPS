@@ -543,16 +543,7 @@ def test_for_port_0_connection(
     assert evidence.victim.direction == victim_direction
 
 
-@pytest.mark.parametrize(
-    "attacker_ip, threat_level, profile_ip",
-    [
-        # Testcase 1: Source IP as attacker
-        ("192.168.0.1", ThreatLevel.INFO, "192.168.0.1"),
-        # Testcase 2: Destination IP as attacker
-        ("10.0.0.1", ThreatLevel.HIGH, "10.0.0.1"),
-    ],
-)
-def test_data_exfiltration(attacker_ip, threat_level, profile_ip):
+def test_data_exfiltration():
     """Testing the data_exfiltration method."""
     set_ev = ModuleFactory().create_conn_analyzer_set_evidence_helper()
     flow = Conn(

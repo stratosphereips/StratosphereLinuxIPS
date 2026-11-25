@@ -1,4 +1,5 @@
 import inspect
+import os
 import socket
 from pathlib import Path
 from unittest.mock import Mock, mock_open, patch
@@ -53,6 +54,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
     module.parent_output_dir = "output/current_run"
     module.redis_port = 32768
     module.conf.web_interface_bind = "localhost"
+    module.conf.permanent_dir.return_value = "custom_perm"
     module.args.interface = None
     module.args.access_point = None
     process = Mock(pid=1234)
@@ -88,6 +90,10 @@ def test_pre_main_starts_server_for_current_run() -> None:
     assert result is False
     command = popen.call_args.args[0]
     assert command[command.index("--bind-address") + 1] == "127.0.0.1"
+    # the server gets the run's permanent dir, since it can't read -c
+    assert command[command.index("--permanent-dir") + 1] == os.path.abspath(
+        "custom_perm"
+    )
     assert command[-3:] == [
         "32768",
         "--output-dir",

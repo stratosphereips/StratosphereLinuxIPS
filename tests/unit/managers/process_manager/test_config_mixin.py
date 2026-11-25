@@ -1,19 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
-from managers.process_manager.config_mixin import ConfigMixin
 from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
-
-
-def test_process_manager_includes_config_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
-
-    assert isinstance(process_manager, ConfigMixin)
 
 
 @pytest.mark.parametrize(
@@ -36,21 +29,6 @@ def test_is_disabled_module(module_name, modules_to_ignore, expected):
     process_manager.user_disabled_modules = set(modules_to_ignore)
     process_manager.slips_disabled_modules = set()
     assert process_manager.is_disabled_module(module_name) == expected
-
-
-def test_get_disabled_modules_uses_disabled_module_helpers() -> None:
-    """Test disabled modules are returned from the dedicated helper methods."""
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.get_user_disabled_modules = Mock(return_value={Modules.TEMPLATE})
-    process_manager.get_runtime_disabled_modules = Mock(return_value={Modules.BLOCKING})
-
-    disabled_modules = process_manager.get_disabled_modules()
-
-    assert disabled_modules == ({Modules.TEMPLATE}, {Modules.BLOCKING})
-    assert process_manager.user_disabled_modules == {Modules.TEMPLATE}
-    assert process_manager.slips_disabled_modules == {Modules.BLOCKING}
-    process_manager.get_user_disabled_modules.assert_called_once_with()
-    process_manager.get_runtime_disabled_modules.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
@@ -249,28 +227,6 @@ def test_get_runtime_disabled_modules_disables_flow_alerts_for_zeek_log_file() -
     )
 
 
-def test_get_runtime_disabled_modules_keeps_flow_alerts_enabled_otherwise() -> (
-    None
-):
-    process_manager = ModuleFactory().create_process_manager_obj()
-    process_manager.main.db.is_running_non_stop.return_value = False
-    process_manager.main.conf.export_to.return_value = []
-    process_manager.main.conf.use_local_p2p.return_value = False
-    process_manager.main.conf.use_global_p2p.return_value = False
-    process_manager.main.conf.send_to_warden.return_value = False
-    process_manager.main.conf.receive_from_warden.return_value = False
-    process_manager.main.args.clearblocking = False
-    process_manager.main.args.blocking = False
-    process_manager.main.input_type = InputType.ZEEK
-    process_manager.main.args.input_module = ""
-    process_manager.slips_disabled_modules = set()
-
-    assert (
-        Modules.FLOW_ALERTS
-        not in process_manager.get_runtime_disabled_modules()
-    )
-
-
 def test_get_disabled_modules_keeps_unrelated_modules_enabled() -> None:
     """Test disabling regex_generator does not disable unrelated modules."""
     process_manager = ModuleFactory().create_process_manager_obj()
@@ -316,17 +272,6 @@ def test_has_missing_dependency_respects_disabled_and_configured_dependencies(
         )
         is expected
     )
-
-
-def test_read_config_parses_module_dependencies() -> None:
-    module_factory = ModuleFactory()
-    process_manager = module_factory.create_process_manager_obj()
-
-    assert process_manager.module_dependencies == {
-        Modules.LLM_PROXY: (),
-        Modules.REGEX_GENERATOR: (Modules.LLM_PROXY,),
-        Modules.ALERT_SUMMARY: (Modules.LLM_PROXY,),
-    }
 
 
 @pytest.mark.parametrize(

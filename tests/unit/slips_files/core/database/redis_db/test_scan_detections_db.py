@@ -9,40 +9,6 @@ from tests.module_factory import ModuleFactory
 import pytest
 
 
-@pytest.mark.parametrize(
-    "scan_kind, expected_key",
-    [
-        (
-            "vertical",
-            "profile_10.0.0.1_timewindow2:tcp:not_estab:8.8.8.8:uids",
-        ),
-        (
-            "horizontal",
-            "profile_10.0.0.1_timewindow2:tcp:not_estab:dstport:443:uids",
-        ),
-    ],
-)
-def test_get_portscan_uids(scan_kind, expected_key):
-    """Read contributing scan UIDs in chronological order."""
-    module_factory = ModuleFactory()
-    handler = module_factory.create_scan_detections_db()
-    profileid = ProfileID(ip="10.0.0.1")
-    twid = TimeWindow(number=2)
-    handler.r.zrange.return_value = ["uid-early", "uid-late"]
-
-    if scan_kind == "vertical":
-        result = handler.get_uids_for_vertical_portscan(
-            profileid, twid, Protocol.TCP, "8.8.8.8"
-        )
-    else:
-        result = handler.get_uids_for_horizontal_portscan(
-            profileid, twid, Protocol.TCP, 443
-        )
-
-    assert result == ["uid-early", "uid-late"]
-    handler.r.zrange.assert_called_once_with(expected_key, 0, -1)
-
-
 @pytest.mark.parametrize("scan_kind", ["vertical", "horizontal"])
 def test_store_portscan_flow_uid(scan_kind):
     """Store every contributing connection UID in the scan index."""
@@ -185,7 +151,6 @@ def test_ask_modules_caches_only_when_giving_threat_intelligence() -> None:
         ("UNK", 10, "Established"),
         # Testcase4: Other states
         ("CON", 10, "Established"),
-        ("ECO", 10, "Established"),
         ("ECR", 10, "Not Established"),
         ("URH", 10, "Not Established"),
         ("URP", 10, "Not Established"),

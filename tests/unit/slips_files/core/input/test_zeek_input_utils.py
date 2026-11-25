@@ -31,17 +31,6 @@ def test_is_zeek_tabs_file_detects_format(tmp_path, contents, expected):
     )
 
 
-def test_get_ts_from_line_returns_timestamp_for_tabs():
-    input_process = ModuleFactory().create_input_obj(
-        "", InputType.ZEEK_LOG_FILE
-    )
-    input_process.is_zeek_tabs = True
-
-    ts, line = input_process.zeek_utils.get_ts_from_line("1.5\tfield\n")
-    assert ts == 1.5
-    assert line == "1.5\tfield\n"
-
-
 def test_close_rotated_file_handle_closes_and_removes_handle() -> None:
     """Test closing a rotated Zeek file removes its cached handle."""
     input_process = ModuleFactory().create_input_obj(
@@ -200,7 +189,8 @@ def test_create_zeek_output_dir(store_in_output, expected_dir):
     )
     input_process.zeek_dir = None
     input_process.args.output = "output"
-    input_process.zeek_utils.is_running_non_stop = False
+    input_process.zeek_utils.is_running_non_stop = True
+    input_process.conf.auto_update_slips.return_value = False
     input_process.conf.store_zeek_files_in_the_output_dir.return_value = (
         store_in_output
     )
@@ -425,3 +415,18 @@ def test_handle_zeek_process_result_suppresses_expected_shutdown_stderr():
     )
     input_process.print.assert_not_called()
     input_process.db.publish_stop.assert_not_called()
+
+
+def test_file_analysis_stores_zeek_files_in_the_output_dir():
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    input_process.zeek_dir = None
+    input_process.args.output = "output"
+    input_process.zeek_utils.is_running_non_stop = False
+    input_process.conf.store_zeek_files_in_the_output_dir.return_value = False
+
+    assert (
+        input_process.zeek_utils.create_zeek_output_dir()
+        == "output/zeek_files"
+    )

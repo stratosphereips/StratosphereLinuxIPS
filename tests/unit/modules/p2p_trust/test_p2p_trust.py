@@ -433,22 +433,6 @@ def test_evaluate_blame_report_no_network_opinion_yet():
     trust.db.publish.assert_not_called()
 
 
-def test_evaluate_blame_report_below_threshold_is_not_forwarded():
-    """
-    A blame about an IP that neither the network nor Slips considers
-    malicious must not be forwarded to the blocking pipeline.
-    """
-    trust = create_trust_for_blame((0, 0), (0, 0))
-
-    with patch(
-        "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
-        return_value=trust.local_opinion,
-    ):
-        trust.evaluate_blame_report("peer1", 123, blame_report())
-
-    trust.db.publish.assert_not_called()
-
-
 def test_evaluate_blame_report_above_threshold_is_forwarded():
     """
     A blame about an IP that both the network and Slips agree is

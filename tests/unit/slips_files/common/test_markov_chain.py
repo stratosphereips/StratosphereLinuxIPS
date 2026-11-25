@@ -20,24 +20,6 @@ import math
         ({}),
     ],
 )
-def test_set_init_vector(init_vector):
-    matrix = ModuleFactory().create_markov_chain_obj()
-    matrix.set_init_vector(init_vector)
-    assert hasattr(matrix, "init_vector")
-    assert matrix.init_vector == init_vector
-
-
-@pytest.mark.parametrize(
-    "init_vector",
-    [
-        # testcase1: basic two-state vector
-        ({"A": 0.3, "B": 0.7}),
-        # testcase2: three-state vector
-        ({"X": 0.5, "Y": 0.2, "Z": 0.3}),
-        # testcase3: empty vector
-        ({}),
-    ],
-)
 def test_get_init_vector(init_vector):
     matrix = ModuleFactory().create_markov_chain_obj()
     matrix.set_init_vector(init_vector)

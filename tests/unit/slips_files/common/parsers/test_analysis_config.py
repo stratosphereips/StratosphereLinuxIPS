@@ -137,7 +137,9 @@ def test_each_process_reconstructs_same_analysis_configuration(tmp_path: Path, m
         monkeypatch.setattr(ConfigParser, "_instance", None)
         conf = ConfigParser()
         configurations.append(conf.config)
-        assert conf.isolated_analysis
+        # conf only holds slips.yaml, runtime values live in redis
+        assert conf.config == original
+        assert not hasattr(conf, "isolated_analysis")
         assert conf.web_interface_port == 55012
         assert conf.get_args().config == str(source)
     assert configurations[0] == configurations[1]
@@ -155,3 +157,47 @@ def test_remote_feeds_default_to_a_dir_inside_permanent() -> None:
         "download_path_for_remote_threat_intelligence": "feeds/"
     }
     assert parser.remote_ti_data_path() == "feeds/"
+
+
+def test_isolated_configuration_leaves_store_settings_untouched(tmp_path: Path) -> None:
+    """Choose store paths in the modules, not by rewriting the settings.
+
+    Parameters:
+        tmp_path: Separate analysis output.
+    """
+    _factory = ModuleFactory()
+    source = {"regex_generator": {"persistent_store_dir": "databases/regex_store"},
+              "t_cell": {"persistent_store_dir": "t_cell"}}
+    effective = isolated_analysis_config(source, str(tmp_path / "analysis"))
+    assert effective["regex_generator"] == source["regex_generator"]
+    assert effective["t_cell"] == source["t_cell"]
+
+
+@pytest.mark.parametrize("isolated", [False, True])
+@pytest.mark.parametrize("storage_class", ["regex", "t_cell"])
+def test_file_analysis_ignores_the_persistent_store(tmp_path: Path, isolated: bool, storage_class: str) -> None:
+    """Keep what a file analysis learns out of the live permanent dir.
+
+    Parameters:
+        tmp_path: Output dir of the analysis.
+        isolated: Whether the run is an isolated file analysis.
+        storage_class: Which store resolves its directory.
+    """
+    from unittest.mock import Mock
+    from slips_files.core.database.sqlite_db.regex_generator_db import (
+        RegexGeneratorStorage,
+    )
+    from slips_files.core.database.sqlite_db.t_cell_db import TCellStorage
+
+    _factory = ModuleFactory()
+    cls, prefix = (RegexGeneratorStorage, "regex_generator") if storage_class == "regex" else (TCellStorage, "t_cell")
+    storage = cls.__new__(cls)
+    storage.output_dir = str(tmp_path)
+    storage.conf = Mock()
+    setattr(storage.conf, f"{prefix}_persistent_store_dir", Mock(return_value="stable_store"))
+    setattr(storage.conf, f"{prefix}_store_dir", Mock(return_value=f"output/{prefix}"))
+    raw, persistent = storage._read_store_dir(allow_persistent=not isolated)
+    if isolated:
+        assert (raw, persistent) == (f"output/{prefix}", False)
+    else:
+        assert (raw, persistent) == ("stable_store", True)

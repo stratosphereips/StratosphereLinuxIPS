@@ -13,7 +13,6 @@ from unittest.mock import (
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
-from slips_files.common.parsers.analysis_config import isolated_analysis_config
 
 
 def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
@@ -32,8 +31,8 @@ def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
     manager.main.args.config = str(source)
     manager.main.args.output = str(output)
     manager.main.args.web_port = 55012
-    manager.main.conf.isolated_analysis = True
-    manager.main.conf.config = isolated_analysis_config(original, str(output))
+    manager.main.db.is_running_non_stop.return_value = False
+    manager.main.conf.config = original
     manager.main.conf.web_interface_port = 55012
     manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
     manager._add_metadata()
@@ -98,6 +97,7 @@ def test_enable_metadata(
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.enable_metadata = enable_metadata
+    metadata_manager.main.db.is_running_non_stop.return_value = True
     metadata_manager._add_metadata = Mock(return_value=expected_info_path)
 
     metadata_manager.add_metadata_if_enabled()
@@ -164,6 +164,7 @@ def test_add_metadata(
     expected_result,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
+    metadata_manager.main.db.is_running_non_stop.return_value = True
     metadata_manager.main.args.output = output_dir
     metadata_manager.main.args.config = config_file
     metadata_manager.main.conf.local_whitelist_path.return_value = (

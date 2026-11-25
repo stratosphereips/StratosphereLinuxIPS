@@ -120,19 +120,6 @@ def test_non_stop_false_skips_mac_lookup():
     gateway_info._get_mac_using_arp_cache.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "db_return_value",
-    ["wlan0", None],
-)
-def test_get_wifi_interface_if_ap(db_return_value):
-    """get_wifi_interface() already returns the interface name, not a
-    dict, so this should just pass it through."""
-    gateway_info = ModuleFactory().create_ip_info_obj().gateway
-    gateway_info.db.get_wifi_interface = Mock(return_value=db_return_value)
-
-    assert gateway_info._get_wifi_interface_if_ap() == db_return_value
-
-
 def test_wifi_interface_uses_own_mac():
     """If interface is WiFi AP, use get_own_mac()."""
     gateway_info = ModuleFactory().create_ip_info_obj().gateway

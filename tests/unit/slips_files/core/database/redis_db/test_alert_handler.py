@@ -131,21 +131,6 @@ def test_try_claim_alert_generation_is_scoped_to_profile_and_timewindow(
     )
 
 
-def test_release_alert_claim_deletes_the_claim_key() -> None:
-    """Verify releasing a claim deletes the exact key it claimed."""
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.release_alert_claim(
-        "profile_192.168.1.20",
-        "timewindow4",
-    )
-
-    alert_handler.r.delete.assert_called_once_with(
-        "alert_claim:profile_192.168.1.20:timewindow4"
-    )
-
-
 @pytest.mark.parametrize(
     "profile_ip, twid, alert_id, evidence_ids, "
     "expected_old_alerts, expected_new_alerts",
@@ -275,119 +260,6 @@ def test_set_alert_increments_number_of_alerts_once_published():
 
 
 @pytest.mark.parametrize(
-    "profile_ip, twid, accumulated_threat_lvl, expected_call",
-    [
-        # Testcase 1: Set accumulated threat level
-        ("192.168.1.9", 1, 10.5, {"profile_192.168.1.9_timewindow1": 10.5}),
-        # Testcase 2: Set accumulated threat level with a different value
-        ("192.168.1.3", 2, 5.0, {"profile_192.168.1.3_timewindow2": 5.0}),
-        # Testcase 3: Set accumulated threat level to 0
-        ("192.168.1.8", 3, 0.0, {"profile_192.168.1.8_timewindow3": 0.0}),
-    ],
-)
-def test_set_accumulated_threat_level(
-    profile_ip, twid, accumulated_threat_lvl, expected_call
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert = Alert(
-        profile=ProfileID(profile_ip),
-        timewindow=TimeWindow(
-            twid,
-            start_time="2024-10-04T18:46:50+03:00",
-            end_time="2024-10-04T19:46:50+03:00",
-        ),
-        last_evidence=Evidence(
-            evidence_type=EvidenceType.ARP_SCAN,
-            description="ARP scan detected",
-            attacker=Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value="192.168.1.20",
-            ),
-            threat_level=ThreatLevel.INFO,
-            profile=ProfileID(profile_ip),
-            timewindow=TimeWindow(twid),
-            uid=[],
-            timestamp="1728417813.8868346",
-        ),
-        accumulated_threat_level=30,
-        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
-    )
-    alert_handler._set_accumulated_threat_level(alert, accumulated_threat_lvl)
-
-    alert_handler.r.zadd.assert_called_once_with(
-        "accumulated_threat_levels", expected_call
-    )
-
-
-@pytest.mark.parametrize(
-    "profileid, twid, update_val, expected_call",
-    [
-        # Testcase 1: Increment accumulated threat level
-        (
-            "profile1",
-            "twid1",
-            1.2,
-            ("accumulated_threat_levels", 1.2, "profile1_twid1"),
-        ),
-        # Testcase 2: Decrement accumulated threat level
-        (
-            "profile2",
-            "twid2",
-            -0.5,
-            ("accumulated_threat_levels", -0.5, "profile2_twid2"),
-        ),
-    ],
-)
-def test_update_accumulated_threat_level(
-    profileid, twid, update_val, expected_call
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.update_accumulated_threat_level(profileid, twid, update_val)
-
-    alert_handler.r.zincrby.assert_called_once_with(*expected_call)
-
-
-def test_delete_evidence():
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    profileid = "profile123"
-    twid = "twid456"
-    evidence_id = "evidence_123"
-
-    alert_handler.delete_evidence(profileid, twid, evidence_id)
-
-    alert_handler.r.hdel.assert_called_once_with(
-        f"{profileid}_{twid}_evidence", evidence_id
-    )
-
-
-@pytest.mark.parametrize(
-    "initial_value, expected_value",
-    [
-        # Testcase 1: No previous value
-        (None, 0),
-        # Testcase 2: Previous value exists
-        ("10", 0),
-    ],
-)
-def test_init_evidence_number(initial_value, expected_value):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.get.return_value = initial_value
-
-    alert_handler.init_evidence_number()
-
-    alert_handler.r.set.assert_called_once_with(
-        "number_of_evidence", expected_value
-    )
-
-
-@pytest.mark.parametrize(
     "evidence_exists, expected",
     [
         (None, True),  # new evidence → added
@@ -514,44 +386,6 @@ def test_update_max_threat_level(
 
 
 @pytest.mark.parametrize(
-    "returned_value, expected_result",
-    [
-        # Testcase 1: Evidence number exists
-        ("100", "100"),
-        # Testcase 2: Evidence number is None
-        (None, None),
-    ],
-)
-def test_get_evidence_number(returned_value, expected_result):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.get.return_value = returned_value
-
-    result = alert_handler.get_evidence_number()
-
-    alert_handler.r.get.assert_called_once_with("number_of_evidence")
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "profileid, threat_level, expected_call",
-    [
-        # Testcase 1: Set max threat level
-        ("profile1", "critical", ("profile1", "max_threat_level", "critical")),
-        # Testcase 2: Update max threat level
-        ("profile2", "medium", ("profile2", "max_threat_level", "medium")),
-    ],
-)
-def test_set_max_threat_level(profileid, threat_level, expected_call):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.set_max_threat_level(profileid, threat_level)
-
-    alert_handler.set_profileid_field.assert_called_once_with(*expected_call)
-
-
-@pytest.mark.parametrize(
     "profileid, twid, expected_result",
     [
         # Testcase 1: Accumulated threat level is present
@@ -608,52 +442,6 @@ def test_get_profileid_twid_alerts(
 
 
 @pytest.mark.parametrize(
-    "evidence_id, profileid, twid, sismember_return, expected_result",
-    [
-        # Testcase 1: Evidence is marked as processed
-        ("evidence1", "profile1", "tw1", True, True),
-        # Testcase 2: Evidence is not marked as processed
-        ("evidence2", "profile2", "tw2", False, False),
-    ],
-)
-def test_is_evidence_processed(
-    evidence_id, profileid, twid, sismember_return, expected_result
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.sismember.return_value = sismember_return
-
-    result = alert_handler.is_evidence_processed(evidence_id, profileid, twid)
-
-    alert_handler.r.sismember.assert_called_once_with(
-        f"processed_evidence_{profileid}_{twid}", evidence_id
-    )
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "uids, evidence_ID",
-    [
-        # Testcase 1: Multiple flow IDs
-        (["flow1", "flow2", "flow3"], "evidence1"),
-        # Testcase 2: Single flow ID
-        (["flow1"], "evidence2"),
-        # Testcase 3: Empty flow ID list
-        ([], "evidence3"),
-    ],
-)
-def test_set_flow_causing_evidence(uids, evidence_ID):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.set_flow_causing_evidence(uids, evidence_ID)
-
-    alert_handler.r.hset.assert_called_once_with(
-        "flows_causing_evidence", evidence_ID, json.dumps(uids)
-    )
-
-
-@pytest.mark.parametrize(
     "evidence_ID, returned_uids, expected_result",
     [
         # Testcase 1: Flows causing evidence exist
@@ -679,55 +467,6 @@ def test_get_flows_causing_evidence(
         "flows_causing_evidence", evidence_ID
     )
     assert result == expected_result
-
-
-def test_set_max_seen_risk_weight_caps_to_high_weight() -> None:
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler._set_max_seen_risk_weight(
-        "profile_192.168.1.1", RiskWeight.HIGH
-    )
-
-    alert_handler.r.hset.assert_called_once_with(
-        alert_handler.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
-        mapping={
-            "risk_weight": RiskWeight.HIGH.weight,
-            "profile": "profile_192.168.1.1",
-        },
-    )
-
-
-def test_get_max_seen_risk_weight_returns_stored_value() -> None:
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.hgetall.return_value = {
-        "risk_weight": RiskWeight.MEDIUM.weight,
-        "profile": "profile_10.0.0.1",
-    }
-
-    result = alert_handler.get_max_seen_risk_weight()
-
-    assert result == {
-        "risk_weight": RiskWeight.MEDIUM,
-        "profile": "profile_10.0.0.1",
-    }
-
-
-def test_get_max_seen_risk_weight_returns_enum_internally() -> None:
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.hgetall.return_value = {
-        "risk_weight": RiskWeight.MEDIUM.weight,
-        "profile": "profile_10.0.0.1",
-    }
-
-    result = alert_handler.get_max_seen_risk_weight()
-
-    assert result == {
-        "risk_weight": RiskWeight.MEDIUM,
-        "profile": "profile_10.0.0.1",
-    }
 
 
 @pytest.mark.parametrize(

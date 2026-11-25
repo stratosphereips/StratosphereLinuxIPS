@@ -198,25 +198,6 @@ def test_get_feed_details_with_unconfigured_path(mocker, feeds_path):
     mock_open_call.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "message",
-    [
-        # Testcase1: Log a simple message.
-        ("Test message"),
-        # Testcase2: Log an empty message.
-        (""),
-    ],
-)
-def test_log(message):
-    """Test the log function with different message types."""
-    update_manager = ModuleFactory().create_update_manager_obj()
-    update_manager.print = Mock()
-    update_manager.log(message)
-    update_manager.print.assert_called_once_with(
-        message, verbose=0, debug=1, log_to_logfiles_only=True
-    )
-
-
 def test_download_file(
     mocker,
 ):

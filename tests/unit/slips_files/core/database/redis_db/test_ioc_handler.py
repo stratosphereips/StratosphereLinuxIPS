@@ -94,26 +94,6 @@ def test_give_threat_intelligence(
 
 
 @pytest.mark.parametrize(
-    "sha1, expected_result",
-    [
-        # Testcase 1: SSL info found
-        (
-            "abc123",
-            '{"source": "feed1", "tags": ["tag1", "tag2"], "threat_level": 3, '
-            '"description": "Malicious SSL cert"}',
-        ),
-        # Testcase 2: SSL info not found
-        ("xyz456", False),
-    ],
-)
-def test_is_blacklisted_ssl(mocker, sha1, expected_result):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.rcache.hmget.return_value = [expected_result]
-    result = ioc_handler.is_blacklisted_ssl(sha1)
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
     "file, expected_file_info",
     [
         # Testcase 1: File with info
@@ -129,79 +109,12 @@ def test_get_ti_feed_info(mocker, file, expected_file_info):
     assert result == expected_file_info
 
 
-def test_delete_ti_feed(mocker):
+def test_set_ti_feed_info(mocker):
     ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.delete_ti_feed("file1.txt")
-    ioc_handler.rcache.hdel.assert_called_with(
-        ioc_handler.constants.TI_FILES_INFO, "file1.txt"
-    )
-
-
-@pytest.mark.parametrize(
-    "profileid, expected_result",
-    [
-        # Testcase 1: Profile is malicious
-        ("profile1", "malicious"),
-        # Testcase 2: Profile is not malicious
-        ("profile2", False),
-    ],
-)
-def test_is_profile_malicious(mocker, profileid, expected_result):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.r.hget.return_value = expected_result
-    result = ioc_handler.is_profile_malicious(profileid)
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "file, data, expected_data",
-    [
-        # Testcase 1: Set new file info
-        (
-            "file1.txt",
-            {"time": 1234567890, "etag": "abc123"},
-            {"time": 1234567890, "etag": "abc123"},
-        ),
-        # Testcase 2: Update existing file info
-        (
-            "file2.txt",
-            {"time": 1234567891, "etag": "def456"},
-            {"time": 1234567891, "etag": "def456"},
-        ),
-    ],
-)
-def test_set_ti_feed_info(mocker, file, data, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.set_ti_feed_info(file, data)
+    data = {"time": 1234567890, "etag": "abc123"}
+    ioc_handler.set_ti_feed_info("file1.txt", data)
     ioc_handler.rcache.hset.assert_called_with(
-        "TI_files_info", file, json.dumps(expected_data)
-    )
-
-
-@pytest.mark.parametrize(
-    "domain, info_to_set, expected_data",
-    [
-        # Testcase 1: Add new information
-        (
-            "example.com",
-            {"VirusTotal": [1, 2, 3], "Malicious": ""},
-            {"VirusTotal": [1, 2, 3], "Malicious": ""},
-        ),
-        # Testcase 2: Overwrite existing information
-        (
-            "google.com",
-            {"VirusTotal": [4, 5, 6], "Malicious": "yes"},
-            {"VirusTotal": [4, 5, 6], "Malicious": "yes"},
-        ),
-    ],
-)
-def test_set_info_for_domains(mocker, domain, info_to_set, expected_data):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.get_domain_data = mocker.Mock(return_value={})
-    ioc_handler.set_info_for_domains(domain, info_to_set, "add")
-    expected_data_str = json.dumps(expected_data)
-    ioc_handler.rcache.hset.assert_called_with(
-        "DomainsInfo", domain, expected_data_str
+        "TI_files_info", "file1.txt", json.dumps(data)
     )
 
 
@@ -215,52 +128,33 @@ def test__store_new_url(mocker):
     )
 
 
-def test_get_domain_data_with_data(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    test_domain = "example.com"
-    expected_data = {"key1": "value1", "key2": "value2"}
-    ioc_handler.rcache.hget.return_value = json.dumps(expected_data)
-    result = ioc_handler.get_domain_data(test_domain)
-    assert result == expected_data
-
-
-def test_get_domain_data_without_data(mocker):
-    ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.rcache.hget.return_value = None
-    result = ioc_handler.get_domain_data("google.com")
-    assert result is False
-
-
-@pytest.mark.parametrize(
-    "domain",
-    [
-        # Testcase 1: New domain
-        "example.com",
-        # Testcase 2: Existing domain
-        "google.com",
-    ],
-)
-def test_set_new_domain(mocker, domain):
+def test_set_new_domain(mocker):
     ioc_handler = ModuleFactory().create_ioc_handler_obj()
     ioc_handler.get_domain_data = mocker.Mock(return_value=False)
-    ioc_handler._set_new_domain(domain)
-    ioc_handler.rcache.hset.assert_called_with("DomainsInfo", domain, "{}")
+    ioc_handler._set_new_domain("example.com")
+    ioc_handler.rcache.hset.assert_called_with(
+        "DomainsInfo", "example.com", "{}"
+    )
 
 
 @pytest.mark.parametrize(
-    "file, time, expected_data",
+    "cached_info, expected_data",
     [
-        # Testcase 1: Set new last update time
-        ("feed1.txt", 1234.56, {"time": 1234.56}),
-        # Testcase 2: Update existing last update time
-        ("feed2.txt", 5678.90, {"time": 5678.90}),
+        # existing info keeps its other fields and only gets a new time
+        (
+            {"time": 100.0, "etag": "abc123"},
+            {"time": 1234.56, "etag": "abc123"},
+        ),
+        # no cached info about this feed
+        (None, {"time": 1234.56}),
     ],
 )
-def test_set_feed_last_update_time(mocker, file, time, expected_data):
+def test_set_feed_last_update_time(mocker, cached_info, expected_data):
     ioc_handler = ModuleFactory().create_ioc_handler_obj()
-    ioc_handler.rcache.hget.return_value = json.dumps({"time": 100.0})
-    ioc_handler.set_feed_last_update_time(file, time)
-    expected_data_json = json.dumps(expected_data)
+    ioc_handler.rcache.hget.return_value = (
+        json.dumps(cached_info) if cached_info else None
+    )
+    ioc_handler.set_feed_last_update_time("feed1.txt", 1234.56)
     ioc_handler.rcache.hset.assert_called_with(
-        "TI_files_info", file, expected_data_json
+        "TI_files_info", "feed1.txt", json.dumps(expected_data)
     )

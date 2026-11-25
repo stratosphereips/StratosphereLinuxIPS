@@ -88,17 +88,6 @@ def test_handle_tw_closed(msg_data, expected_profileid, expected_twid):
             "timewindow1",
             2,
         ),
-        # testcase2: Test with minimum required parameters
-        (
-            0.85,
-            0.7,
-            "uid456",
-            "2023-01-02 13:00:00",
-            "10.0.0.1-443-UDP",
-            "profile_192.168.1.1",
-            "timewindow2",
-            2,
-        ),
     ],
 )
 def test_set_evidence_cc_channel(
@@ -153,42 +142,6 @@ def test_convert_input_for_module(
         result[0, :5, 0], expected_first_values
     )
     assert np.all((result >= 0) & (result <= 49))
-
-
-@pytest.mark.parametrize(
-    "side_effect, expected_c1, expected_c2, expected_channels",
-    [
-        # Testcase 1: Successful subscriptions
-        (
-            ["channel1", "channel2"],
-            "channel1",
-            "channel2",
-            {"new_letters": "channel1", "tw_closed": "channel2"},
-        ),
-        # Testcase 2: One subscription fails (returns None)
-        (
-            ["channel1", None],
-            "channel1",
-            None,
-            {"new_letters": "channel1", "tw_closed": None},
-        ),
-        # Testcase 3: Both subscriptions fail
-        ([None, None], None, None, {"new_letters": None, "tw_closed": None}),
-    ],
-)
-def test_subscribe_to_channels(
-    side_effect, expected_c1, expected_c2, expected_channels
-):
-    cc_detection = ModuleFactory().create_rnn_detection_object()
-    cc_detection.db.subscribe.side_effect = side_effect
-
-    cc_detection.subscribe_to_channels()
-
-    assert cc_detection.c1 == expected_c1
-    assert cc_detection.c2 == expected_c2
-    assert cc_detection.channels == expected_channels
-    cc_detection.db.subscribe.assert_any_call("new_letters")
-    cc_detection.db.subscribe.assert_any_call("tw_closed")
 
 
 def test_handle_new_letters_valid_tcp_high_score():

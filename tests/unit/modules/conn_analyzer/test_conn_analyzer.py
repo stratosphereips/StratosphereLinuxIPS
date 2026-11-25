@@ -1326,50 +1326,9 @@ def test_check_connection_to_local_ip(
 
 
 @pytest.mark.parametrize(
-    "saddr, daddr, sport, dport, official_dns_ip",
-    [
-        ("192.168.1.20", "192.168.1.53", "40000", "53", ""),
-        ("fd00::53", "fd00::10", "547", "546", ""),
-        ("fd00::10", "fd00::53", "546", "547", ""),
-    ],
-)
-def test_check_connection_to_local_ip_ignores_official_dns_server(
-    saddr, daddr, sport, dport, official_dns_ip
-):
-    conn = ModuleFactory().create_conn_analyzer_obj()
-    conn.set_evidence.conn_to_private_ip = Mock()
-    conn.db.get_gateway_ip.return_value = "192.168.1.1"
-    conn.db.is_official_dns_server.side_effect = (
-        lambda ip: ip == official_dns_ip
-    )
-    flow = Conn(
-        starttime="1726249372.312124",
-        uid="123",
-        saddr=saddr,
-        daddr=daddr,
-        dur=1,
-        proto="udp",
-        appproto="",
-        sport=sport,
-        dport=dport,
-        spkts=0,
-        dpkts=0,
-        sbytes=0,
-        dbytes=0,
-        smac="",
-        dmac="",
-        state="Established",
-        history="",
-    )
-
-    conn.check_connection_to_local_ip(twid, flow)
-
-    conn.set_evidence.conn_to_private_ip.assert_not_called()
-
-
-@pytest.mark.parametrize(
     "saddr, daddr, sport, dport",
     [
+        ("192.168.1.20", "192.168.1.53", "40000", "53"),
         ("fd00::10", "fd00::53", "40000", "53"),
         ("fd00::53", "fd00::10", "547", "546"),
         ("fd00::10", "fd00::53", "546", "547"),
@@ -1474,18 +1433,8 @@ async def test_check_non_ssl_port_443_conns_is_ssl():
     conn.keep_track_of_ssl_flow.assert_called_once()
 
 
-async def test_check_non_ssl_port_443_conns_matching_ssl_past():
-    conn = ModuleFactory().create_conn_analyzer_obj()
-    conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
-    conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
-    # Simulate a matching SSL flow
-    conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
-    flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
-    result = await conn.check_non_ssl_port_443_conns(None, flow)
-    assert result is False
-
-
-async def test_check_non_ssl_port_443_conns_matching_ssl_future():
+@pytest.mark.parametrize("timeout_reached", [False, True])
+async def test_check_non_ssl_port_443_conns_matching_ssl_flow(timeout_reached):
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.is_tcp_established_443_non_empty_flow = Mock(return_value=True)
     conn.is_ssl_proto_recognized_by_zeek = Mock(return_value=False)
@@ -1493,7 +1442,7 @@ async def test_check_non_ssl_port_443_conns_matching_ssl_future():
     conn.search_ssl_recognized_flows_for_ts_range = Mock(return_value=[1.0])
     flow = MagicMock(starttime=100, saddr="192.168.1.1", daddr="1.1.1.1")
     result = await conn.check_non_ssl_port_443_conns(
-        None, flow, timeout_reached=True
+        None, flow, timeout_reached=timeout_reached
     )
     assert result is False
 

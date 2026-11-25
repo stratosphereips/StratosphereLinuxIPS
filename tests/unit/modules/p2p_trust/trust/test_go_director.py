@@ -389,28 +389,9 @@ def test_set_evidence_p2p_report(
     assert call_args.threat_level == expected_threat_level
 
 
-def test_read_configuration():
-    with patch(
-        "slips_files.common.parsers.config_parser.ConfigParser",
-        return_value=3600.0,
-    ):
-        go_director = ModuleFactory().create_go_director_obj()
-        go_director.read_configuration()
-        assert go_director.width == 3600.0
-
-
-@pytest.mark.parametrize(
-    "text, expected_log_content",
-    [  # Test case 1: Basic log message
-        ("Test log message", " - Test log message\n"),
-        # Test case 2: Another log message
-        ("Another test message", " - Another test message\n"),
-    ],
-)
-def test_log(
-    text,
-    expected_log_content,
-):
+def test_log():
+    text = "Test log message"
+    expected_log_content = " - Test log message\n"
     go_director = ModuleFactory().create_go_director_obj()
 
     with tempfile.NamedTemporaryFile(mode="w+", delete=False) as temp_file:

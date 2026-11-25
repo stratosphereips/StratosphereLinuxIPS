@@ -7,14 +7,6 @@ import pytest
 
 from tests.module_factory import ModuleFactory
 from slips_files.common.abstracts.imodule import IModule
-from slips_files.common.slips_utils import utils
-
-
-def test_imodule_exposes_slips_version():
-    ip_info = ModuleFactory().create_ip_info_obj()
-
-    assert ip_info.slips_version == utils.get_slips_version()
-    assert ip_info.db.source_module == "ip_info"
 
 
 @pytest.mark.parametrize(
