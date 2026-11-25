@@ -454,7 +454,7 @@ def test_stop_daemon_uses_verified_instance_shutdown(is_daemon: bool) -> None:
     daemon.pid = 12345
     daemon_module = sys.modules[daemon.__class__.__module__]
     instance = RunningInstance(12345, 1, ("-D",) if is_daemon else ("-i", "eth0"))
-    with patch.object(daemon, "_is_running", return_value=True), patch.object(daemon_module, "Lock"), patch.object(daemon_module.psutil, "Process"), patch.object(daemon_module, "inspect_instance", return_value=instance), patch.object(daemon_module, "stop_instances", return_value=0) as stop:
+    with patch.object(daemon, "_is_running", return_value=True), patch.object(daemon_module, "Lock"), patch.object(daemon_module.psutil, "Process"), patch.object(daemon_module, "get_verified_instance", return_value=instance), patch.object(daemon_module, "stop_instances", return_value=0) as stop:
         result = daemon.stop()
     assert result["stopped"] is is_daemon
     assert stop.call_count == int(is_daemon)

@@ -1,4 +1,5 @@
-"""Remember owned process identities before their parents can exit."""
+"""Track the processes a Slips process started, so they can still be
+killed after their parents exit."""
 
 import os
 import signal
@@ -8,18 +9,29 @@ import psutil
 
 
 class OwnedProcesses:
-    """Keep a shutdown-only record of this run's workers and subprocesses."""
+    """
+    Tracks workers started by the calling process and everything those
+    workers start (e.g. zeek, the web server).
+
+    A subprocess whose parent exits is handed over to init and can no
+    longer be found through that parent, so it is recorded here while the
+    link still exists.
+    """
 
     def __init__(self) -> None:
-        """Create an empty record owned by the calling coordinator."""
+        """Start with nothing tracked; the calling process is the owner."""
         self.owner_pid = os.getpid()
         self.processes: dict[int, psutil.Process] = {}
 
-    def remember(self, pid: int) -> None:
-        """Record a worker and descendants while ownership is verifiable.
+    def track(self, pid: int) -> None:
+        """
+        Start tracking a worker and all of its current descendants.
+
+        PIDs that the owner did not start are ignored, so an unrelated
+        process is never killed by mistake.
 
         Parameters:
-            pid: Worker PID belonging to the current coordinator.
+            pid: PID of a worker started by the owner.
         """
         if pid in self.processes or pid <= 1 or pid == self.owner_pid:
             return
@@ -35,8 +47,12 @@ class OwnedProcesses:
         except psutil.NoSuchProcess:
             return
 
-    def refresh(self) -> None:
-        """Remember descendants before a worker exits or is forcibly killed."""
+    def track_new_descendants(self) -> None:
+        """
+        Start tracking subprocesses that tracked processes started since
+        the last call. Call it before a worker exits or is killed, while
+        its subprocesses can still be found through it.
+        """
         for process in list(self.processes.values()):
             try:
                 if process.is_running():
@@ -45,22 +61,26 @@ class OwnedProcesses:
             except psutil.NoSuchProcess:
                 continue
 
-    def stop(
-        self, exclude: frozenset[int] = frozenset(), grace_seconds: float = 0
+    def kill_all(
+        self,
+        pids_to_keep: frozenset[int] = frozenset(),
+        grace_seconds: float = 0,
     ) -> None:
-        """Kill retained identities together and verify that none still run.
+        """
+        Kill every tracked process and confirm that none is still running.
 
         Parameters:
-            exclude: Owned PIDs deliberately retained for the web prompt.
-            grace_seconds: Optional wait for SIGTERM before forced cleanup.
+            pids_to_keep: Tracked PIDs to leave running.
+            grace_seconds: When set, send SIGTERM first and only SIGKILL
+                the processes still running after this many seconds.
 
         Raises:
-            RuntimeError: An owned process could not be stopped or verified.
+            RuntimeError: A tracked process is still running after SIGKILL.
         """
-        self.refresh()
+        self.track_new_descendants()
         pending = []
         for process in reversed(list(self.processes.values())):
-            if process.pid in exclude:
+            if process.pid in pids_to_keep:
                 continue
             try:
                 # psutil checks PID and creation time before sending signals.
@@ -90,11 +110,13 @@ class OwnedProcesses:
     def _wait_for_exit(
         self, processes: list[psutil.Process], timeout: float
     ) -> list[psutil.Process]:
-        """Verify exit without stealing waitpid results from multiprocessing.
+        """
+        Wait for processes to exit by polling them, because waitpid() here
+        would take the exit status multiprocessing needs for its own join().
 
         Parameters:
-            processes: Retained identities to check together.
-            timeout: Shared maximum wait in seconds.
+            processes: Tracked processes to wait for.
+            timeout: Maximum seconds to wait for all of them together.
 
         Returns:
             Processes still executing at the deadline; zombies cannot execute.

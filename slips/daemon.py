@@ -15,7 +15,7 @@ from exclusiveprocess import (
 import psutil
 
 from managers.process_manager.instance_control import (
-    inspect_instance,
+    get_verified_instance,
     stop_instances,
 )
 
@@ -160,6 +160,62 @@ class Daemon:
         self.print(f"Slips daemon core workers started. [PID {os.getpid()}]")
         self._report_startup("ready", str(os.getpid()))
 
+    def _announce_early_exit(self) -> int:
+        """Tell the terminal that the daemon died before it finished starting.
+
+        Returns:
+            Failing exit status for the terminal command.
+        """
+        print(
+            f"Slips daemon exited before startup completed. See {self.stderr}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
+
+    def _announce_startup_result(self, result: dict) -> int:
+        """Tell the terminal how the daemon's startup ended.
+
+        Parameters:
+            result: Final startup message, with its status and message.
+
+        Returns:
+            Zero for a ready daemon, one for a failed startup.
+        """
+        if result["status"] == "ready":
+            print(
+                f"Slips daemon started. [PID {result['message']}] \n"
+                f"Logs: {self.logsfile}",
+                flush=True,
+            )
+            return 0
+        print(
+            f"Slips daemon startup failed: {result['message']}. See {self.stderr}",
+            file=sys.stderr,
+            flush=True,
+        )
+        return 1
+
+    def _announce_unconfirmed_startup(self, pid: Optional[int]) -> int:
+        """Tell the terminal what is known once the startup wait ran out.
+
+        Parameters:
+            pid: Daemon PID if it was reported during the wait.
+
+        Returns:
+            Zero when the daemon is still running, one when it is gone.
+        """
+        if pid and self.is_pid_running(pid):
+            print(
+                f"Slips daemon PID {pid} is running. Initialization continues "
+                "in the background after the 30-second wait. "
+                f"Startup confirmation and progress: {self.logsfile}. "
+                f"Errors: {self.stderr}.",
+                flush=True,
+            )
+            return 0
+        return self._announce_early_exit()
+
     def _wait_for_startup(self, descriptor: int) -> int:
         """Wait for startup feedback without mistaking a fork for success.
 
@@ -181,47 +237,15 @@ class Daemon:
                     break
                 chunk = os.read(descriptor, 4096)
                 if not chunk:
-                    print(
-                        f"Slips daemon exited before startup completed. See {self.stderr}",
-                        file=sys.stderr,
-                        flush=True,
-                    )
-                    return 1
+                    return self._announce_early_exit()
                 pending += chunk
                 while b"\n" in pending:
                     line, pending = pending.split(b"\n", 1)
                     result = json.loads(line)
-                    if result["status"] == "starting":
-                        pid = int(result["message"])
-                    elif result["status"] == "ready":
-                        print(
-                            f"Slips daemon started. [PID {result['message']}] \n"
-                            f"Logs: {self.logsfile}",
-                            flush=True,
-                        )
-                        return 0
-                    else:
-                        print(
-                            f"Slips daemon startup failed: {result['message']}. See {self.stderr}",
-                            file=sys.stderr,
-                            flush=True,
-                        )
-                        return 1
-            if pid and self.is_pid_running(pid):
-                print(
-                    f"Slips daemon PID {pid} is running. Initialization continues "
-                    "in the background after the 30-second wait. "
-                    f"Startup confirmation and progress: {self.logsfile}. "
-                    f"Errors: {self.stderr}.",
-                    flush=True,
-                )
-                return 0
-            print(
-                f"Slips daemon exited before startup completed. See {self.stderr}",
-                file=sys.stderr,
-                flush=True,
-            )
-            return 1
+                    if result["status"] != "starting":
+                        return self._announce_startup_result(result)
+                    pid = int(result["message"])
+            return self._announce_unconfirmed_startup(pid)
         finally:
             os.close(descriptor)
 
@@ -331,7 +355,7 @@ class Daemon:
                 # Starts the daemon
                 self.daemonize()
                 self.slips.pid = os.getpid()
-                self.slips.proc_man.adopt_daemon_ipc()
+                self.slips.proc_man.make_daemon_own_inherited_semaphores()
 
                 # any code run after daemonizing will be run inside
                 # the daemon and have the same PID as slips.py
@@ -437,7 +461,7 @@ class Daemon:
                     return {"stopped": True, "error": None}
                 entrypoint = Path(__file__).parent.parent / "slips.py"
                 process = psutil.Process(int(self.pid))
-                instance = inspect_instance(process, entrypoint)
+                instance = get_verified_instance(process, entrypoint)
                 if instance is None or not {"-D", "--daemon"}.intersection(
                     instance.arguments
                 ):

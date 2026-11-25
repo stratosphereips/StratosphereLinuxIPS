@@ -8,7 +8,9 @@ from slips_files.common.parsers.arg_parser import (
 )
 
 
-def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
+def get_isolated_analysis_output_dir(
+    arguments: list[str] | None = None,
+) -> str | None:
     """Identify an offline analysis with its own output and Redis instance.
 
     Parameters:
@@ -35,7 +37,7 @@ def isolated_analysis_output(arguments: list[str] | None = None) -> str | None:
     return str(Path(options.output))
 
 
-def isolated_analysis_config(config: dict, output: str) -> dict:
+def build_isolated_analysis_config(config: dict, output: str) -> dict:
     """Build the settings an isolated analysis actually runs with.
 
     ConfigParser keeps only what slips.yaml says. Code that reads one of

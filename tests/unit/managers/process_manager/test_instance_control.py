@@ -66,7 +66,7 @@ def candidate(pid: int, entrypoint: Path, *arguments: str) -> Mock:
         (["python", "-X"], None),
     ],
 )
-def test_script_position(command: list[str], expected: int | None) -> None:
+def test_get_slips_script_index(command: list[str], expected: int | None) -> None:
     """Distinguish a real entry point from an argument or Python code string.
 
     Parameters:
@@ -74,7 +74,7 @@ def test_script_position(command: list[str], expected: int | None) -> None:
         expected: Script position, or None for non-captures.
     """
     _factory = ModuleFactory()
-    assert control.script_position(command) == expected
+    assert control.get_slips_script_index(command) == expected
 
 
 @pytest.mark.parametrize("command,expected", [
@@ -93,7 +93,7 @@ def test_script_position(command: list[str], expected: int | None) -> None:
     (["echo", "slips.py"], None),
     ([], None),
 ])
-def test_capture_arguments(command: list[str], expected: tuple[str, ...] | None) -> None:
+def test_get_slips_run_arguments(command: list[str], expected: tuple[str, ...] | None) -> None:
     """Use the same capture classification for discovery and resource checks.
 
     Parameters:
@@ -101,7 +101,7 @@ def test_capture_arguments(command: list[str], expected: tuple[str, ...] | None)
         expected: Capture arguments or None for a management/unrelated command.
     """
     _factory = ModuleFactory()
-    assert control.capture_arguments(command) == expected
+    assert control.get_slips_run_arguments(command) == expected
 
 
 @pytest.mark.parametrize(
@@ -114,7 +114,7 @@ def test_capture_arguments(command: list[str], expected: tuple[str, ...] | None)
         (("-f", "capture.pcap"), ("-i", "--interface"), "—"),
     ],
 )
-def test_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expected: str) -> None:
+def test_get_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expected: str) -> None:
     """Display launch values without loading a configuration.
 
     Parameters:
@@ -123,7 +123,7 @@ def test_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expe
         expected: Displayed value.
     """
     _factory = ModuleFactory()
-    assert control.argument_value(arguments, *names) == expected
+    assert control.get_argument_value(arguments, *names) == expected
 
 
 @pytest.mark.parametrize("case,expected", [
@@ -174,14 +174,14 @@ def test_web_ports_use_owned_listening_sockets(
     with patch.object(control.psutil, "Process", return_value=main), patch.object(
         control.psutil, "process_iter", return_value=[server] if case == "orphan" else []
     ):
-        assert control.web_ports_for_instance(instance) == expected
+        assert control.get_web_ports_of_instance(instance) == expected
     redis_child.net_connections.assert_not_called()
     if case == "viewer":
         main.children.assert_not_called()
 
 
 @pytest.mark.parametrize("case", ["capture", "relative", "other_checkout", "self", "zombie", "denied", "management", "legacy_stop", "restart", "restart_pid"])
-def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
+def test_get_verified_instance_scope(tmp_path: Path, case: str) -> None:
     """Reject other programs, stale processes and management invocations.
 
     Parameters:
@@ -206,7 +206,7 @@ def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
         process.cmdline.return_value.append("--stop=all" if case == "management" else "-S")
     elif case in {"restart", "restart_pid"}:
         process.cmdline.return_value.append("--restart" if case == "restart" else "--restart=41002")
-    actual = control.inspect_instance(process, entrypoint)
+    actual = control.get_verified_instance(process, entrypoint)
     if case in {"capture", "relative"}:
         assert actual == control.RunningInstance(41001, 100.0, ("-i", "eth0"))
     else:
@@ -228,7 +228,7 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
     with patch.object(control.psutil, "process_iter", return_value=[first, other, second]):
         instances = control.list_instances(entrypoint)
     assert [instance.pid for instance in instances] == [41001, 41002]
-    with patch.object(control, "web_ports_for_instance", side_effect=[[55000], []]):
+    with patch.object(control, "get_web_ports_of_instance", side_effect=[[55000], []]):
         control.print_instances(instances)
     listing = capsys.readouterr().out
     assert "eth0" in listing and "test.pcap" in listing
@@ -251,9 +251,9 @@ def test_saved_viewer_discovery_and_listing(background: bool, capsys: pytest.Cap
     entrypoint = Path("slips.py")
     arguments = ["--view", "output/saved", *( ["-D"] if background else [])]
     process = candidate(41001, entrypoint, *arguments)
-    instance = control.inspect_instance(process, entrypoint)
+    instance = control.get_verified_instance(process, entrypoint)
     assert instance is not None
-    assert control.capture_arguments(process.cmdline()) is None
+    assert control.get_slips_run_arguments(process.cmdline()) is None
     control.print_instances([instance])
     listing = capsys.readouterr().out
     assert "saved results" in listing and "output/saved" in listing
@@ -284,7 +284,7 @@ def test_discovery_excludes_forked_workers(tmp_path: Path, case: str) -> None:
         instances = control.list_instances(entrypoint)
     if case in {"forked", "nested"}:
         assert [instance.pid for instance in instances] == [main.pid]
-        assert control.inspect_instance(worker, entrypoint) is None
+        assert control.get_verified_instance(worker, entrypoint) is None
     else:
         assert [instance.pid for instance in instances] == [main.pid, worker.pid]
 
@@ -303,7 +303,7 @@ def test_stop_revalidates_and_waits(tmp_path: Path, case: str, expected: int) ->
     process = candidate(41001, entrypoint, "-i", "eth0")
     child = Mock(pid=41002)
     process.children.return_value = [child]
-    instance = control.inspect_instance(process, entrypoint)
+    instance = control.get_verified_instance(process, entrypoint)
     if case == "reused":
         process.create_time.return_value += 1
     if case == "denied":
@@ -341,7 +341,7 @@ def test_stop_does_not_wait_for_exited_unreaped_workers(tmp_path: Path, status: 
     child.is_running.return_value = True
     child.status.return_value = status
     process.children.return_value = [child]
-    instance = control.inspect_instance(process, entrypoint)
+    instance = control.get_verified_instance(process, entrypoint)
     process.send_signal.side_effect = lambda _: setattr(process.status, "return_value", status)
     with patch.object(control.psutil, "Process", return_value=process), patch.object(control.psutil, "wait_procs") as wait:
         assert control.stop_instances([instance], entrypoint, timeout=0.1) == 0
@@ -555,7 +555,7 @@ def test_restart_handles_failures(tmp_path: Path, case: str) -> None:
     _factory = ModuleFactory()
     entrypoint = tmp_path / "slips.py"
     process = candidate(41001, entrypoint, "-D", "-i", "eth0")
-    instance = control.inspect_instance(process, entrypoint)
+    instance = control.get_verified_instance(process, entrypoint)
     if case == "foreground":
         instance = control.RunningInstance(41001, 100.0, ("-i", "eth0"))
     elif case == "reused":
@@ -607,9 +607,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 sys.path.insert(0, __PROJECT_DIRECTORY__)
 import psutil
-from managers.process_manager.instance_control import inspect_instance, restart_instance
+from managers.process_manager.instance_control import get_verified_instance, restart_instance
 if sys.argv[1:2] == ["--restart"]:
-    instance = inspect_instance(psutil.Process(int(sys.argv[2])), Path(__file__))
+    instance = get_verified_instance(psutil.Process(int(sys.argv[2])), Path(__file__))
     raise SystemExit(restart_instance(instance, Path(__file__)))
 from managers.redis_manager import RedisManager
 parent = psutil.Process(os.getppid())
@@ -617,7 +617,7 @@ parent.info = parent.as_dict(attrs=["pid", "cmdline"])
 args = SimpleNamespace(interface="eth0", output="output/capture with spaces",
     multiinstance=False, db=None, port=None, is_slips_started_by_an_update=False)
 with patch("managers.redis_manager.psutil.process_iter", return_value=[parent]):
-    assert RedisManager(SimpleNamespace(args=args)).validate_keep_history()
+    assert RedisManager(SimpleNamespace(args=args)).validate_keep_history_and_find_saved_history()
 if os.fork():
     raise SystemExit(0)
 os.setsid()
@@ -659,7 +659,7 @@ while True:
         while not marker.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
         previous = json.loads(marker.read_text())
-        instance = control.inspect_instance(psutil.Process(previous["pid"]), entrypoint)
+        instance = control.get_verified_instance(psutil.Process(previous["pid"]), entrypoint)
         assert instance is not None
         restarted = subprocess.run([sys.executable, "./slips.py", "--restart", str(instance.pid)],
                                    cwd=tmp_path, capture_output=True, text=True, timeout=cleanup_delay + 20)
@@ -684,7 +684,7 @@ while True:
     finally:
         if marker.exists():
             current = json.loads(marker.read_text())
-            instance = control.inspect_instance(psutil.Process(current["pid"]), entrypoint)
+            instance = control.get_verified_instance(psutil.Process(current["pid"]), entrypoint)
             if instance is not None:
                 control.stop_instances([instance], entrypoint, timeout=5)
         for record in (previous, current):
@@ -734,9 +734,9 @@ while True:
         while not marker.exists() and time.monotonic() < deadline:
             time.sleep(0.02)
         child_pid = json.loads(marker.read_text())["child"]
-        instance = control.inspect_instance(psutil.Process(process.pid), entrypoint)
+        instance = control.get_verified_instance(psutil.Process(process.pid), entrypoint)
         assert instance is not None
-        assert control.inspect_instance(psutil.Process(child_pid), entrypoint) is None
+        assert control.get_verified_instance(psutil.Process(child_pid), entrypoint) is None
         assert [item.pid for item in control.list_instances(entrypoint)] == [process.pid]
         assert control.stop_instances([instance], entrypoint, timeout=5) == 0
         assert saved.read_text() == "saved"

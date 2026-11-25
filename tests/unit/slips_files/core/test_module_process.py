@@ -111,8 +111,8 @@ def test_owned_child_is_reaped_without_redis(recorded_stopped: bool) -> None:
         manager.children = [process]
         manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
         manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
-        manager.deferred_stopped_modules = set()
-        manager._should_defer_web_interface_stopped_message = Mock(return_value=False)
+        manager.modules_with_delayed_stopped_msg = set()
+        manager._should_delay_web_interface_stopped_msg = Mock(return_value=False)
         manager.print_stopped_module = Mock()
         manager.kill_all_children(force=True)
         assert not process.is_alive()

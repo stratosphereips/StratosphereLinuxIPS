@@ -89,6 +89,42 @@ def create_instance_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def create_launch_parser() -> argparse.ArgumentParser:
+    """Build the parser naming the options of a running Slips launch.
+
+    Only the spellings matter: it is never used to parse a command line.
+
+    Returns:
+        Parser holding the options read from other runs' arguments.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("-D", "--daemon", action="store_true")
+    parser.add_argument("-i", "--interface")
+    parser.add_argument("-f", "--filepath")
+    parser.add_argument("-g", "--growing")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("--view")
+    parser.add_argument("-k", "--killall", action="store_true")
+    parser.add_argument("-V", "--version", action="store_true")
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument(
+        "-S", "--stopdaemon", dest="stop_daemon", action="store_true"
+    )
+    add_instance_arguments(parser)
+    return parser
+
+
+def create_web_server_parser() -> argparse.ArgumentParser:
+    """Build the parser naming the options of the web interface server.
+
+    Returns:
+        Parser holding the options read from a running web server.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--output-dir")
+    return parser
+
+
 def create_isolated_analysis_parser() -> argparse.ArgumentParser:
     """Build the parser that detects isolated offline analyses.
 

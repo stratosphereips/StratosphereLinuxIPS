@@ -26,16 +26,24 @@ class WebInterfaceShutdownMixin:
 
         return self.main.conf.web_interface_enabled()
 
-    def _should_defer_web_interface_stopped_message(
+    def _should_delay_web_interface_stopped_msg(
         self, module_name: object
     ) -> bool:
-        """Defer the launcher status while its HTTP server remains available.
+        """
+        Decide whether to delay printing that a module stopped.
+
+        Only the web interface qualifies: its module process just starts
+        the web server and exits, while the server keeps serving the
+        results. Printing "web_interface Stopped" at that point would be
+        wrong, so the message waits in modules_with_delayed_stopped_msg
+        until _report_web_interface_stopped() prints it.
 
         Parameters:
             module_name: Name of the child process that exited.
 
         Returns:
-            True when the detached web server is still running.
+            True when this is the web interface module and its web server
+            is still running.
         """
         if str(module_name).casefold() != Modules.WEB_INTERFACE.value:
             return False
@@ -48,7 +56,9 @@ class WebInterfaceShutdownMixin:
 
     def _report_web_interface_stopped(self) -> None:
         """Report the web interface only after its HTTP server has stopped."""
-        self.deferred_stopped_modules.discard(Modules.WEB_INTERFACE.value)
+        self.modules_with_delayed_stopped_msg.discard(
+            Modules.WEB_INTERFACE.value
+        )
         total_modules = max(
             len(getattr(self, "children", [])), len(self.stopped_modules) + 1
         )

@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config, isolated_analysis_output,
+    build_isolated_analysis_config, get_isolated_analysis_output_dir,
     validate_analysis_paths,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -33,7 +33,7 @@ def test_isolated_analysis_selection(arguments: list[str], expected: str | None)
         expected: Independent output path, or None for other run types.
     """
     _factory = ModuleFactory()
-    assert isolated_analysis_output(arguments) == expected
+    assert get_isolated_analysis_output_dir(arguments) == expected
 
 
 @pytest.mark.parametrize("extra", [["--clearcache"], ["--keep-history"], ["-P", "6379"]])
@@ -45,7 +45,7 @@ def test_isolated_analysis_rejects_shared_cache_operations(extra: list[str]) -> 
     """
     _factory = ModuleFactory()
     with pytest.raises(SystemExit) as error:
-        isolated_analysis_output(["-m", "-f", "test.pcap", "-o", "output/test", *extra])
+        get_isolated_analysis_output_dir(["-m", "-f", "test.pcap", "-o", "output/test", *extra])
     assert error.value.code == 2
 
 
@@ -62,7 +62,7 @@ def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> 
               "ml_online_model": {"model_load_path": "trained/model.bin"}}
     before = deepcopy(source)
     output = tmp_path / "analysis"
-    effective = isolated_analysis_config(source, str(output))
+    effective = build_isolated_analysis_config(source, str(output))
     assert source == before
     assert effective["parameters"]["permanent_dir"] == "live"
     assert effective["parameters"]["time_window_width"] == 120
@@ -85,7 +85,7 @@ def test_isolated_configuration_never_creates_a_permanent_dir(tmp_path: Path) ->
               "whitelists": {"local_whitelist_path": "rules/whitelist.conf"},
               "threatintelligence": {"download_path_for_remote_threat_intelligence": "feeds/"}}
     output = tmp_path / "analysis"
-    effective = isolated_analysis_config(source, str(output))
+    effective = build_isolated_analysis_config(source, str(output))
     assert effective["parameters"]["permanent_dir"] == "live"
     assert effective["whitelists"] == source["whitelists"]
     assert effective["threatintelligence"] == source["threatintelligence"]
@@ -168,7 +168,7 @@ def test_isolated_configuration_leaves_store_settings_untouched(tmp_path: Path) 
     _factory = ModuleFactory()
     source = {"regex_generator": {"persistent_store_dir": "databases/regex_store"},
               "t_cell": {"persistent_store_dir": "t_cell"}}
-    effective = isolated_analysis_config(source, str(tmp_path / "analysis"))
+    effective = build_isolated_analysis_config(source, str(tmp_path / "analysis"))
     assert effective["regex_generator"] == source["regex_generator"]
     assert effective["t_cell"] == source["t_cell"]
 

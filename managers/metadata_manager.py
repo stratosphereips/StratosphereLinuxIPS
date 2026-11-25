@@ -14,7 +14,7 @@ from typing import (
 
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config,
+    build_isolated_analysis_config,
 )
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import header_line
@@ -64,7 +64,7 @@ class MetadataManager:
             captured_config = os.path.join(
                 metadata_dir, os.path.basename(config_file)
             )
-            effective_config = isolated_analysis_config(
+            effective_config = build_isolated_analysis_config(
                 self.main.conf.config, self.main.args.output
             )
             with open(captured_config, "w", encoding="utf-8") as target:

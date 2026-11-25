@@ -91,7 +91,11 @@ class ProcessManager(
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event = Event()
         self.stopped_modules: List[str] = []
-        self.deferred_stopped_modules: Set[str] = set()
+        # modules whose process exited but whose "stopped" message isn't
+        # printed yet. only the web interface ends up here: its web server
+        # keeps running after its module process exits, so its message is
+        # printed once the server stops.
+        self.modules_with_delayed_stopped_msg: Set[str] = set()
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
         # thread (input and profiler)

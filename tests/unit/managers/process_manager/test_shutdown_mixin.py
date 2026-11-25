@@ -35,7 +35,7 @@ manager.main = SimpleNamespace(logger=SimpleNamespace(_startup_queue=startup))
 if UNREAD:
     for queue in queues:
         queue.put(b"x" * (1024 * 1024))
-manager._close_shutdown_queues()
+manager._close_queues_owned_by_main()
 assert all(queue._closed and queue._joincancelled for queue in queues)
 print("closed")
 '''.replace("UNREAD", repr(unread))
@@ -71,7 +71,7 @@ def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
         child.join(5)
         assert child.exitcode == 0
         before = time.monotonic()
-        assert not manager._notify_shutdown_event(event, before + 0.05)
+        assert not manager._set_stop_event_within_deadline(event, before + 0.05)
         assert time.monotonic() - before < 1
         manager.main.print.assert_called_with(
             "Could not deliver the stop signal before the shutdown deadline; "
@@ -82,7 +82,7 @@ def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
             child.kill()
             child.join(5)
         event._cond.release()
-        for thread, _ in getattr(manager, "_shutdown_notifications", {}).values():
+        for thread, _ in getattr(manager, "_stop_event_setter_threads", {}).values():
             thread.join(2)
             assert not thread.is_alive()
         child.close()
@@ -102,8 +102,8 @@ def test_shutdown_notification_reports_failure_and_reuses_one_thread(failed: boo
     if failed:
         event.set.side_effect = RuntimeError("damaged event")
     for _ in range(2):
-        assert manager._notify_shutdown_event(event, time.monotonic() + 1) is (not failed)
-    assert len(manager._shutdown_notifications) == 1
+        assert manager._set_stop_event_within_deadline(event, time.monotonic() + 1) is (not failed)
+    assert len(manager._stop_event_setter_threads) == 1
     event.set.assert_called_once_with()
 
 
@@ -277,7 +277,7 @@ def test_interrupt_caps_module_shutdown_wait(
     process_manager.main.conf.wait_for_modules_to_finish.return_value = 10080
     process_manager.shutdown_signal_received = interrupted
 
-    assert process_manager._module_shutdown_timeout() == expected_seconds
+    assert process_manager._get_module_shutdown_timeout() == expected_seconds
 
 
 def test_interrupt_wait_uses_remaining_global_deadline() -> None:
@@ -304,7 +304,7 @@ def test_forced_child_cleanup_skips_another_grace_wait() -> None:
     child.is_alive.return_value = True
     process_manager.children = [child]
     process_manager.main.db.get_name_of_module_at.return_value = "test_module"
-    process_manager._should_defer_web_interface_stopped_message = Mock(
+    process_manager._should_delay_web_interface_stopped_msg = Mock(
         return_value=False
     )
     process_manager.print_stopped_module = Mock()
@@ -330,8 +330,8 @@ def test_child_cleanup_does_not_depend_on_redis_metadata(recorded_stopped: bool)
     process_manager.children = [child]
     process_manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
     process_manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
-    process_manager.deferred_stopped_modules = set()
-    process_manager._should_defer_web_interface_stopped_message = Mock(return_value=False)
+    process_manager.modules_with_delayed_stopped_msg = set()
+    process_manager._should_delay_web_interface_stopped_msg = Mock(return_value=False)
     process_manager.print_stopped_module = Mock()
     process_manager.kill_process_tree = Mock()
 
@@ -932,9 +932,9 @@ def test_failed_stop_notification_always_reaps_workers(interrupted: bool) -> Non
     manager.main.conf.export_labeled_flows.return_value = False
     manager._generate_plots = Mock()
     manager.get_hitlist_in_order = Mock(return_value=([], []))
-    manager._notify_shutdown_event = Mock(return_value=False)
+    manager._set_stop_event_within_deadline = Mock(return_value=False)
     if interrupted:
-        manager._notify_shutdown_event.side_effect = KeyboardInterrupt()
+        manager._set_stop_event_within_deadline.side_effect = KeyboardInterrupt()
     manager.shutdown_interactive = Mock()
     manager.kill_all_children = Mock()
     manager.get_analysis_time = Mock(return_value=(1.0, "2026/10/24 16:39:54"))
@@ -964,7 +964,7 @@ def test_kill_all_children_only_kills_running_processes(
     child.is_alive.return_value = still_alive
     process_manager.children = [child]
     process_manager.main.db.get_name_of_module_at.return_value = "test_module"
-    process_manager._should_defer_web_interface_stopped_message = Mock(
+    process_manager._should_delay_web_interface_stopped_msg = Mock(
         return_value=False
     )
     process_manager.print_stopped_module = Mock()
@@ -1005,26 +1005,26 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
     ]
 
 
-def test_shutdown_exception_still_verifies_owned_processes() -> None:
+def test_shutdown_exception_still_kills_tracked_processes() -> None:
     """Run final cleanup even when a shutdown operation fails unexpectedly."""
     manager = ModuleFactory().create_process_manager_obj()
     manager._generate_plots = Mock(side_effect=RuntimeError("failed plot"))
-    manager._finish_owned_processes = Mock()
+    manager._kill_tracked_processes = Mock()
     with patch("managers.process_manager.shutdown_mixin.multiprocessing.active_children", return_value=[]):
         with pytest.raises(RuntimeError, match="failed plot"):
             manager.shutdown_gracefully()
-    manager._finish_owned_processes.assert_called_once_with()
+    manager._kill_tracked_processes.assert_called_once_with()
     assert manager.profiler_queue._closed
 
 
 def test_final_process_cleanup_cannot_be_interrupted_by_ctrl_c() -> None:
     """Restore SIGINT handling only after the verified cleanup completes."""
     manager = ModuleFactory().create_process_manager_obj()
-    owned = manager._owned_shutdown_processes = Mock()
+    owned = manager._tracked_processes = Mock()
     previous = signal.getsignal(signal.SIGINT)
-    owned.stop.side_effect = lambda _: signal.getsignal(signal.SIGINT) == signal.SIG_IGN or pytest.fail("cleanup left interruptible")
-    manager._finish_owned_processes()
-    owned.stop.assert_called_once_with(frozenset())
+    owned.kill_all.side_effect = lambda _: signal.getsignal(signal.SIGINT) == signal.SIG_IGN or pytest.fail("cleanup left interruptible")
+    manager._kill_tracked_processes()
+    owned.kill_all.assert_called_once_with(frozenset())
     assert signal.getsignal(signal.SIGINT) == previous
 
 

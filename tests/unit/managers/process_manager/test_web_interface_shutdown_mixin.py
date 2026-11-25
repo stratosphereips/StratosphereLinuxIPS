@@ -31,7 +31,7 @@ def test_wait_defers_web_stopped_message_while_server_is_running() -> None:
         )
 
     assert alive_processes == []
-    assert process_manager.deferred_stopped_modules == {
+    assert process_manager.modules_with_delayed_stopped_msg == {
         Modules.WEB_INTERFACE.value
     }
     print_stopped.assert_not_called()
@@ -47,7 +47,7 @@ def test_kill_skips_web_launcher_with_deferred_status() -> None:
     web_launcher.name = Modules.WEB_INTERFACE.value
     web_launcher.is_alive.return_value = False
     process_manager.children = [web_launcher]
-    process_manager.deferred_stopped_modules = {Modules.WEB_INTERFACE.value}
+    process_manager.modules_with_delayed_stopped_msg = {Modules.WEB_INTERFACE.value}
     process_manager.main.db.get_name_of_module_at.return_value = (
         Modules.WEB_INTERFACE.value
     )

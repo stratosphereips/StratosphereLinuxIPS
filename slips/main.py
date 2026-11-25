@@ -25,7 +25,7 @@ from managers.ui_manager import UIManager
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_output,
+    get_isolated_analysis_output_dir,
     validate_analysis_paths,
 )
 from slips_files.common.performance_paths import get_performance_plots_dir
@@ -79,7 +79,7 @@ class Main:
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             # redis isn't up yet, so tell from the CLI args
-            if isolated_analysis_output() is not None:
+            if get_isolated_analysis_output_dir() is not None:
                 validate_analysis_paths(
                     self.conf.config,
                     self.args.output,
@@ -203,7 +203,7 @@ class Main:
             return
 
         if getattr(self.args, "keep_history", False) is True:
-            if self.redis_man.validate_keep_history():
+            if self.redis_man.validate_keep_history_and_find_saved_history():
                 os.chmod(self.args.output, 0o777)
                 return
             print(
