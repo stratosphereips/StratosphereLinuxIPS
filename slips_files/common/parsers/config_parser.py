@@ -19,10 +19,6 @@ from slips_files.common.parsers.arg_parser import (
     ArgumentParser,
     get_web_port_override,
 )
-from slips_files.common.parsers.analysis_config import (
-    isolated_analysis_config,
-    isolated_analysis_output,
-)
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 
@@ -47,19 +43,9 @@ class ConfigParser(object):
         if self._initialized:
             return
         configfile: str = self.get_config_file()
+        # only holds what slips.yaml says. values decided at runtime (e.g.
+        # whether this is an isolated analysis) are stored in Redis
         self.config = self.read_config_file(configfile)
-        self.source_config = self.config
-        analysis_output = isolated_analysis_output()
-        self.isolated_analysis = analysis_output is not None
-        if self.isolated_analysis:
-            self.config = isolated_analysis_config(
-                self.config, analysis_output
-            )
-        web_port = get_web_port_override()
-        if web_port is not None:
-            web_settings = self.config.get("web_interface") or {}
-            web_settings["port"] = web_port
-            self.config["web_interface"] = web_settings
         self.home_network_ranges = (
             "192.168.0.0/16",
             "172.16.0.0/12",
@@ -135,6 +121,10 @@ class ConfigParser(object):
 
     @property
     def web_interface_port(self) -> int:
+        """Read the web interface port, --web-port wins over slips.yaml."""
+        port = get_web_port_override()
+        if port is not None:
+            return port
         port = self.read_configuration("web_interface", "port", 55000)
         try:
             return int(port)

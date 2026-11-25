@@ -1431,12 +1431,14 @@ class RedisDB(
         """
         self.r.set(self.constants.MODE, slips_mode)
 
-    def get_slips_mode(self):
+    def get_slips_mode(self) -> str | None:
         """
-        function to get the current mode (daemonized/interactive)
-        in the db
+        Read the mode slips is running in, as stored by set_slips_mode().
+
+        Returns:
+            The mode (daemonized/interactive), or None if it was never set.
         """
-        self.r.get(self.constants.MODE)
+        return self.r.get(self.constants.MODE)
 
     def get_modified_ips_in_the_last_tw(self):
         """

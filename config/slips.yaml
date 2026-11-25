@@ -95,7 +95,7 @@ parameters:
   # This directory stores databases and runtime-generated files that must
   # persist across different slips runs and should not be overwritten.
   # this dir is inside slips root dir.
-  # With -m -f <input> -o <dir>, runtime data uses <dir>/permanent automatically.
+  # This is the same directory for live captures and for file/pcap analysis.
   permanent_dir: permanent
 
   # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'
@@ -493,6 +493,8 @@ regex_generator:
   # inside parameters.permanent_dir. If set, it takes precedence over
   # store_dir and lets the generator reuse the same DBs across many Slips
   # restarts.
+  # When Slips analyses a file/pcap with -m -f, this is ignored and
+  # store_dir (inside the output dir) is used, so the live DBs are not changed.
   persistent_store_dir: databases/regex_store
 
   # Persist rejected regexes in generated_regexes.sqlite.
@@ -550,6 +552,8 @@ t_cell:
   # Optional stable directory for the T Cell SQLite database.
   # Leave this empty for normal runs because T Cell state is run-specific.
   # If set, relative paths are resolved inside parameters.permanent_dir.
+  # When Slips analyses a file/pcap with -m -f, this is ignored and
+  # store_dir (inside the output dir) is used.
   persistent_store_dir: ""
 
   # Keep processed evidence observations for this many seconds.

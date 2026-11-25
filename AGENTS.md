@@ -83,8 +83,9 @@ These rules MUST be followed:
 - module names should follow the format: X_doer. e.g http_analyzer, brute_force_detector, etc.
 - when a generated function is too long, split it into shorter helpers.
 - when a module is too long, and contains logic that can be grouped together in a helper class, do it. like exporting_alerts module, it has idmef, slack and stix exporter helpers.
-
-
+- ConfigParser() should only have value read from slips.yaml. not custom ones added and changed by slips at runtime. you can use redis for custom runtime values instead.
+- Add or modify unit tests only when they verify meaningful functionality, business logic, or non-trivial edge cases.
+- Avoid trivial, redundant, or implementation-detail tests; remove existing tests that provide no meaningful behavioral coverage.
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.
