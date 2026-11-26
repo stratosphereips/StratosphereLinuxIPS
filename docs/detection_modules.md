@@ -630,7 +630,7 @@ Commented TI files (lines starting with ;) will be completely removed from our d
 
 
 The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```.
-By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/```
+By default, the files are stored in the Slips directory ```permanent/remote_data_files/``` (inside ```parameters.permanent_dir```)
 are deleted after slips is done reading them.
 
 

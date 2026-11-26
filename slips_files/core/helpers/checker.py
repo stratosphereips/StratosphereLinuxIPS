@@ -9,6 +9,7 @@ from slips_files.common.input_type import (
     InputType,
     FOREVER_GROWING_INPUT_TYPES,
 )
+from slips_files.common.parsers.analysis_config import is_isolated_run
 from slips_files.common.slips_utils import utils
 
 
@@ -88,7 +89,6 @@ class Checker:
         mutually_exclusive_flags = [
             self.main.args.interface,  # -i
             self.main.args.access_point,  # -ap
-            self.main.args.save,  # -s
             self.main.args.db,  # -d
             self.main.args.filepath,  # -f
             self.main.args.input_module,  # -im
@@ -100,7 +100,7 @@ class Checker:
 
         if mutually_exclusive_flag_count > 1:
             print(
-                "Only one of the flags -i, -ap, -s, -d, or -f is allowed. "
+                "Only one of the flags -i, -ap, -d, or -f is allowed. "
                 "Stopping Slips."
             )
             self.main.terminate_slips()
@@ -125,8 +125,8 @@ class Checker:
             self.main.terminate_slips()
 
     def _check_if_root_is_required(self):
-        if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
-            print("Saving and loading the database requires root privileges.")
+        if self.main.args.db and os.getuid() != 0:
+            print("Loading the database requires root privileges.")
             self.main.terminate_slips()
             return
         if (
@@ -173,6 +173,25 @@ class Checker:
                     self.main.terminate_slips()
                     return
 
+    def _check_isolated_run_flags(self) -> None:
+        """Stop an isolated run that uses an option touching shared data,
+        since another instance may be using that data.
+        """
+        if not is_isolated_run():
+            return
+
+        if (
+            self.main.args.clearcache
+            or self.main.args.keep_history
+            or str(self.main.args.port) == "6379"
+        ):
+            print(
+                "An isolated file analysis cannot use --clearcache, "
+                "--keep-history or Redis port 6379. Stopping Slips."
+            )
+            # not terminate_slips(), a refused run has to exit with an error
+            sys.exit(1)
+
     def verify_given_flags(self):
         """
         Checks the validity of the given flags.
@@ -185,6 +204,8 @@ class Checker:
             self.main.terminate_slips()
             return
 
+        # must run before any flag below acts on shared data
+        self._check_isolated_run_flags()
         self._check_mutually_exclusive_flags()
         self._check_if_root_is_required()
         self._check_interface_validity()

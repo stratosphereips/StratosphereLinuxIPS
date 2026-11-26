@@ -5,7 +5,7 @@ import threading
 import pytest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
 from slips_files.core.input.zeek.utils.zeek_input_utils import ZeekInputUtils
@@ -29,17 +29,6 @@ def test_is_zeek_tabs_file_detects_format(tmp_path, contents, expected):
     assert (
         input_process.zeek_utils.is_zeek_tabs_file(str(test_file)) == expected
     )
-
-
-def test_get_ts_from_line_returns_timestamp_for_tabs():
-    input_process = ModuleFactory().create_input_obj(
-        "", InputType.ZEEK_LOG_FILE
-    )
-    input_process.is_zeek_tabs = True
-
-    ts, line = input_process.zeek_utils.get_ts_from_line("1.5\tfield\n")
-    assert ts == 1.5
-    assert line == "1.5\tfield\n"
 
 
 def test_close_rotated_file_handle_closes_and_removes_handle() -> None:
@@ -78,6 +67,7 @@ def test_start_zeek_process_stores_pid(
     """Test starting Zeek records its PID and uses the validated directory."""
     input_process = ModuleFactory().create_input_obj("", InputType.PCAP)
     zeek_process = Mock(pid=4321)
+    owned = input_process.zeek_utils.zeek_processes = Mock()
     popen = Mock(return_value=zeek_process)
     monkeypatch.setattr(
         "slips_files.core.input.zeek.utils.zeek_input_utils.subprocess.Popen",
@@ -90,6 +80,7 @@ def test_start_zeek_process_stores_pid(
 
     assert result is zeek_process
     assert input_process.zeek_utils.zeek_pids == [4321]
+    owned.track.assert_called_once_with(4321)
     popen.assert_called_once_with(
         ["zeek", "-r", "capture.pcap"],
         stdout=-1,
@@ -198,7 +189,8 @@ def test_create_zeek_output_dir(store_in_output, expected_dir):
     )
     input_process.zeek_dir = None
     input_process.args.output = "output"
-    input_process.zeek_utils.is_running_non_stop = False
+    input_process.zeek_utils.is_running_non_stop = True
+    input_process.conf.auto_update_slips.return_value = False
     input_process.conf.store_zeek_files_in_the_output_dir.return_value = (
         store_in_output
     )
@@ -423,3 +415,32 @@ def test_handle_zeek_process_result_suppresses_expected_shutdown_stderr():
     )
     input_process.print.assert_not_called()
     input_process.db.publish_stop.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "isolated, expected",
+    [(True, "output/zeek_files"), (False, "zeek_files_inputfile")],
+)
+def test_only_isolated_runs_override_the_zeek_files_dir(
+    isolated: bool, expected: str
+) -> None:
+    """Follow slips.yaml unless the file analysis is isolated.
+
+    Parameters:
+        isolated: Whether the run is an isolated file analysis.
+        expected: Where the zeek files should be stored.
+    """
+    input_process = ModuleFactory().create_input_obj(
+        "pcaps/inputfile.pcap", InputType.PCAP
+    )
+    input_process.zeek_dir = None
+    input_process.args.output = "output"
+    input_process.zeek_utils.is_running_non_stop = False
+    input_process.conf.store_zeek_files_in_the_output_dir.return_value = False
+
+    with patch(
+        "slips_files.core.input.zeek.utils.zeek_input_utils."
+        "is_isolated_run",
+        return_value=isolated,
+    ), patch.object(Path, "mkdir"):
+        assert input_process.zeek_utils.create_zeek_output_dir() == expected

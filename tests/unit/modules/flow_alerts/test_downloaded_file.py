@@ -50,23 +50,6 @@ import pytest
             None,
             0,
         ),
-        (  # Testcase 3: Not an SSL certificate
-            Files(
-                starttime="1726593782.8840969",
-                uid="123",
-                saddr="192.168.1.80",
-                daddr="1.1.1.1",
-                size=5,
-                md5="",
-                source="SSL",
-                analyzers="SHA1",
-                sha1="malicious_sha1",
-                tx_hosts=["192.168.1.80"],
-                rx_hosts=["1.1.1.1"],
-            ),
-            None,
-            0,
-        ),
     ],
 )
 def test_check_malicious_ssl(flow, db_result, expected_call_count):

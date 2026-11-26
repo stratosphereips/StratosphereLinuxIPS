@@ -22,12 +22,9 @@ def test_issue_token_validates():
     assert web_auth.validate_token(token)
 
 
-def test_validate_token_rejects_none():
-    assert not web_auth.validate_token(None)
-
-
-def test_validate_token_rejects_malformed_token():
-    assert not web_auth.validate_token("not-a-real-token")
+@pytest.mark.parametrize("token", [None, "not-a-real-token"])
+def test_validate_token_rejects_missing_or_malformed_token(token):
+    assert not web_auth.validate_token(token)
 
 
 def test_validate_token_rejects_expired_token(monkeypatch):

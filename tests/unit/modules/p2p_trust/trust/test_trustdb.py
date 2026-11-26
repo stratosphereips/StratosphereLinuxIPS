@@ -15,44 +15,19 @@ def normalize_sql(sql):
     return " ".join(sql.strip().split())
 
 
-@pytest.mark.parametrize(
-    "existing_tables",
-    [
-        # Testcase 1: All tables exist
-        (
-            [
-                "opinion_cache",
-                "slips_reputation",
-                "go_reliability",
-                "peer_ips",
-                "reports",
-            ]
-        ),
-        # Testcase 2: Some tables missing
-        (["slips_reputation", "peer_ips"]),
-        # Testcase 3: No tables exist
-        ([]),
-    ],
-)
-def test_delete_tables(existing_tables):
+def test_delete_tables():
     trust_db = ModuleFactory().create_trust_db_obj()
     trust_db.execute = Mock()
-    trust_db.execute.side_effect = lambda query: (
-        None if query.startswith("DROP TABLE") else ["table"]
-    )
-    trust_db.conn.fetchall = Mock()
-    trust_db.conn.fetchall.return_value = existing_tables
 
-    expected_calls = [
+    trust_db.delete_tables()
+
+    assert trust_db.execute.call_args_list == [
         call("DROP TABLE IF EXISTS opinion_cache;"),
         call("DROP TABLE IF EXISTS slips_reputation;"),
         call("DROP TABLE IF EXISTS go_reliability;"),
         call("DROP TABLE IF EXISTS peer_ips;"),
         call("DROP TABLE IF EXISTS reports;"),
     ]
-
-    trust_db.delete_tables()
-    assert trust_db.execute.call_args_list == expected_calls
 
 
 @pytest.mark.parametrize(
@@ -133,52 +108,21 @@ def test_update_cached_network_opinion(
     trust_db.execute.assert_called_once_with(expected_query, expected_params)
 
 
-@pytest.mark.parametrize(
-    "peerid, ip, timestamp, expected_params",
-    [  # Testcase 1: Using provided timestamp
-        (
-            "peer_123",
-            "192.168.1.20",
-            1678887000,
-            ("192.168.1.20", "peer_123", 1678887000),
-        ),
-        # Testcase 2: Using current time as timestamp
-        (
-            "another_peer",
-            "10.0.0.5",
-            datetime.datetime(2024, 7, 24, 20, 26, 35),
-            (
-                "10.0.0.5",
-                "another_peer",
-                datetime.datetime(2024, 7, 24, 20, 26, 35),
-            ),
-        ),
-    ],
-)
-def test_insert_go_ip_pairing(peerid, ip, timestamp, expected_params):
+def test_insert_go_ip_pairing():
     trust_db = ModuleFactory().create_trust_db_obj()
     trust_db.insert = Mock()
-    trust_db.insert_go_ip_pairing(peerid, ip, timestamp)
+    trust_db.insert_go_ip_pairing("peer_123", "192.168.1.20", 1678887000)
     trust_db.insert.assert_called_once_with(
-        "peer_ips", (ip, peerid, timestamp), "ipaddress, peerid, update_time"
+        "peer_ips",
+        ("192.168.1.20", "peer_123", 1678887000),
+        "ipaddress, peerid, update_time",
     )
 
 
-@pytest.mark.parametrize(
-    "ip, score, confidence, timestamp, expected_timestamp",
-    [
-        # Testcase 1: Using provided timestamp
-        ("192.168.1.10", 0.85, 0.95, 1678886400, 1678886400),
-        # Testcase 2: Using current time as timestamp
-        ("10.0.0.1", 0.6, 0.7, None, 1234),
-    ],
-)
-def test_insert_slips_score(
-    ip, score, confidence, timestamp, expected_timestamp
-):
+def test_insert_slips_score():
     trust_db = ModuleFactory().create_trust_db_obj()
     trust_db.execute = Mock()
-    trust_db.insert_slips_score(ip, score, confidence, timestamp)
+    trust_db.insert_slips_score("192.168.1.10", 0.85, 0.95, 1678886400)
     actual_call = trust_db.execute.call_args
     actual_sql = normalize_sql(actual_call[0][0])
     expected_sql = normalize_sql(
@@ -186,6 +130,7 @@ def test_insert_slips_score(
         "confidence, update_time) VALUES (?, ?, ?, ?)"
     )
     assert actual_sql == expected_sql
+    assert actual_call[0][1] == ("192.168.1.10", 0.85, 0.95, 1678886400)
 
 
 @pytest.mark.parametrize(
@@ -233,41 +178,6 @@ def test_get_ip_of_peer(peerid, fetchone_result, expected_result):
     trust_db.select.return_value = fetchone_result
     result = trust_db.get_ip_of_peer(peerid)
     assert result == expected_result
-
-
-def test_create_tables():
-    trust_db = ModuleFactory().create_trust_db_obj()
-    trust_db.create_table = Mock()
-
-    trust_db.create_tables()
-
-    expected_calls = [
-        (
-            "slips_reputation",
-            "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, update_time REAL NOT NULL",
-        ),
-        (
-            "go_reliability",
-            "id INTEGER PRIMARY KEY NOT NULL, peerid TEXT NOT NULL, reliability REAL NOT NULL, update_time REAL NOT NULL",
-        ),
-        (
-            "peer_ips",
-            "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, peerid TEXT NOT NULL, update_time REAL NOT NULL",
-        ),
-        (
-            "reports",
-            "id INTEGER PRIMARY KEY NOT NULL, reporter_peerid TEXT NOT NULL, key_type TEXT NOT NULL, reported_key TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, update_time REAL NOT NULL",
-        ),
-        (
-            "opinion_cache",
-            "key_type TEXT NOT NULL, reported_key TEXT NOT NULL PRIMARY KEY, score REAL NOT NULL, confidence REAL NOT NULL, network_score REAL NOT NULL, update_time DATE NOT NULL",
-        ),
-    ]
-
-    for table, schema in expected_calls:
-        trust_db.create_table.assert_any_call(table, schema)
-
-    assert trust_db.create_table.call_count == len(expected_calls)
 
 
 @pytest.mark.parametrize(

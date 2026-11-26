@@ -15,7 +15,10 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.supported_module_names import Modules
 from slips_files.common.ips import LOCALHOST_HOSTNAME
-from slips_files.common.parsers.arg_parser import ArgumentParser
+from slips_files.common.parsers.arg_parser import (
+    ArgumentParser,
+    get_web_port_override,
+)
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 
@@ -40,6 +43,8 @@ class ConfigParser(object):
         if self._initialized:
             return
         configfile: str = self.get_config_file()
+        # only holds what slips.yaml says. values decided at runtime (e.g.
+        # whether this is an isolated analysis) are stored in Redis
         self.config = self.read_config_file(configfile)
         self.home_network_ranges = (
             "192.168.0.0/16",
@@ -116,6 +121,10 @@ class ConfigParser(object):
 
     @property
     def web_interface_port(self) -> int:
+        """Read the web interface port, --web-port wins over slips.yaml."""
+        port = get_web_port_override()
+        if port is not None:
+            return port
         port = self.read_configuration("web_interface", "port", 55000)
         try:
             return int(port)
@@ -1032,23 +1041,11 @@ class ConfigParser(object):
             self.read_configuration(section, "model_load_path", default)
         ).strip()
 
-    def ml_module_model_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "model_store_path", default)
-        ).strip()
-
     def ml_module_preprocess_load_path(
         self, section: str, default: str
     ) -> str:
         return str(
             self.read_configuration(section, "preprocess_load_path", default)
-        ).strip()
-
-    def ml_module_preprocess_store_path(
-        self, section: str, default: str
-    ) -> str:
-        return str(
-            self.read_configuration(section, "preprocess_store_path", default)
         ).strip()
 
     def ml_module_pca_n_components(
@@ -1080,11 +1077,6 @@ class ConfigParser(object):
     def ml_module_pca_load_path(self, section: str, default: str) -> str:
         return str(
             self.read_configuration(section, "pca_load_path", default)
-        ).strip()
-
-    def ml_module_pca_store_path(self, section: str, default: str) -> str:
-        return str(
-            self.read_configuration(section, "pca_store_path", default)
         ).strip()
 
     def ml_module_benign_target_value(
@@ -1335,8 +1327,10 @@ class ConfigParser(object):
         path = self.read_configuration(
             "threatintelligence",
             "download_path_for_remote_threat_intelligence",
-            "modules/threat_intelligence/remote_data_files/",
+            "",
         )
+        if not path:
+            return os.path.join(self.permanent_dir(), "remote_data_files")
         return utils.sanitize(path)
 
     def ti_files(self):

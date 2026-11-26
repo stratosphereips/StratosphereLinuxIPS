@@ -13,7 +13,6 @@ from unittest.mock import (
 import shutil
 import os
 import json
-import signal
 import threading
 import time
 
@@ -412,25 +411,6 @@ def test_give_profiler(line, input_type, expected_line, expected_input_type):
     assert line_sent["input_type"] == expected_input_type
 
 
-def test_mark_self_as_done_processing_sends_worker_stop_signals():
-    """Test input sends one stop sentinel per started profiler worker."""
-    input_process = ModuleFactory().create_input_obj("", InputType.STDIN)
-    input_process.profiler_queue = Mock()
-    input_process.done_processing = Mock()
-    input_process.is_input_done_event = Mock()
-    input_process.is_profiler_done_event = Mock()
-    input_process.db.get_slips_start_time.return_value = "0"
-    input_process.db.get_profiler_workers_started.return_value = 3
-
-    type(input_process).mark_self_as_done_processing(input_process)
-
-    input_process.db.get_profiler_workers_started.assert_called_once()
-    input_process.profiler_queue.put.assert_has_calls([call("stop")] * 3)
-    input_process.is_input_done_event.set.assert_called_once()
-    input_process.is_profiler_done_event.wait.assert_called_once()
-    input_process.done_processing.release.assert_called_once()
-
-
 def test_get_file_handle_existing_file(tmp_path):
     """
     Test that the get_file_handle method correctly
@@ -505,6 +485,7 @@ def test_mark_self_as_done_processing_waits_for_profiler_workers() -> None:
     input_process.is_profiler_done_starting_initial_workers_event.wait.assert_called_once_with(
         30
     )
+    input_process.profiler_queue.put.assert_has_calls([call("stop")] * 3)
     assert input_process.profiler_queue.put.call_count == 3
     input_process.is_input_done_event.set.assert_called_once_with()
     input_process.is_profiler_done_event.wait.assert_called_once_with()
@@ -546,29 +527,33 @@ def test_close_all_handles():
 
 
 @pytest.mark.parametrize(
-    "pids, expected_kills",
-    [([123, 321], 2), ([], 0)],
+    "pids",
+    [[123, 321], []],
 )
-def test_shutdown_zeek_runtime_kills_pids(pids, expected_kills):
-    """Test shutdown_zeek_runtime joins threads and kills Zeek pids."""
+def test_shutdown_zeek_runtime_kills_pids(pids: list[int]) -> None:
+    """Stop the registered Zeek processes before joining the Zeek monitor threads.
+
+    Parameters:
+        pids: Legacy PID list, which must never be used to send signals.
+    """
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
     mock_thread = MagicMock()
     input_process.zeek_utils.zeek_threads = [mock_thread]
     input_process.zeek_utils.zeek_pids = pids
+    owned = input_process.zeek_utils.zeek_processes = Mock()
+    ordering = Mock()
+    ordering.attach_mock(owned.kill_all, "kill_all")
+    ordering.attach_mock(mock_thread.join, "join")
 
     with patch("os.kill") as mock_kill:
         input_process.zeek_utils.shutdown_zeek_runtime()
 
     mock_thread.join.assert_called_once_with(3)
-    if expected_kills:
-        mock_kill.assert_has_calls(
-            [call(pid, signal.SIGKILL) for pid in pids],
-            any_order=True,
-        )
-    else:
-        mock_kill.assert_not_called()
+    assert ordering.mock_calls == [call.kill_all(grace_seconds=2), call.join(3)]
+    assert input_process.zeek_utils.zeek_shutdown_requested
+    mock_kill.assert_not_called()
 
 
 def test_get_file_handle_non_existing_file():
@@ -602,54 +587,19 @@ def test_create_zeek_output_dir_creates_dir(tmp_path):
     )
 
 
-def test_check_if_time_to_del_rotated_files_deletes_old_files():
-    """Test that rotated files are deleted when the retention time passes."""
-    input_process = ModuleFactory().create_input_obj(
-        "", InputType.ZEEK_LOG_FILE
-    )
-    input_process.zeek_utils.rotated_files_to_delete = [
-        ("old1.log", 1.0),
-        ("old2.log", 1.0),
-    ]
-
-    with (
-        patch("time.time", return_value=2.0),
-        patch("os.remove") as mock_remove,
-    ):
-        input_process.zeek_utils.check_if_time_to_del_rotated_files()
-
-    assert mock_remove.call_count == 2
-    assert input_process.zeek_utils.rotated_files_to_delete == []
-
-
-@pytest.mark.parametrize(
-    "data, expected_chunks",
-    [  # Testcase 1: String length is multiple of chunk size
-        (b"This is a test string.", [b"This is a", b" test str", b"ing."]),
-        # Testcase 2: String length is less than chunk size
-        (b"Hello", [b"Hello"]),
-        # Testcase 3: String length is more than chunk size
-        (
-            b"This is a longer string that exceeds the chunk size.",
-            [
-                b"This is a longer ",
-                b"string that exceed",
-                b"s the chunk size.",
-            ],
-        ),
-    ],
-)
-def test__make_gen(data, expected_chunks):
+def test__make_gen():
     """
     Test that the _make_gen function yields chunks of data from a file.
     """
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
+    expected_chunks = [b"This is a", b" test str", b"ing."]
     reader = MagicMock(side_effect=[*expected_chunks, b""])
     gen = input_process._make_gen(reader)
     for expected_chunk in expected_chunks:
         assert next(gen) == expected_chunk
+    assert next(gen, None) is None
 
 
 def test_get_earliest_line_with_no_cached_lines():

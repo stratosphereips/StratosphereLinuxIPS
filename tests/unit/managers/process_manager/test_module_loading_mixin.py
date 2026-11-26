@@ -2,15 +2,8 @@ from unittest.mock import Mock, call
 
 import pytest
 
-from managers.process_manager.module_loading_mixin import ModuleLoadingMixin
 from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
-
-
-def test_process_manager_includes_module_loading_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
-
-    assert isinstance(process_manager, ModuleLoadingMixin)
 
 
 def test_get_enabled_module_names() -> None:

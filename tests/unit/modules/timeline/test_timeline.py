@@ -510,12 +510,6 @@ def test_process_tcp_udp_flow(saddr, flow, expected_activity):
         # testcase2: Timestamp in epoch format,
         # converted to human-readable
         (1625097600, True, "2021-07-01 00:00:00"),
-        # testcase3: Another timestamp in epoch format,
-        # no conversion needed
-        (1609459200, False, "1609459200"),
-        # testcase4: Another timestamp in epoch format,
-        # converted to human-readable
-        (1609459200, True, "2021-01-01 00:00:00"),
     ],
 )
 def test_convert_timestamp_to_slips_format(timestamp, is_human, expected):

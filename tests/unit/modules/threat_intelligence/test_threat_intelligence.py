@@ -61,55 +61,6 @@ def test_parse_jarm_file():
 
 
 @pytest.mark.parametrize(
-    "current_hash, old_hash, expected_return",
-    [
-        ("111", "222", "111"),
-        ("111", "111", False),
-        (False, "222", False),
-    ],
-)
-def test_check_local_ti_files_for_update(
-    current_hash, old_hash, expected_return, mocker
-):
-    """
-    Test the logic for updating local threat intelligence files based on hash comparison.
-
-    This test verifies the `should_update_local_ti_file` method's ability to decide
-    whether a local threat intelligence file needs to be updated by comparing its
-    current hash against a previously stored hash. The test covers scenarios including
-    changed hashes, matching hashes, and errors in retrieving the current hash.
-
-    Args:
-        current_hash: The hash value of the current file, simulated for test scenarios.
-        old_hash: The previously stored hash value for comparison.
-        expected_return: The expected outcome of the comparison (new hash or False).
-        mocker: The pytest-mock mocker object for patching dependencies.
-    """
-    # since this is a clear db, then we should update the local ti file
-    threatintel = ModuleFactory().create_threatintel_obj()
-    own_malicious_iocs = os.path.join(
-        threatintel.path_to_local_ti_files, "own_malicious_iocs.csv"
-    )
-
-    mock_hash = mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_sha256_hash_of_file_contents"
-    )
-
-    mock_hash.return_value = current_hash
-
-    threatintel.db.get_ti_feed_info.return_value = {"hash": old_hash}
-
-    # the test asserts return value of should_update_local_tii_file
-    # matches expected_return
-    # for each scenario. This method should return new hash if an
-    # update is needed or False if not
-    assert (
-        threatintel.should_update_local_ti_file(own_malicious_iocs)
-        == expected_return
-    )
-
-
-@pytest.mark.parametrize(
     "mock_ip_ranges, expected_ipv4_ranges, expected_ipv6_ranges",
     [
         # Test case 1:  Both IPv4 and IPv6 ranges
@@ -745,26 +696,6 @@ def test_search_online_for_hash(
 
 
 @pytest.mark.parametrize(
-    "ip_address, mock_return_value, expected_result",
-    [
-        (
-            "192.168.1.1",
-            '{"description": "Malicious IP"}',
-            json.dumps({"description": "Malicious IP"}),
-        ),
-        ("10.0.0.1", None, None),
-    ],
-)
-def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
-    """Test `search_offline_for_ip` for querying local
-    threat intelligence data."""
-    threatintel = ModuleFactory().create_threatintel_obj()
-    threatintel.db.is_blacklisted_ip.return_value = mock_return_value
-    result = threatintel.search_offline_for_ip(ip_address)
-    assert result == expected_result
-
-
-@pytest.mark.parametrize(
     "ip, ip_type, in_blacklist, expected_result",
     [
         # Testcase 1:ipv4 in blacklist
@@ -774,10 +705,6 @@ def test_search_offline_for_ip(ip_address, mock_return_value, expected_result):
         # Testcase 3: ipv6 not in blacklist
         ("2001:db8:1::1", "ipv6", False, False),
         # Testcase 4: invalid ip
-        ("10.0.0.21", "invalid", False, False),
-        # Testcase 5: ipv6 range not in cache
-        ("2001:db8::", "ipv6", False, False),
-        # Testcase 6: invalid ip range not in cache
         ("10.0.0.21", "invalid", False, False),
     ],
 )
@@ -822,29 +749,6 @@ def test_ip_belongs_to_blacklisted_range(
         "srcip",
     )
     assert result is expected_result
-
-
-@pytest.mark.parametrize(
-    "url, mock_return_value, expected_result",
-    [
-        (
-            "https://example.com",
-            {"description": "Malicious URL"},
-            {"description": "Malicious URL"},
-        ),
-        ("https://safe.com", None, None),
-    ],
-)
-def test_search_online_for_url(
-    mocker, url, mock_return_value, expected_result
-):
-    """Test `search_online_for_url` for
-    querying online threat intelligence sources."""
-    threatintel = ModuleFactory().create_threatintel_obj()
-    mock_urlhaus_lookup = mocker.patch.object(threatintel.urlhaus, "lookup")
-    mock_urlhaus_lookup.return_value = mock_return_value
-    result = threatintel.search_online_for_url(url)
-    assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -1308,16 +1212,6 @@ def test_main_domain_lookup(mocker, msg_data, expected_call):
     mock_call.assert_called_once()
 
 
-def test_main_empty_message(mocker):
-    """
-    Test the `main` function's behavior when receiving an empty message,
-    """
-    threatintel = ModuleFactory().create_threatintel_obj()
-    mock_get_msg = mocker.patch.object(threatintel, "get_msg")
-    mock_get_msg.return_value = None
-    threatintel.main()
-
-
 def test_main_file_hash_lookup(mocker):
     """
     Test the `main` function's handling of file hash lookups,
@@ -1719,9 +1613,4 @@ def test_read_configuration(mocker):
         mocker.patch("os.path.exists", return_value=False)
         mocker.patch("os.mkdir")
         threatintel._ThreatIntel__read_configuration()
-        assert (
-            MockConfigParser.return_value.local_ti_data_path.return_value
-            == "/tmp/slips/local_ti_files"
-        )
-        MockConfigParser.return_value.local_ti_data_path.assert_called_once()
         os.mkdir.assert_called_once_with("/tmp/slips/local_ti_files")

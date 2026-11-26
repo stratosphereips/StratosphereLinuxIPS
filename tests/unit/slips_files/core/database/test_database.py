@@ -18,8 +18,10 @@ import os
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from typing import (
     Any,
     Callable,
@@ -398,48 +400,6 @@ def test_each_test_starts_from_an_empty_redis(db: DBManager, run: int) -> None:
 
     db.r.set("leftover", run)
     db.rdb.rcache.set("leftover", run)
-
-
-# --------------------------------------------------------------------------
-# DBManager is a facade: it must forward args and kwargs untouched
-# --------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    "method_name, args",
-    [
-        (
-            "get_uids_for_vertical_portscan",
-            (PROFILEID, TWID, Protocol.TCP, "8.8.8.8"),
-        ),
-        (
-            "get_uids_for_horizontal_portscan",
-            (PROFILEID, TWID, Protocol.TCP, 80),
-        ),
-        ("try_claim_alert_generation", (PROFILEID, TWID)),
-        ("release_alert_claim", (PROFILEID, TWID)),
-        ("get_the_other_ip_version", (PROFILEID,)),
-        ("is_tor_node", ("185.220.101.1",)),
-        ("store_official_dns_server", ("192.168.1.53",)),
-        ("set_info_for_domains", ("example.com", {"ti": "feed"})),
-        ("set_module_label_for_profile", (PROFILEID, "rnn", "malicious")),
-        ("add_mac_addr_to_profile", (PROFILEID, MAC_ADDR, "eth0")),
-        ("get_available_llm_backends", ()),
-        ("incr_current_timewindow", ()),
-    ],
-)
-def test_db_manager_forwards_calls_to_redis_db(
-    db: DBManager,
-    monkeypatch: pytest.MonkeyPatch,
-    method_name: str,
-    args: tuple,
-) -> None:
-    forwarded = Mock(return_value="redis-result")
-    monkeypatch.setattr(db.rdb, method_name, forwarded)
-
-    assert getattr(db, method_name)(*args, extra="kw") == "redis-result"
-
-    forwarded.assert_called_once_with(*args, extra="kw")
 
 
 # --------------------------------------------------------------------------
@@ -1337,6 +1297,53 @@ def test_init_p2p_trust_db_uses_the_permanent_dir(
     assert db.get_p2p_trust_dir() == str(permanent_dir / "p2p_trust_runtime")
 
 
+@pytest.mark.parametrize(
+    "running_non_stop, opens_trust_db",
+    [
+        # live runs with local p2p enabled use the permanent trust db
+        (True, True),
+        # file analyses never run p2p, so they don't touch it
+        (False, False),
+    ],
+)
+def test_trust_db_is_opened_only_outside_isolated_analyses(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    running_non_stop: bool,
+    opens_trust_db: bool,
+) -> None:
+    conf = Mock()
+    conf.use_local_p2p = Mock(return_value=True)
+    rdb = Mock()
+    rdb.is_running_non_stop.return_value = running_non_stop
+    init_p2p_trust_db = Mock(return_value=str(tmp_path / "trustdb.db"))
+    trust_db_cls = Mock()
+    monkeypatch.setattr(
+        f"{DB_MANAGER_MODULE}.RedisDB", Mock(return_value=rdb)
+    )
+    monkeypatch.setattr(DBManager, "init_p2p_trust_db", init_p2p_trust_db)
+    monkeypatch.setattr(
+        "modules.p2p_trust.trust.trustdb.TrustDB", trust_db_cls
+    )
+    monkeypatch.setattr(
+        f"{DB_MANAGER_MODULE}.utils.get_all_interfaces", Mock(return_value=[])
+    )
+
+    db = DBManager(
+        logger=Mock(),
+        output_dir=str(tmp_path),
+        redis_port=32768,
+        conf=conf,
+        main_pid=os.getpid(),
+        start_sqlite=False,
+        start_redis_server=False,
+    )
+
+    assert init_p2p_trust_db.called is opens_trust_db
+    assert trust_db_cls.called is opens_trust_db
+    assert (db.trust_db is not None) is opens_trust_db
+
+
 def test_close_all_dbs_closes_every_backend(
     db: DBManager, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1427,17 +1434,19 @@ def test_setup_config_file_writes_a_per_port_conf(
     assert not any(line.startswith("requirepass") for line in lines)
 
 
-def test_setup_config_file_enables_autosave_when_save_is_requested(
+def test_setup_config_file_never_enables_autosave(
     redis_conf_setup: Dict[str, Any],
 ) -> None:
+    # -s was removed, the db is saved once on shutdown instead of by
+    # redis autosave, so a leftover save arg must not change the conf
     RedisDB.args = Mock(save=True)
 
     RedisDB._setup_config_file()
 
     lines = redis_conf_setup["conf"].read_text(encoding="utf-8").splitlines()
-    assert "save 30 500" in lines
-    assert "appendonly yes" in lines
-    assert 'save ""' not in lines
+    assert 'save ""' in lines
+    assert "appendonly no" in lines
+    assert "save 30 500" not in lines
 
 
 def test_setup_config_file_uses_absolute_paths(
@@ -1777,6 +1786,22 @@ def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | N
     db.r.hget.assert_not_called()
 
 
+def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
+    """Clear the Redis data of the current run even if flushing is disabled in the config.
+
+    Parameters:
+        monkeypatch: Restores RedisDB class settings and argv.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=False)
+    assert db.rdb is not None
+    RedisDB.args = SimpleNamespace(keep_history=True)
+    RedisDB.config_flush_db = False
+    RedisDB.flush_db = True
+    monkeypatch.setattr(sys, "argv", ["slips.py"])
+
+    assert RedisDB._should_flush_db() is True
+
+
 @pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
 def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
     """Keep durable host profiling out of the flow ingestion path.
@@ -1853,6 +1878,68 @@ def test_set_evidence_publishes_after_sqlite_commit() -> None:
     db.rdb.publish_evidence_added.assert_called_once_with(evidence)
 
 
+def test_replace_network_state_clears_old_network_settings() -> None:
+    """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
+    db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
+    first = {
+        "host_ip": "192.168.1.20",
+        "local_network": "192.168.1.0/24",
+        "gateway_ip": "192.168.1.1",
+        "gateway_mac": "aa:bb:cc:dd:ee:ff",
+        "dns_servers": ["192.168.1.53"],
+        "version": 1,
+    }
+    second = {
+        "host_ip": "10.0.0.25",
+        "local_network": "10.0.0.0/24",
+        "gateway_ip": "10.0.0.1",
+        "gateway_mac": "11:22:33:44:55:66",
+        "dns_servers": ["10.0.0.53"],
+        "version": 2,
+    }
+
+    db.replace_network_state("wlan0", first)
+    db.store_official_dns_server("192.168.1.54")
+    db.replace_network_state("wlan0", second)
+
+    assert db.get_network_state("wlan0") == second
+    assert db.get_host_ip("wlan0") == "10.0.0.25"
+    assert db.get_local_network("wlan0") == "10.0.0.0/24"
+    assert db.get_gateway_ip("wlan0") == "10.0.0.1"
+    assert db.get_gateway_mac("wlan0") == "11:22:33:44:55:66"
+    assert db.is_official_dns_server("10.0.0.53") is True
+    assert db.is_official_dns_server("192.168.1.53") is False
+    assert db.is_official_dns_server("192.168.1.54") is False
+
+    db.replace_network_state(
+        "wlan0",
+        {
+            **second,
+            "host_ip": "",
+            "local_network": "",
+            "gateway_ip": "",
+            "gateway_mac": "",
+            "dns_servers": [],
+            "version": 3,
+        },
+    )
+    assert db.get_host_ip("wlan0") is None
+    assert db.get_local_network("wlan0") is None
+    assert db.get_gateway_ip("wlan0") is None
+    assert db.is_official_dns_server("10.0.0.53") is False
+
+
+def test_gateway_fields_survive_separate_discovery() -> None:
+    """Preserve both gateway IP and MAC found by different modules."""
+    db = ModuleFactory().create_db_manager_obj(6396, flush_db=True)
+
+    db.set_default_gateway("IP", "10.0.0.1", "eth0")
+    db.set_default_gateway("MAC", "aa:bb:cc:dd:ee:ff", "eth0")
+
+    assert db.get_gateway_ip("eth0") == "10.0.0.1"
+    assert db.get_gateway_mac("eth0") == "aa:bb:cc:dd:ee:ff"
+
+
 @pytest.mark.parametrize("owner", [None, "output/a-slips-run"])
 def test_factory_refuses_a_redis_run_owner(owner: str | None) -> None:
     """Refuse an owned database before its constructor can write test values.
@@ -1892,6 +1979,68 @@ def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) ->
     with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
         with pytest.raises(RuntimeError, match="Cannot verify ownership"):
             factory._assert_redis_has_no_run_owner(65000)
+
+
+@pytest.mark.parametrize("redis_port", [6379, 32768, 32850])
+@pytest.mark.parametrize("output_name", ["first-run", "second-run"])
+def test_setup_config_file_owns_port_specific_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    redis_port: int, output_name: str,
+) -> None:
+    """Replace the PID path of the template with one this run can write to.
+
+    Parameters:
+        tmp_path: Isolated configuration and output directory.
+        monkeypatch: Restore Redis class settings after the test.
+        redis_port: Default, alternate, or database-loading port.
+        output_name: Separate output directories must not share PID files.
+    """
+    _module_factory = ModuleFactory()
+    template = tmp_path / "redis.conf.template"
+    template.write_text('daemonize yes\npidfile redis-default.pid\nsave ""\n')
+    monkeypatch.chdir(tmp_path)
+    RedisDB._conf_file_template = str(template)
+    RedisDB._conf_file = ""
+    RedisDB.output_dir = output_name
+    RedisDB.redis_port = redis_port
+    RedisDB.args = SimpleNamespace(save=False)
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.ensure_redis_password", lambda: "fixture")
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.get_redis_auth_conf_path", lambda: str(tmp_path / "redis-auth.conf"))
+
+    RedisDB._setup_config_file()
+
+    expected = tmp_path / output_name / "redis" / f"redis-server-port-{redis_port}.pid"
+    assert RedisDB._get_pid_file_path() == str(expected)
+    assert RedisDB._get_pid_file_path(32850) == str(expected.with_name("redis-server-port-32850.pid"))
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+    expected.write_text("12345\n")
+    assert expected.read_text() == "12345\n"
+
+
+def test_load_redis_database_keeps_a_separate_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The restored server must not overwrite the PID file of another Redis server.
+
+    Parameters:
+        tmp_path: Isolated backup and Redis output directory.
+        monkeypatch: Restore Redis class settings after the test.
+    """
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.sudo = ""
+    db.print = Mock()
+    backup = tmp_path / "dump.rdb"
+    backup.write_bytes(b"test")
+    RedisDB.output_dir = str(tmp_path)
+    RedisDB._conf_file = ""
+    RedisDB._options = {"pidfile": "cache.pid"}
+    with patch("slips_files.core.database.redis_db.database.subprocess.run", return_value=SimpleNamespace(stdout=b"Redis RDB dump")), patch("os.system", return_value=0):
+        assert db.load(str(backup)) is True
+    expected = tmp_path / "redis" / "redis-server-port-32850.pid"
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
 
 
 @pytest.mark.parametrize("add_version", [True, False])
@@ -1970,6 +2119,7 @@ def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
     db = DBManager.__new__(DBManager)
     db.logger = factory.logger
     db.rdb = Mock()
+    db.rdb.is_running_non_stop.return_value = True
     db.conf = Mock()
     db.conf.permanent_dir.return_value = str(tmp_path)
     db.output_dir = "output/test"
@@ -1984,75 +2134,7 @@ def test_host_profile_store_is_created_once_on_first_use(tmp_path) -> None:
     assert db._get_host_profile_store() is store
 
 
-def test_init_host_profile_store_opens_the_store_for_later_use() -> None:
-    """Let a module open the store early, before it drops root."""
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    db._get_host_profile_store = Mock()
-
-    store = db.init_host_profile_store()
-
-    db._get_host_profile_store.assert_called_once_with()
-    assert store is db._get_host_profile_store.return_value
-
-
-@pytest.mark.parametrize(
-    "wrapper_name",
-    [
-        "save_host_identity_from_flows",
-        "save_host_identity_from_ip_info",
-        "save_hostname_of_profile",
-    ],
-)
-def test_host_profile_wrappers_forward_to_the_store(wrapper_name: str) -> None:
-    """Forward host identity writes to the permanent store unchanged.
-
-    Parameters:
-        wrapper_name: Database manager wrapper to call.
-    """
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    db.host_profile_store = Mock()
-
-    result = getattr(db, wrapper_name)("first", second="value")
-
-    store_method = getattr(db.host_profile_store, wrapper_name)
-    store_method.assert_called_once_with("first", second="value")
-    assert result is store_method.return_value
-
-
-@pytest.mark.parametrize(
-    "wrapper_name, backend_name, backend_method",
-    [
-        ("get_flows_after_rowid", "sqlite", "get_flows_after_rowid"),
-        (
-            "get_cached_hostname_from_profile",
-            "rdb",
-            "get_hostname_from_profile",
-        ),
-    ],
-)
-def test_host_profile_readers_forward_to_their_database(
-    wrapper_name: str, backend_name: str, backend_method: str
-) -> None:
-    """Forward the host profile module's reads to SQLite and Redis.
-
-    Parameters:
-        wrapper_name: Database manager wrapper to call.
-        backend_name: Attribute holding the database that owns the data.
-        backend_method: Method expected to be called on that database.
-    """
-    factory = ModuleFactory()
-    db = DBManager.__new__(DBManager)
-    db.logger = factory.logger
-    backend = Mock()
-    setattr(db, backend_name, backend)
-
-    result = getattr(db, wrapper_name)("first", second="value")
-
-    getattr(backend, backend_method).assert_called_once_with(
-        "first", second="value"
-    )
-    assert result is getattr(backend, backend_method).return_value
+def test_get_slips_mode_returns_the_stored_mode(db: DBManager) -> None:
+    assert db.get_slips_mode() is None
+    db.set_slips_mode("daemonized")
+    assert db.get_slips_mode() == "daemonized"

@@ -24,11 +24,6 @@ def mock_handler():
     return MagicMock(spec=MessageHandler)
 
 
-def test_initialization(network_bridge, mock_queue):
-    assert network_bridge._NetworkBridge__queue == mock_queue
-    assert network_bridge.version == utils.get_current_version()
-
-
 def test_listen_success(network_bridge, mock_handler, mock_queue):
     mock_queue.listen = MagicMock()
     mock_handler.on_message = MagicMock()

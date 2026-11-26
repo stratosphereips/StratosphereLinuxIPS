@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import json
+from pathlib import Path
+import yaml
 from unittest.mock import (
     patch,
     MagicMock,
@@ -11,6 +13,45 @@ from unittest.mock import (
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("isolated", [True, False])
+def test_metadata_records_overrides_only_for_isolated_runs(
+    tmp_path: Path, isolated: bool
+) -> None:
+    """Record the overrides of isolated runs, keeping the original YAML.
+
+    Parameters:
+        tmp_path: Original config and independent run output.
+        isolated: Whether the run is an isolated file analysis.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    source = tmp_path / "slips.yaml"
+    original = {"parameters": {"permanent_dir": "live-state"},
+                "web_interface": {"port": 55000}}
+    source.write_text(yaml.safe_dump(original))
+    output = tmp_path / "analysis"
+    output.mkdir()
+    manager.main.args.config = str(source)
+    manager.main.args.output = str(output)
+    manager.main.args.web_port = 55012
+    manager.main.db.is_running_non_stop.return_value = False
+    manager.main.conf.config = original
+    manager.main.conf.web_interface_port = 55012
+    manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
+    with patch(
+        "managers.metadata_manager.is_isolated_run",
+        return_value=isolated,
+    ):
+        manager._add_metadata()
+    captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
+    assert captured["parameters"]["permanent_dir"] == "live-state"
+    assert not (output / "permanent").exists()
+    assert captured["web_interface"].get("bind") == (
+        "localhost" if isolated else None
+    )
+    assert captured["web_interface"]["port"] == 55012
+    assert yaml.safe_load(source.read_text()) == original
 
 
 @pytest.mark.parametrize(
@@ -66,6 +107,7 @@ def test_enable_metadata(
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
     metadata_manager.enable_metadata = enable_metadata
+    metadata_manager.main.db.is_running_non_stop.return_value = True
     metadata_manager._add_metadata = Mock(return_value=expected_info_path)
 
     metadata_manager.add_metadata_if_enabled()
@@ -132,6 +174,7 @@ def test_add_metadata(
     expected_result,
 ):
     metadata_manager = ModuleFactory().create_metadata_manager_obj()
+    metadata_manager.main.db.is_running_non_stop.return_value = True
     metadata_manager.main.args.output = output_dir
     metadata_manager.main.args.config = config_file
     metadata_manager.main.conf.local_whitelist_path.return_value = (

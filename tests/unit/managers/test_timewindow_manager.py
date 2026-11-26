@@ -8,20 +8,6 @@ from managers.timewindow_manager import TimewindowManager
 from tests.module_factory import ModuleFactory
 
 
-def test_init_reads_timewindow_width_from_configuration() -> None:
-    """Initialize the manager from the main configuration."""
-    main = ModuleFactory().create_main_obj()
-    main.conf = Mock()
-    main.conf.get_tw_width_in_seconds.return_value = 120
-    main.db = Mock()
-
-    manager = TimewindowManager(main)
-
-    assert manager.twid_width == 120
-    assert manager.current_timewindow == 1
-    assert manager.next_timewindow_update is None
-
-
 @pytest.mark.parametrize(
     "db_value",
     [

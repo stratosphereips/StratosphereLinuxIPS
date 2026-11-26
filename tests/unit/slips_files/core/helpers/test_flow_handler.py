@@ -4,21 +4,33 @@ from slips_files.core.structures.flow_attributes import Role
 from tests.module_factory import ModuleFactory
 
 from unittest.mock import Mock, call
+
+import pytest
 from slips_files.core.flows.zeek import DHCP
 import json
 from dataclasses import asdict
 from uuid import UUID
 
 
-def test_handle_dns():
+@pytest.mark.parametrize(
+    "handler_name, db_method",
+    [
+        ("handle_dns", "add_out_dns"),
+        ("handle_http", "add_out_http"),
+        ("handle_ssl", "add_out_ssl"),
+        ("handle_ssh", "add_out_ssh"),
+    ],
+)
+def test_handle_stores_flow_and_adds_altflow(handler_name, db_method):
     flow = Mock()
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_dns()
 
-    flow_handler.db.add_out_dns.assert_called_with(
+    getattr(flow_handler, handler_name)()
+
+    getattr(flow_handler.db, db_method).assert_called_once_with(
         flow_handler.profileid, flow_handler.twid, flow
     )
-    flow_handler.db.add_altflow.assert_called_with(
+    flow_handler.db.add_altflow.assert_called_once_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
 
@@ -35,96 +47,28 @@ def test_handle_ftp():
     )
 
 
-def test_handle_http():
-    flow = Mock()
+@pytest.mark.parametrize(
+    "handler_name, channel",
+    [
+        ("handle_weird", "new_weird"),
+        ("handle_tunnel", "new_tunnel"),
+        ("handle_login", "new_login"),
+        ("handle_smtp", "new_smtp"),
+    ],
+)
+def test_handle_publishes_flow_and_adds_altflow(flow, handler_name, channel):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_http()
 
-    flow_handler.db.add_out_http.assert_called_with(
-        flow_handler.profileid, flow_handler.twid, flow
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
+    getattr(flow_handler, handler_name)()
 
-
-# testing handle_ssl
-def test_handle_ssl(flow):
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_ssl()
-
-    flow_handler.db.add_out_ssl.assert_called_with(
-        flow_handler.profileid, flow_handler.twid, flow
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-
-
-# testing handle_ssh
-def test_handle_ssh(flow):
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_ssh()
-
-    flow_handler.db.add_out_ssh.assert_called_with(
-        flow_handler.profileid, flow_handler.twid, flow
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-
-
-# testing handle_weird
-def test_handle_weird(flow):
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_weird()
-
-    expected_payload = {
+    flow_handler.db.publish.assert_called_once()
+    published_channel, payload = flow_handler.db.publish.call_args.args
+    assert published_channel == channel
+    assert json.loads(payload) == {
         "profileid": flow_handler.profileid,
         "twid": flow_handler.twid,
         "flow": asdict(flow),
     }
-    flow_handler.db.publish.assert_called_with(
-        "new_weird", json.dumps(expected_payload)
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-
-
-# testing handle_tunnel
-def test_handle_tunnel(flow):
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-
-    flow_handler.handle_tunnel()
-
-    expected_payload = {
-        "profileid": flow_handler.profileid,
-        "twid": flow_handler.twid,
-        "flow": asdict(flow),
-    }
-    flow_handler.db.publish.assert_called_with(
-        "new_tunnel", json.dumps(expected_payload)
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-
-
-def test_handle_login(flow):
-    """Test login flows are published to the new_login channel."""
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-
-    flow_handler.handle_login()
-
-    expected_payload = {
-        "profileid": flow_handler.profileid,
-        "twid": flow_handler.twid,
-        "flow": asdict(flow),
-    }
-    flow_handler.db.publish.assert_called_with(
-        "new_login", json.dumps(expected_payload)
-    )
     flow_handler.db.add_altflow.assert_called_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
@@ -228,24 +172,6 @@ def test_handle_arp(flow):
     )
     flow_handler.db.publish_new_mac.assert_has_calls(
         [call(flow.dmac, flow.daddr), call(flow.smac, flow.saddr)]
-    )
-    flow_handler.db.add_altflow.assert_called_with(
-        flow, flow_handler.profileid, flow_handler.twid, "benign"
-    )
-
-
-# testing handle_smtp
-def test_handle_smtp(flow):
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
-    flow_handler.handle_smtp()
-
-    expected_payload = {
-        "flow": asdict(flow),
-        "profileid": flow_handler.profileid,
-        "twid": flow_handler.twid,
-    }
-    flow_handler.db.publish.assert_called_with(
-        "new_smtp", json.dumps(expected_payload)
     )
     flow_handler.db.add_altflow.assert_called_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"

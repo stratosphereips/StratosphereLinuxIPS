@@ -126,6 +126,7 @@ def run_slips(cmd, timeout=300):
         # running; kill the whole process group instead.
         os.killpg(os.getpgid(slips.pid), signal.SIGKILL)
         slips.communicate()
+        raise
 
     return slips.returncode
 

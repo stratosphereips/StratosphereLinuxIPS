@@ -68,27 +68,6 @@ def test_remove_old_zeek_files_closes_and_schedules_cleanup():
     ]
 
 
-@pytest.mark.parametrize("keep_rotated_files_for", [0, 5])
-def test_check_if_time_to_del_rotated_files_deletes_ready_files(
-    keep_rotated_files_for,
-):
-    input_process = ModuleFactory().create_input_obj(
-        "", InputType.ZEEK_LOG_FILE
-    )
-    input_process.keep_rotated_files_for = keep_rotated_files_for
-    input_process.zeek_utils.rotated_files_to_delete = [
-        ("/tmp/conn.2020-01-01.log", 100.0 + keep_rotated_files_for)
-    ]
-
-    with patch(
-        "slips_files.core.input.zeek.utils.zeek_input_utils.utils.convert_ts_format",
-        return_value=105.0,
-    ), patch("slips_files.core.input.zeek.utils.zeek_input_utils.os.remove"):
-        input_process.zeek_utils.check_if_time_to_del_rotated_files()
-
-    assert input_process.zeek_utils.rotated_files_to_delete == []
-
-
 @pytest.mark.parametrize("now,expected_deleted", [(50.0, []), (150.0, ["older.log"])])
 def test_rotated_cleanup_keeps_future_deadlines_and_deletes_oldest_first(
     now: float, expected_deleted: list[str],

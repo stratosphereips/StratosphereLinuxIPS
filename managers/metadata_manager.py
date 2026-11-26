@@ -6,12 +6,17 @@ import sys
 import os
 import shutil
 import json
+import yaml
 from typing import (
     Tuple,
     Set,
 )
 
 from modules.supported_module_names import Modules
+from slips_files.common.parsers.analysis_config import (
+    build_isolated_analysis_config,
+    is_isolated_run,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import header_line
 
@@ -20,6 +25,15 @@ class MetadataManager:
     def __init__(self, main):
         self.main = main
         self.enable_metadata = self.main.conf.enable_metadata()
+
+    def _is_metadata_enabled(self) -> bool:
+        """
+        Isolated runs always keep metadata, whatever slips.yaml says.
+
+        Returns:
+            True when the metadata dir should be written.
+        """
+        return self.enable_metadata or is_isolated_run()
 
     def get_pid_using_port(self, port):
         """
@@ -32,31 +46,94 @@ class MetadataManager:
                 return psutil.Process(conn.pid).pid  # .name()
         return None
 
-    def _add_metadata(self):
+    def _create_metadata_dir(self) -> str:
         """
-        Create a metadata dir output/metadata/ that has a copy of
-        slips.yaml, whitelist.conf, current commit and date
+        Create output/metadata/ if it doesn't exist yet.
+
+        Returns:
+            The path of the metadata dir.
         """
         metadata_dir = os.path.join(self.main.args.output, "metadata")
-        try:
-            os.mkdir(metadata_dir)
-        except FileExistsError:
-            # if the file exists it will be overwritten
-            pass
+        os.makedirs(metadata_dir, exist_ok=True)
+        return metadata_dir
 
+    def _write_isolated_run_config(self, captured_config: str) -> None:
+        """
+        Replace the config copy with the settings of this isolated run.
+        Some are overridden in memory, so they differ from the original
+        .yaml file, which stays unchanged.
+
+        Parameters:
+            captured_config: Path of the config copy in the metadata dir.
+        """
+        effective_config = build_isolated_analysis_config(
+            self.main.conf.config, self.main.args.output
+        )
+        with open(captured_config, "w", encoding="utf-8") as target:
+            yaml.safe_dump(effective_config, target, sort_keys=False)
+
+    def _write_web_port(self, captured_config: str) -> None:
+        """
+        Record the web interface port that was actually used.
+
+        Parameters:
+            captured_config: Path of the config copy in the metadata dir.
+        """
+        with open(captured_config, encoding="utf-8") as source:
+            config = yaml.safe_load(source) or {}
+        web_settings = config.get("web_interface") or {}
+        web_settings["port"] = self.main.conf.web_interface_port
+        config["web_interface"] = web_settings
+
+        with open(captured_config, "w", encoding="utf-8") as target:
+            yaml.safe_dump(config, target, sort_keys=False)
+
+    def _copy_config(self, metadata_dir: str) -> None:
+        """
+        Copy the config used by this run into the metadata dir.
+
+        Parameters:
+            metadata_dir: The metadata dir.
+        """
         config_file = self.main.args.config or "config/slips.yaml"
         shutil.copy(config_file, metadata_dir)
+        captured_config = os.path.join(
+            metadata_dir, os.path.basename(config_file)
+        )
 
-        # Add a copy of whitelist.conf
+        # isolated run: -m with -o and -f, to analyze a file while another
+        # instance analyzes an interface. Not isolated without -m.
+        if is_isolated_run():
+            self._write_isolated_run_config(captured_config)
+
+        if isinstance(getattr(self.main.args, "web_port", None), int):
+            self._write_web_port(captured_config)
+
+    def _copy_whitelist(self, metadata_dir: str) -> None:
+        """
+        Copy whitelist.conf into the metadata dir, if it exists.
+
+        Parameters:
+            metadata_dir: The metadata dir.
+        """
         whitelist = self.main.conf.local_whitelist_path()
         if os.path.isfile(whitelist):
             shutil.copy(whitelist, metadata_dir)
 
-        now = utils.get_human_readable_datetime()
+    def _write_info_file(self, metadata_dir: str) -> str:
+        """
+        Write info.txt (version, input, commit, command, start date).
 
-        self.info_path = os.path.join(metadata_dir, "info.txt")
+        Parameters:
+            metadata_dir: The metadata dir.
+
+        Returns:
+            The path of info.txt.
+        """
+        info_path = os.path.join(metadata_dir, "info.txt")
+        now = utils.get_human_readable_datetime()
         cmd = " ".join(sys.argv)
-        with open(self.info_path, "w") as f:
+        with open(info_path, "w") as f:
             f.write(
                 f"Slips version: {self.main.version}\n"
                 f"File: {self.main.input_information}\n"
@@ -67,7 +144,17 @@ class MetadataManager:
             )
             if hasattr(self.main, "zeek_bro"):
                 f.write(f"Zeek version: {self.main.db.get_zeek_version()}\n")
+        return info_path
 
+    def _add_metadata(self):
+        """
+        Create a metadata dir output/metadata/ that has a copy of
+        slips.yaml, whitelist.conf, current commit and date
+        """
+        metadata_dir = self._create_metadata_dir()
+        self._copy_config(metadata_dir)
+        self._copy_whitelist(metadata_dir)
+        self.info_path = self._write_info_file(metadata_dir)
         self.main.print(header_line("Metadata", metadata_dir))
         return self.info_path
 
@@ -76,7 +163,7 @@ class MetadataManager:
         Add the analysis end date to the metadata file and
         the db for the web interface to display
         """
-        if not self.enable_metadata:
+        if not self._is_metadata_enabled():
             return
 
         end_date = utils.convert_ts_format(end_date, utils.alerts_format)
@@ -189,6 +276,6 @@ class MetadataManager:
         return modified_ips_in_the_last_tw, modified_profiles
 
     def add_metadata_if_enabled(self):
-        if not self.enable_metadata:
+        if not self._is_metadata_enabled():
             return
         self.info_path = self._add_metadata()

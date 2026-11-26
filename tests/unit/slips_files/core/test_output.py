@@ -270,21 +270,18 @@ def test_create_logfile_new():
             mock_file_success().close.assert_called_once()
 
 
-def test_create_logfile_permission_error():
+@pytest.mark.parametrize(
+    "path, error",
+    [
+        ("/root/restricted.log", PermissionError),
+        ("/mnt/full_disk/file.log", IOError),
+    ],
+)
+def test_create_logfile_propagates_unrecoverable_errors(path, error):
     output = ModuleFactory().create_output_obj()
-    path = "/root/restricted.log"
 
-    with patch("builtins.open", side_effect=PermissionError):
-        with pytest.raises(PermissionError):
-            output.create_logfile(path)
-
-
-def test_create_logfile_disk_full():
-    output = ModuleFactory().create_output_obj()
-    path = "/mnt/full_disk/file.log"
-
-    with patch("builtins.open", side_effect=IOError):
-        with pytest.raises(IOError):
+    with patch("builtins.open", side_effect=error):
+        with pytest.raises(error):
             output.create_logfile(path)
 
 
@@ -300,7 +297,8 @@ def _hold_lock_in_child(output: Output, result_queue) -> None:
 
 def test_output_locks_are_shared_with_spawned_child() -> None:
     """A spawned child must use the parent's locks, not create its own."""
-    output = Output.__new__(Output)
+    # the locks are created in __init__, a bare Output.__new__ has none
+    output = ModuleFactory().create_output_obj()
     output.cli_lock.acquire()
     output._cli_has_dangling_line.value = True
     try:
@@ -350,3 +348,70 @@ def test_shared_state_reaches_spawned_child():
 
     output._startup_in_progress.value = False
     output._cli_has_dangling_line.value = False
+
+
+def test_msgs_that_wont_be_printed_are_not_queued_during_startup():
+    """Debug msgs below the -d level are dropped, not queued then dropped."""
+    output = ModuleFactory().create_output_obj()
+    output.verbose, output.debug = 1, 0
+    output._startup_queue = MagicMock()
+    output.begin_startup_announcements()
+    try:
+        output.update(
+            {"from": "input", "txt": "sent line", "verbose": 0, "debug": 3}
+        )
+        output.update(
+            {"from": "input", "txt": "stopping", "verbose": 1, "debug": 0}
+        )
+    finally:
+        output._startup_in_progress.value = False
+
+    output._startup_queue.put.assert_called_once()
+    assert output._startup_queued.value == 1
+
+
+def test_flush_reads_every_queued_msg_even_if_it_arrives_late():
+    """A slow process' msg can reach the pipe after a few empty reads."""
+    from queue import Empty
+
+    output = ModuleFactory().create_output_obj()
+    output._startup_in_progress.value = True
+    output._startup_queued.value = 2
+    output._startup_queue = MagicMock()
+    output._startup_queue.get.side_effect = [
+        {"txt": "first"},
+        Empty(),
+        Empty(),
+        Empty(),
+        Empty(),
+        {"txt": "late"},
+    ]
+    output._dispatch = MagicMock()
+
+    with patch("slips_files.core.output.print_separator"):
+        output._flush_startup_queue()
+
+    assert output._dispatch.call_args_list == [
+        mockedcall({"txt": "first"}),
+        mockedcall({"txt": "late"}),
+    ]
+    assert output._startup_queued.value == 0
+    assert not output._startup_in_progress.value
+
+
+def test_flush_gives_up_after_its_timeout():
+    """A msg that never arrives doesn't keep the flush (and startup) going."""
+    from queue import Empty
+
+    output = ModuleFactory().create_output_obj()
+    output.STARTUP_FLUSH_TIMEOUT_SECS = 0.2
+    output._startup_in_progress.value = True
+    output._startup_queued.value = 1
+    output._startup_queue = MagicMock()
+    output._startup_queue.get.side_effect = Empty()
+
+    with patch("slips_files.core.output.print_separator"):
+        output._flush_startup_queue()
+
+    assert not output._startup_in_progress.value
+    assert output._startup_queued.value == 0

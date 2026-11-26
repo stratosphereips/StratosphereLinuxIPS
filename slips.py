@@ -24,7 +24,6 @@ from __future__ import print_function
 import multiprocessing
 import os
 import sys
-import time
 import warnings
 
 # Must be set before importing anything from Slips: class-level locks and
@@ -34,9 +33,10 @@ import warnings
 # start method.
 multiprocessing.set_start_method("spawn", force=True)
 
-from slips.main import Main  # noqa: E402
-from slips.daemon import Daemon  # noqa: E402
-
+# this import has to come after set_start_method() above
+from managers.process_manager.instance_control import (  # noqa: E402
+    handle_instance_command,
+)
 
 # Ignore warnings on CPU from tensorflow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
@@ -51,20 +51,16 @@ if __name__ == "__main__":
     if sys.version_info[0] < 3:
         sys.exit("Slips can only run on python3+ .. Stopping.")
 
+    status = handle_instance_command(sys.argv[1:])
+    if status is not None:
+        sys.exit(status)
+
+    from slips.main import Main
+    from slips.daemon import Daemon
+
     slips = Main()
 
-    if slips.args.stopdaemon:
-        # -S is provided
-        daemon_status: dict = Daemon(slips).stop()
-        # it takes about 5 seconds for the stop_slips msg
-        # to arrive in the channel, so give slips time to stop
-        time.sleep(5)
-        if daemon_status["stopped"]:
-            print("Daemon stopped.")
-        else:
-            print(daemon_status["error"])
-
-    elif slips.args.daemon:
+    if slips.args.daemon:
         print("Slips daemon starting..", flush=True)
         Daemon(slips).start()
     else:

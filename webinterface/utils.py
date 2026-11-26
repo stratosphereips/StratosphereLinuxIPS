@@ -107,7 +107,6 @@ def get_open_redis_servers() -> Dict[int, dict]:
         "output_dir": ...,
         "slips_pid": ...,
         "is_daemon": ...,
-        "save_the_db": ...,
     }}
     """
     running_logfile = "running_slips_info.txt"
@@ -130,7 +129,6 @@ def get_open_redis_servers() -> Dict[int, dict]:
                         output_dir,
                         slips_pid,
                         is_daemon,
-                        save_the_db,
                     ) = line
 
                     open_servers[port] = {
@@ -142,7 +140,6 @@ def get_open_redis_servers() -> Dict[int, dict]:
                         "output_dir": output_dir,
                         "slips_pid": slips_pid,
                         "is_daemon": is_daemon,
-                        "save_the_db": save_the_db,
                     }
                 except ValueError:
                     # sometimes slips can't get the server pid and logs

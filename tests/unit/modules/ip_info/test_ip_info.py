@@ -106,18 +106,6 @@ async def test_new_mac_is_enriched_using_the_lookup_executor() -> None:
     pending_queries_check.assert_called_once_with()
 
 
-async def test_new_domain_is_enriched_using_the_lookup_executor() -> None:
-    """Hand the bounded lookup runner to the domain helper."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.domain_info.get_domain_info_async = AsyncMock()
-
-    await ip_info.handle_new_dns_async("example.com")
-
-    ip_info.domain_info.get_domain_info_async.assert_awaited_once_with(
-        "example.com", ip_info.run_lookup
-    )
-
-
 def test_set_evidence_malicious_jarm_hash(mocker):
     ip_info = ModuleFactory().create_ip_info_obj()
     flow = {
@@ -322,58 +310,6 @@ def test_pre_main_stores_the_gateway_of_each_interface(mocker) -> None:
         call("IP", "192.168.1.1", "eth0"),
         call("MAC", "AA:BB:CC:DD:EE:FF", "eth0"),
     ]
-
-
-@pytest.mark.parametrize(
-    "gw_return, expected",
-    [
-        (
-            ["10.0.0.1", "192.168.1.1"],
-            {"wlan0": "10.0.0.1", "eth0": "192.168.1.1"},
-        ),
-        ([None, None], {}),
-        (
-            ["10.0.0.1", None],
-            {
-                "wlan0": "10.0.0.1",
-            },
-        ),
-    ],
-)
-def test_get_gateway_ip_if_interface_args_access_point(
-    mocker, gw_return, expected
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.is_running_non_stop = True
-    ip_info.is_running_in_ap_mode = True
-    ip_info.args.access_point = "wlan0,eth0"
-    mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_gateway_for_iface",
-        return_value=gw_return,
-    )
-
-
-@pytest.mark.parametrize(
-    "gw_return, expected",
-    [
-        ("10.0.0.1", {"ap0": "10.0.0.1"}),
-        (None, {}),
-        ("192.168.1.1", {"wlan0": "192.168.1.1"}),
-        ("10.0.0.1", None),
-        ("192.168.1.1", None),
-    ],
-)
-def test_get_gateway_ip_if_interface_args_interface(
-    mocker, gw_return, expected
-):
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.is_running_non_stop = True
-    ip_info.is_running_in_ap_mode = False
-    ip_info.args.interface = "wlan0"
-    mocker.patch(
-        "slips_files.common.slips_utils.Utils.get_gateway_for_iface",
-        return_value=gw_return,
-    )
 
 
 @pytest.mark.parametrize(

@@ -213,29 +213,11 @@ def test_stop_profiler_workers_stops_waiting_when_input_failed():
     assert profiler.did_all_workers_stop.is_set() is True
 
 
-def test_notify_observers_no_observers():
-    profiler = ModuleFactory().create_profiler_obj()
-    test_msg = {"action": "test"}
-    try:
-        profiler.notify_observers(test_msg)
-    except Exception as e:
-        pytest.fail(f"Unexpected error occurred: {e}")
-
-
 def test_notify_observers():
     profiler = ModuleFactory().create_profiler_obj()
     observer_mock = Mock()
     profiler.observers.append(observer_mock)
     test_msg = {"test": "message"}
-    profiler.notify_observers(test_msg)
-    observer_mock.update.assert_called_once_with(test_msg)
-
-
-def test_notify_observers_with_correct_message():
-    observer_mock = Mock()
-    profiler = ModuleFactory().create_profiler_obj()
-    profiler.observers.append(observer_mock)
-    test_msg = {"action": "test_action"}
     profiler.notify_observers(test_msg)
     observer_mock.update.assert_called_once_with(test_msg)
 

@@ -94,7 +94,6 @@ def test_check_given_flags_root_user(monkeypatch):
     checker.main.args.interface = None
     checker.main.args.filepath = None
     checker.main.args.input_module = None
-    checker.main.args.save = False
     checker.main.args.db = False
     checker.main.args.verbose = 0
     checker.main.args.debug = 0
@@ -297,3 +296,47 @@ def test_input_module_exists(
         mock_listdir.side_effect = [available_modules, module_dir_content]
         result = checker.input_module_exists(module_name)
         assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "isolated, clearcache, keep_history, port, refused",
+    [
+        (True, True, False, None, True),
+        (True, False, True, None, True),
+        (True, False, False, "6379", True),
+        (True, False, False, "32850", False),
+        (False, True, False, "6379", False),
+    ],
+)
+def test_check_isolated_run_flags(
+    isolated: bool,
+    clearcache: bool,
+    keep_history: bool,
+    port: str | None,
+    refused: bool,
+) -> None:
+    """Refuse options touching shared data, only in isolated runs.
+
+    Parameters:
+        isolated: Whether the run is isolated.
+        clearcache: Whether --clearcache was given.
+        keep_history: Whether --keep-history was given.
+        port: The Redis port given with -P.
+        refused: Whether Slips should stop with an error.
+    """
+    checker = ModuleFactory().create_checker_obj()
+    checker.main.args.clearcache = clearcache
+    checker.main.args.keep_history = keep_history
+    checker.main.args.port = port
+
+    with patch(
+        "slips_files.core.helpers.checker.is_isolated_run",
+        return_value=isolated,
+    ):
+        if not refused:
+            checker._check_isolated_run_flags()
+            return
+        with pytest.raises(SystemExit) as error:
+            checker._check_isolated_run_flags()
+
+    assert error.value.code == 1

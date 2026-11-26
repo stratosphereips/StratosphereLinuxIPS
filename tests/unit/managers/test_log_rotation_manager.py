@@ -11,19 +11,9 @@ from managers.log_rotation_manager import (
     LOCK_ACQUIRE_TIMEOUT_SECONDS,
     LOG_ROTATION_INTERVAL_SECONDS,
 )
-from slips_files.core.output import Output
 from tests.module_factory import ModuleFactory
 
 MANAGER = "managers.log_rotation_manager"
-
-
-def test_init_reads_the_policy_and_does_not_rotate_yet() -> None:
-    """Read the policy and stay idle until start() is called."""
-    manager = ModuleFactory().create_log_rotation_manager_obj()
-
-    assert manager.detection_history_policy["enabled"] is True
-    assert manager.is_running is False
-    assert manager.last_rotation_time == 0.0
 
 
 @pytest.mark.parametrize("is_history_enabled", [True, False])
@@ -78,12 +68,14 @@ def test_get_logs_to_rotate(mode: str, is_slips_log_rotated: bool) -> None:
         logs = dict(manager._get_logs_to_rotate())
 
     expected = {
-        Path("output/errors.log"): Output.errors_logfile_lock,
+        Path("output/errors.log"): manager.main.logger.errors_logfile_lock,
         Path("output/alerts/alerts.log"): None,
         Path("output/alerts/alerts.json"): None,
     }
     if is_slips_log_rotated:
-        expected[Path("output/slips.log")] = Output.slips_logfile_lock
+        expected[Path("output/slips.log")] = (
+            manager.main.logger.slips_logfile_lock
+        )
     assert logs == expected
 
 

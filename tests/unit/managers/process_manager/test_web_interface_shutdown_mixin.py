@@ -4,17 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from managers.process_manager.web_interface_shutdown_mixin import (
-    WebInterfaceShutdownMixin,
-)
 from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
-
-
-def test_process_manager_includes_web_interface_shutdown_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
-
-    assert isinstance(process_manager, WebInterfaceShutdownMixin)
 
 
 def test_wait_defers_web_stopped_message_while_server_is_running() -> None:
@@ -40,7 +31,7 @@ def test_wait_defers_web_stopped_message_while_server_is_running() -> None:
         )
 
     assert alive_processes == []
-    assert process_manager.deferred_stopped_modules == {
+    assert process_manager.modules_with_delayed_stopped_msg == {
         Modules.WEB_INTERFACE.value
     }
     print_stopped.assert_not_called()
@@ -53,8 +44,10 @@ def test_kill_skips_web_launcher_with_deferred_status() -> None:
     process_manager.main.conf.web_interface_port = 55000
     process_manager.web_interface_shutdown = False
     web_launcher = Mock(pid=1234)
+    web_launcher.name = Modules.WEB_INTERFACE.value
+    web_launcher.is_alive.return_value = False
     process_manager.children = [web_launcher]
-    process_manager.deferred_stopped_modules = {Modules.WEB_INTERFACE.value}
+    process_manager.modules_with_delayed_stopped_msg = {Modules.WEB_INTERFACE.value}
     process_manager.main.db.get_name_of_module_at.return_value = (
         Modules.WEB_INTERFACE.value
     )
@@ -238,6 +231,7 @@ def test_shutdown_reports_interface_web_address() -> None:
     process_manager.main.conf.web_interface_port = 55000
     process_manager.main.conf.web_interface_bind = "interface"
     process_manager.main.db.get_host_ip.return_value = "192.0.2.25"
+    process_manager.main.db.is_running_non_stop.return_value = True
     process_manager.shutdown_signal_received = False
     process_manager.web_interface_shutdown = False
 

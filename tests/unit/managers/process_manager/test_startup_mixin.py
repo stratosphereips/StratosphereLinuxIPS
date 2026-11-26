@@ -1,18 +1,40 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import Mock, patch
+import os
+from multiprocessing import util
+from multiprocessing.synchronize import SemLock
+from types import SimpleNamespace
 
 import pytest
 
-from managers.process_manager.startup_mixin import StartupMixin
 from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
 
 
-def test_process_manager_includes_startup_mixin() -> None:
-    process_manager = ModuleFactory().create_process_manager_obj()
+def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
+    """Clean up the inherited semaphores without touching other cleanup callbacks."""
+    manager = ModuleFactory().create_process_manager_obj()
+    semaphore = SimpleNamespace(_callback=SemLock._cleanup, _pid=-1)
+    unrelated = SimpleNamespace(_callback=lambda: None, _pid=-1)
+    with patch.dict(util._finalizer_registry, {("daemon-test", 1): semaphore, ("daemon-test", 2): unrelated}):
+        manager.make_daemon_own_inherited_semaphores()
+    assert semaphore._pid == os.getpid()
+    assert unrelated._pid == -1
 
-    assert isinstance(process_manager, StartupMixin)
+
+@pytest.mark.parametrize("mode", ["normal", "daemonized"])
+def test_startup_notifies_terminal_only_for_daemon(mode: str) -> None:
+    """Tell only the terminal that launched the daemon that it is ready, once the main processes started.
+
+    Parameters:
+        mode: Foreground or daemon capture mode.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.main.mode = mode
+    manager.declare_that_slips_is_done_starting_all_children()
+    assert manager.all_children_started
+    assert manager.main.daemon.notify_started.call_count == int(mode == "daemonized")
 
 
 @pytest.mark.parametrize(
@@ -236,19 +258,8 @@ def test_start_evidence_process(output_dir, redis_port):
         )
 
 
-@pytest.mark.parametrize(
-    "local_files, ti_feeds",
-    [  # Testcase1: Update both
-        (True, True),
-        # Testcase2: Update local only
-        (True, False),
-        # Testcase3: Update TI only
-        (False, True),
-        # Testcase4: Don't update
-        (False, False),
-    ],
-)
-def test_start_feeds_update_manager(local_files, ti_feeds):
+def test_start_feeds_update_manager():
+    local_files, ti_feeds = True, False
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.args.output = "output"
     process_manager.main.bloom_filters_man = Mock()

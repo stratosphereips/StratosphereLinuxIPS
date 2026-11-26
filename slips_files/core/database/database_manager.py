@@ -91,7 +91,10 @@ class DBManager:
         self.constants = self.rdb.constants
 
         self.trust_db = None
-        if self.conf.use_local_p2p():
+        # p2p only runs on non-stop inputs (interfaces/growing dirs), file
+        # analyses must not open or create the live trust db in the
+        # permanent dir
+        if self.conf.use_local_p2p() and self.is_running_non_stop():
             # import this on demand because slips light version doesn't
             # include the P2P dir
             from modules.p2p_trust.trust.trustdb import TrustDB
@@ -1469,9 +1472,16 @@ class DBManager:
 
     def _get_host_profile_store(self) -> HostProfileStore:
         if self.host_profile_store is None:
+            # a file analysis keeps the identities it learns in its own
+            # output dir instead of the live permanent dir
+            store_root = (
+                Path(self.conf.permanent_dir())
+                if self.is_running_non_stop()
+                else Path(self.output_dir)
+            )
             self.host_profile_store = HostProfileStore(
                 self.logger,
-                Path(self.conf.permanent_dir()) / HOST_PROFILES_DB_SUBPATH,
+                store_root / HOST_PROFILES_DB_SUBPATH,
                 self.main_pid,
                 f"{self.output_dir}:{self.main_pid}",
                 self.rdb.get_network_state,
@@ -1537,6 +1547,7 @@ class DBManager:
                 self.conf,
                 self.output_dir,
                 self.main_pid,
+                db=self,
             )
         return self.regex_generator_storage
 
@@ -1561,6 +1572,7 @@ class DBManager:
                 self.conf,
                 self.output_dir,
                 self.main_pid,
+                db=self,
             )
         return self.t_cell_storage
 

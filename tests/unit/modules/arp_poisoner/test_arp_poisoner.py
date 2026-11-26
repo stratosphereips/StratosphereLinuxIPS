@@ -75,12 +75,12 @@ def test_subscribe_to_channels_depends_on_arp_scan(
         poisoner.db.subscribe.assert_not_called()
 
 
-def test_is_broadcast_true(poisoner):
-    assert poisoner.is_broadcast("192.168.1.255", "192.168.1.0/24")
-
-
-def test_is_broadcast_false(poisoner):
-    assert not poisoner.is_broadcast("192.168.1.10", "192.168.1.0/24")
+@pytest.mark.parametrize(
+    "ip, expected",
+    [("192.168.1.255", True), ("192.168.1.10", False)],
+)
+def test_is_broadcast(poisoner, ip, expected):
+    assert bool(poisoner.is_broadcast(ip, "192.168.1.0/24")) is expected
 
 
 @pytest.mark.parametrize(

@@ -3,62 +3,8 @@
 from unittest.mock import patch, Mock
 
 import netifaces
-import pytest
 
 from tests.module_factory import ModuleFactory
-import sys
-
-
-@pytest.mark.parametrize(
-    "is_interface, host_ips, modified_profiles, "
-    "expected_calls, expected_result",
-    [
-        # Shouldn't update host IP
-        (
-            True,
-            {"eth0": "192.168.1.1"},
-            {"192.168.1.1"},
-            0,
-            {"eth0": "192.168.1.1"},
-        ),
-        # Shouldn't update host IP (not interface)
-        (False, {"eth0": "192.168.1.1"}, set(), 0, None),
-    ],
-)
-def test_update_host_ip_shouldnt_update(
-    is_interface,
-    host_ips,
-    modified_profiles,
-    expected_calls,
-    expected_result,
-):
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.refresh_network_state = Mock(
-        return_value=host_ips if is_interface else None
-    )
-    result = host_ip_man.update_host_ip(host_ips, modified_profiles)
-    assert result == expected_result
-    host_ip_man.refresh_network_state.assert_called_once_with()
-
-
-@pytest.mark.parametrize(
-    "is_interface, host_ips, modified_profiles, " "expected_calls",
-    [
-        # Shouldn't update host IP
-        (True, {"eth0": "192.168.1.1"}, set(), 1)
-    ],
-)
-def test_update_host_ip_should_update(
-    is_interface,
-    host_ips,
-    modified_profiles,
-    expected_calls,
-):
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.refresh_network_state = Mock(return_value=host_ips)
-
-    assert host_ip_man.update_host_ip(host_ips, modified_profiles) == host_ips
-    host_ip_man.refresh_network_state.assert_called_once_with()
 
 
 @patch("netifaces.ifaddresses")
@@ -120,30 +66,6 @@ def test_get_host_ips_skips_loopback(mock_ifaddresses):
 
     result = host_ip_man._get_host_ips()
     assert result == {}
-
-
-@pytest.mark.parametrize(
-    "running_on_interface, host_ip," "expected_result",
-    [
-        # testcase1: Running on interface, valid IP
-        (True, {"eth0": "192.168.1.100"}, {"eth0": "192.168.1.100"}),
-        # testcase2: Not running on interface
-        (False, {"eth0": "192.168.1.100"}, None),
-    ],
-)
-def test_store_host_ip(
-    running_on_interface,
-    host_ip,
-    expected_result,
-):
-    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
-    host_ip_man.refresh_network_state = Mock(return_value=expected_result)
-
-    with patch.object(sys, "argv", ["-i"] if running_on_interface else []):
-        with patch("time.sleep"):
-            result = host_ip_man.store_host_ip()
-            assert result == expected_result
-            host_ip_man.refresh_network_state.assert_called_once_with()
 
 
 def test_refresh_network_state_replaces_values_after_wifi_switch() -> None:

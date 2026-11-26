@@ -1,11 +1,30 @@
-"""Check that modules cross a spawn boundary holding only configuration."""
+"""Check that modules cross a spawn boundary holding only configuration.
+
+Exercise real spawn/forkserver boundaries without external services.
+"""
+
 import multiprocessing
+import os
 import pickle
+import time
+from queue import Empty
 from unittest.mock import Mock, patch
+
+import pytest
 
 from modules.template.template import Template
 from slips_files.core.aid_manager import AIDManager
 from tests.module_factory import ModuleFactory
+
+
+def wait_for_cleanup(ready: object) -> None:
+    """Keep an isolated child alive until the process manager reaps it.
+
+    Parameters:
+        ready: Queue reporting that the child has started.
+    """
+    ready.put(os.getpid())
+    time.sleep(30)
 
 
 def make_module(**kwargs):
@@ -72,6 +91,73 @@ def test_run_prepares_child_then_executes() -> None:
     module._execute.assert_called_once_with()
     watchdog.return_value.set.assert_called_once_with()
     tracker.stop.assert_called_once_with()
+
+
+@pytest.mark.parametrize("recorded_stopped", [False, True])
+def test_owned_child_is_reaped_without_redis(recorded_stopped: bool) -> None:
+    """Prevent a restarted analysis from retaining an old consumer process.
+
+    Parameters:
+        recorded_stopped: Whether the child reported completion prematurely.
+    """
+    factory = ModuleFactory()
+    manager = factory.create_process_manager_obj()
+    context = multiprocessing.get_context("spawn")
+    ready = context.Queue()
+    process = context.Process(target=wait_for_cleanup, args=(ready,), name="flow_alerts")
+    try:
+        process.start()
+        assert ready.get(timeout=20) == process.pid
+        manager.children = [process]
+        manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
+        manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
+        manager.modules_with_delayed_stopped_msg = set()
+        manager._should_delay_web_interface_stopped_msg = Mock(return_value=False)
+        manager.print_stopped_module = Mock()
+        manager.kill_all_children(force=True)
+        assert not process.is_alive()
+        assert process.exitcode is not None
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=5)
+        process.close()
+        ready.close()
+        ready.join_thread()
+
+
+def test_aid_worker_owns_database_and_drains_tasks() -> None:
+    """Create the AID database in the consumer and store queued flows."""
+    factory = ModuleFactory()
+
+    flow = Mock()
+    queue = Mock()
+    queue.get_nowait.side_effect = Empty
+    queue.get.side_effect = [
+        {
+            "flow": flow,
+            "profileid": "profile_1",
+            "twid": "tw1",
+            "label": "benign",
+        },
+        "stop",
+    ]
+    options = {
+        "logger": factory.logger,
+        "start_redis_server": False,
+        "flush_db": False,
+    }
+    with patch(
+        "slips_files.core.aid_manager.DBManager"
+    ) as database_class, patch(
+        "slips_files.core.aid_manager.utils.get_aid", return_value="aid-value"
+    ):
+        AIDManager._run_worker(queue, options)
+        database_class.assert_called_once_with(**options)
+        database_class.return_value.add_flows.assert_called_once_with(
+            [{"flow": flow, "profileid": "profile_1", "twid": "tw1", "label": "benign"}]
+        )
+        assert flow.aid == "aid-value"
 
 
 def test_aid_shutdown_waits_for_storage() -> None:

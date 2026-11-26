@@ -32,47 +32,33 @@ def test_db_connection_and_creation(db):
     assert len(tables) > 0  # Ensure tables are created
 
 
-def test_store_slips_threat_intelligence(db):
-    # Create a SlipsThreatIntelligence object
-    intelligence = SlipsThreatIntelligence(
-        target="example.com", score=-1, confidence=0.9, confidentiality=0.75
+@pytest.mark.parametrize(
+    "target, score, confidence, confidentiality",
+    [
+        ("example.com", -1, 0.9, 0.75),
+        # the optional confidentiality field is left as None
+        ("192.168.1.1", 0.70, 1.0, None),
+    ],
+)
+def test_store_and_get_slips_threat_intelligence(
+    db, target, score, confidence, confidentiality
+):
+    db.store_slips_threat_intelligence(
+        SlipsThreatIntelligence(
+            target=target,
+            score=score,
+            confidence=confidence,
+            confidentiality=confidentiality,
+        )
     )
 
-    # Store the intelligence in the database
-    db.store_slips_threat_intelligence(intelligence)
+    result = db.get_slips_threat_intelligence_by_target(target)
 
-    # Fetch it back using the target
-    result = db.get_slips_threat_intelligence_by_target("example.com")
-
-    # Assert the retrieved data matches what was stored
     assert result is not None
-    assert result.target == "example.com"
-    assert result.score == -1
-    assert result.confidence == 0.9
-    assert result.confidentiality == 0.75
-
-
-def test_get_slips_threat_intelligence_by_target(db):
-    # Create a SlipsThreatIntelligence object and insert it
-    intelligence = SlipsThreatIntelligence(
-        target="192.168.1.1",
-        score=0.70,
-        confidence=1.0,
-        confidentiality=None,  # Optional field left as None
-    )
-    db.store_slips_threat_intelligence(intelligence)
-
-    # Retrieve the intelligence by the target (IP address)
-    result = db.get_slips_threat_intelligence_by_target("192.168.1.1")
-
-    # Assert the retrieved data matches what was stored
-    assert result is not None
-    assert result.target == "192.168.1.1"
-    assert result.score == 0.7
-    assert result.confidence == 1
-    assert (
-        result.confidentiality is None
-    )  # Should be None since it was not set
+    assert result.target == target
+    assert result.score == score
+    assert result.confidence == confidence
+    assert result.confidentiality == confidentiality
 
 
 def test_get_peer_trust_data(db):
@@ -186,27 +172,6 @@ def test_store_peer_trust_data_overwrites_existing_history(db):
     assert result.service_trust == 0.7
     assert result.reputation == 0.8
     assert len(result.service_history) == 1
-
-
-def test_get_connected_peers_1(db):
-    # Create PeerInfo data for multiple peers
-    peers = [
-        PeerInfo(id="peerA", organisations=["orgA"], ip="192.168.0.1"),
-        PeerInfo(id="peerB", organisations=["orgB", "orgC"], ip="192.168.0.2"),
-    ]
-
-    # Store connected peers in the database
-    db.store_connected_peers_list(peers)
-
-    # Fetch all connected peers
-    connected_peers = db.get_connected_peers()
-
-    # Assert the connected peers were retrieved correctly
-    assert len(connected_peers) == 2
-    assert connected_peers[0].id == "peerA"
-    assert connected_peers[1].id == "peerB"
-    assert connected_peers[0].ip == "192.168.0.1"
-    assert "orgB" in connected_peers[1].organisations
 
 
 def test_get_peers_by_organisations(db):

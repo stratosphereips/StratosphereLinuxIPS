@@ -93,31 +93,6 @@ def test_check_multiple_google_connections():
     assert found_detection is True
 
 
-def test_parsing_online_ua_info(mocker):
-    """
-    tests the parsing and processing the ua found by the online query
-    """
-    http_analyzer = ModuleFactory().create_http_analyzer_obj()
-    # use a different profile for this unit test to make
-    # sure we don't already have info about it in the db
-    profileid = "profile_192.168.99.99"
-
-    http_analyzer.db.get_user_agent_from_profile.return_value = None
-    # mock the function that gets info about the given ua from an online db
-    mock_requests = mocker.patch("requests.get")
-    mock_requests.return_value.status_code = 200
-    mock_requests.return_value.text = """{
-        "agent_name":"Safari",
-        "os_type":"Macintosh",
-        "os_name":"OS X"
-    }"""
-
-    # add os_type , os_name and agent_name to the db
-    ua_info = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
-    assert ua_info["os_type"] == "Macintosh"
-    assert ua_info["browser"] == "Safari"
-
-
 def test_get_user_agent_info(mocker):
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
     # mock the function that gets info about the
@@ -389,19 +364,6 @@ def test_set_evidence_executable_mime_type(mocker):
     http_analyzer.set_evidence.executable_mime_type(twid, flow)
 
     assert http_analyzer.db.set_evidence.call_count == 2
-
-
-@pytest.mark.parametrize("config_value", [700])
-def test_read_configuration_valid(mocker, config_value):
-    http_analyzer = ModuleFactory().create_http_analyzer_obj()
-    mock_conf = mocker.patch(
-        "slips_files.common.parsers.config_parser.ConfigParser"
-    )
-    mock_conf.return_value.get_pastebin_download_threshold.return_value = (
-        config_value
-    )
-    http_analyzer.read_configuration()
-    assert http_analyzer.pastebin_downloads_threshold == config_value
 
 
 @pytest.mark.parametrize(

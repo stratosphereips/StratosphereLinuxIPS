@@ -240,6 +240,25 @@ class RedisDB(
             cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
+    @classmethod
+    def _get_pid_file_path(cls, redis_port: Optional[int] = None) -> str:
+        """Get the path of the PID file of the Redis server on a port.
+
+        It is placed next to the Redis logs, in a dir we can write to.
+
+        Parameters:
+            redis_port: Redis port. Defaults to this instance's port.
+
+        Returns:
+            Absolute path of the PID file (Redis changes its working dir later).
+        """
+        port = cls.redis_port if redis_port is None else redis_port
+        return cls._absolute_path(
+            get_redis_logs_path_inside_output_dir(
+                cls.output_dir, f"redis-server-port-{port}.pid"
+            )
+        )
+
     @staticmethod
     def _absolute_path(path: str) -> str:
         return os.path.abspath(os.fspath(path))
@@ -278,11 +297,8 @@ class RedisDB(
                 setup(self)
 
     @classmethod
-    def _setup_config_file(cls):
-        """
-        Update cls._conf_file (config/redis.conf) based on the params given
-        to slips (e.g -s)
-        """
+    def _setup_config_file(cls) -> None:
+        """Fill the Redis config template with this run's paths and options."""
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
@@ -311,7 +327,9 @@ class RedisDB(
                 cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
             )
         )
-        cls._options.update({"logfile": logfile})
+        cls._options.update(
+            {"logfile": logfile, "pidfile": cls._get_pid_file_path()}
+        )
         cls._options.update(
             {
                 # manual SAVE writes the .rdb file to <output_dir>/databases
@@ -321,18 +339,6 @@ class RedisDB(
                 "dbfilename": "dump.rdb",
             }
         )
-
-        # -s for saving the db
-        if cls.args.save:
-            cls._options.update(
-                {
-                    # save the db after 30 sec if at least 500 keys changed
-                    "save": "30 500",
-                    # AOF is now enabled. Redis will write each operation to the
-                    # AOF file.
-                    "appendonly": "yes",
-                }
-            )
 
         with open(cls._conf_file, "w") as f:
             for option, val in cls._options.items():
@@ -380,14 +386,17 @@ class RedisDB(
         these are the cases that we DO NOT flush the db when we
             connect to it, because we need to use it
             -d means Read an analysed file (rdb) from disk.
-            -S stop daemon
             -cb clears the blocking chain
         """
-        will_need_the_db_later = (
-            "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
-        )
+        will_need_the_db_later = "-cb" in sys.argv or "-d" in sys.argv
         if will_need_the_db_later:
             return False
+
+        if getattr(cls.args, "keep_history", False) is True:
+            # Old detections are kept in the SQLite db of the run. Redis db 0
+            # holds the state of the current run (processes, timewindows),
+            # so it has to start empty even if deletePrevdb is off.
+            return cls.flush_db
 
         return cls.config_flush_db and cls.flush_db
 
@@ -1412,12 +1421,14 @@ class RedisDB(
         """
         self.r.set(self.constants.MODE, slips_mode)
 
-    def get_slips_mode(self):
+    def get_slips_mode(self) -> str | None:
         """
-        function to get the current mode (daemonized/interactive)
-        in the db
+        Read the mode slips is running in, as stored by set_slips_mode().
+
+        Returns:
+            The mode (daemonized/interactive), or None if it was never set.
         """
-        self.r.get(self.constants.MODE)
+        return self.r.get(self.constants.MODE)
 
     def get_modified_ips_in_the_last_tw(self):
         """
@@ -2376,6 +2387,7 @@ class RedisDB(
                     "dbfilename": os.path.basename(safe_backup_file),
                     "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
+                    "pidfile": RedisDB._get_pid_file_path(32850),
                 }
             )
 

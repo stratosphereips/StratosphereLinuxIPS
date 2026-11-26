@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import pytest
-import random
 from unittest.mock import Mock
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.evidence import (
@@ -11,40 +10,6 @@ from slips_files.core.structures.evidence import (
     ProfileID,
     TimeWindow,
 )
-
-random_ports = {
-    1234: 1,
-    2222: 1,
-    12234: 1,
-    5555: 1,
-}
-
-
-def generate_random_ip():
-    return ".".join(str(random.randint(0, 255)) for _ in range(4))
-
-
-def enough_dstips_to_reach_the_threshold():
-    """
-    returns conns to dport that are not enough
-    to reach the minimum dports to trigger the first scan
-    """
-    module = ModuleFactory().create_horizontal_portscan_obj()
-    # get a random list of ints(ports) that are below the threshold
-    # Generate a random number between 0 and threshold
-    amount_of_dstips: int = random.randint(
-        module.minimum_dstips_to_set_evidence,
-        module.minimum_dstips_to_set_evidence + 100,
-    )
-    dport = 5555
-    res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
-
-    for _ in range(amount_of_dstips + 1):
-        res[dport]["dstips"].update(
-            {generate_random_ip(): {"dstports": random_ports}}
-        )
-
-    return res
 
 
 @pytest.mark.parametrize(
@@ -107,28 +72,6 @@ def test_should_set_evidence_less_than_minimum():
         cur_amount_of_dstips, profileid, timewindow, dport
     )
     assert enough is False
-
-
-def not_enough_dstips_to_reach_the_threshold():
-    """
-    returns conns to dport that are not enough
-    to reach the minimum dports to trigger the first scan
-    """
-    module = ModuleFactory().create_horizontal_portscan_obj()
-    # get a random list of ints(ports) that are below the threshold
-    # Generate a random number between 0 and threshold
-    amount_of_dstips: int = random.randint(
-        0, module.minimum_dstips_to_set_evidence - 1
-    )
-    dport = 5555
-    res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
-
-    for _ in range(amount_of_dstips - 1):
-        res[dport]["dstips"].update(
-            {generate_random_ip(): {"dstports": random_ports}}
-        )
-
-    return res
 
 
 def test_set_evidence_horizontal_portscan_empty_port_info():

@@ -451,19 +451,6 @@ def test_is_whitelisted_domain_not_found():
     )
 
 
-@patch(
-    "slips_files.common.parsers.config_parser.ConfigParser"
-    ".local_whitelist_path"
-)
-def test_read_configuration(
-    mock_config_parser,
-):
-    whitelist = ModuleFactory().create_whitelist_obj()
-    mock_config_parser.return_value = "config_whitelist_path"
-    whitelist.parser.read_configuration()
-    assert whitelist.parser.local_whitelist_path == "config_whitelist_path"
-
-
 @pytest.mark.parametrize(
     "ip, what_to_ignore, expected_result",
     [
@@ -500,7 +487,6 @@ def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
         (True, False, True),
         (True, True, True),
         (False, True, True),
-        (True, False, True),
         (False, False, False),
     ],
 )
@@ -657,65 +643,6 @@ def test_is_domain_whitelisted(
             domain, direction, type_
         )
         assert result == expected_result
-
-
-@pytest.mark.parametrize(
-    "ip, org, org_asn_info, ip_asn_info, expected_result",
-    [
-        (
-            "8.8.8.8",
-            "google",
-            ["AS6432"],
-            {"asn": {"number": "AS6432"}},
-            True,
-        ),
-        (
-            "1.1.1.1",
-            "cloudflare",
-            ["AS6432"],
-            {"asn": {"number": "AS6432"}},
-            True,
-        ),
-        (
-            "8.8.8.8",
-            "Google",
-            ["AS15169"],
-            {"asn": {"number": "AS15169", "asnorg": "Google"}},
-            True,
-        ),
-        (
-            "1.1.1.1",
-            "Cloudflare",
-            ["AS13335"],
-            {"asn": {"number": "AS15169", "asnorg": "Google"}},
-            False,
-        ),
-        ("9.9.9.9", "IBM", ["AS36459"], {}, False),
-        (
-            "9.9.9.9",
-            "IBM",
-            ["AS36459"],
-            {"asn": {"number": "Unknown"}},
-            False,
-        ),
-    ],
-)
-def test_is_ip_asn_in_org_asn(
-    ip, org, org_asn_info, ip_asn_info, expected_result
-):
-    whitelist = ModuleFactory().create_whitelist_obj()
-
-    whitelist.db = MagicMock()
-    whitelist.db.get_ip_info.return_value = ip_asn_info
-    whitelist.db.get_org_info.return_value = org_asn_info
-
-    ip_asn = ip_asn_info.get("asn", {}).get("number", None)
-    whitelist.org_analyzer._is_asn_in_org = MagicMock(
-        return_value=ip_asn in org_asn_info
-    )
-
-    result = whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org)
-    assert result == expected_result
 
 
 @pytest.mark.parametrize(

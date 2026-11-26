@@ -785,7 +785,7 @@ Use ```;``` for commenting TI files in ```config/slips.yaml``` instead of ```#``
 Commented TI files (lines starting with ;) will be completely removed from our database.
 
 
-The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/```
+The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```permanent/remote_data_files/``` (inside ```parameters.permanent_dir```)
 
 
 #### Commenting a remote TI feed

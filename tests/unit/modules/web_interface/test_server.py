@@ -2656,6 +2656,55 @@ def test_p2p_trust_history_honors_selected_range(
     }
 
 
+def test_p2p_reads_trust_db_from_configured_permanent_dir(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Read the trust db from parameters.permanent_dir, not ./permanent."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    trust_path = tmp_path / "custom_perm" / "p2p_trust_runtime" / "trustdb.db"
+    trust_path.parent.mkdir(parents=True)
+    with sqlite3.connect(trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE go_reliability "
+            "(peerid TEXT, reliability REAL, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE peer_ips "
+            "(peerid TEXT, ipaddress TEXT, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE reports "
+            "(reporter_peerid TEXT, reported_key TEXT, score REAL, "
+            "confidence REAL, update_time REAL)"
+        )
+        connection.execute(
+            "INSERT INTO reports VALUES (?, ?, ?, ?, ?)",
+            ("QmRemotePeer", "192.0.2.1", 0.5, 0.8, 1000),
+        )
+    # a ./permanent trust db with no reports must not be the one read
+    default_trust = tmp_path / "permanent" / "p2p_trust_runtime"
+    default_trust.mkdir(parents=True)
+
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.permanent_dir = tmp_path / "custom_perm"
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"analysis_start": "0"} if key == "analysis" else {}
+    )
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["reports_received"] == 1
+
+
 def test_p2p_api_forwards_selected_history_range() -> None:
     """Forward the P2P history selector through the HTTP API route."""
     _module_factory = ModuleFactory()

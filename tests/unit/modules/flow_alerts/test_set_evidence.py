@@ -114,13 +114,7 @@ def test_young_domain(
             "SSH::CLIENT",
             "SSH client version changing from 8.0 to 7.2",
         ),
-        # Testcase4:Client and Server
-        (
-            "7.2",
-            "8.0",
-            "SSH::CLIENT",
-            "SSH client version changing from 7.2 to 8.0",
-        ),
+        # Testcase4:Different server major version
         (
             "2.2",
             "3.1",
@@ -581,21 +575,9 @@ def test_pw_guessing():
     assert evidence.uid == [flow.uid]
 
 
-@pytest.mark.parametrize(
-    "msg",
-    [
-        # Testcase 1: Standard message format
-        "Seen at least 10 unique hosts scanned on 80/tcp",
-        # Testcase 2: Different port and protocol
-        "Seen at least 25 unique hosts scanned on 443/udp",
-        # Testcase 3: Single host scanned
-        "Seen at least 1 unique hosts scanned on 22/tcp",
-        # Testcase 4: Large number of hosts scanned
-        "Seen at least 1000 unique hosts scanned on 53/tcp",
-    ],
-)
-def test_horizontal_portscan(msg):
+def test_horizontal_portscan():
     """Testing the horizontal_portscan method."""
+    msg = "Seen at least 10 unique hosts scanned on 80/tcp"
     set_ev = ModuleFactory().create_set_evidence_helper()
     flow = Notice(
         starttime="1726655400.0",

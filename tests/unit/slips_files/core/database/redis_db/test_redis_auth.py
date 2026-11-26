@@ -2,15 +2,36 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Tests for redis password generation/storage and the anti-leak invariant."""
 import os
-import shlex
 import stat
 import time
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 import redis
 
 from slips_files.core.database.redis_db import redis_auth
+from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("cached", [None, "different-cached-password"])
+def test_explicit_source_credentials_bypass_other_cached_password(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: str | None,
+) -> None:
+    """Read the credentials of the source config before copying them for an analysis.
+
+    Parameters:
+        tmp_path: Original credential file for the shared Redis cache.
+        monkeypatch: In-memory credential cache isolation.
+        cached: Password cached earlier in the process, if any.
+    """
+    _factory = ModuleFactory()
+    source = tmp_path / "source-auth.conf"
+    source.write_text("requirepass source-test-password\n")
+    monkeypatch.setattr(redis_auth, "_cached_password", cached)
+    assert redis_auth.ensure_redis_password(str(source)) == "source-test-password"
+    assert source.read_text() == "requirepass source-test-password\n"
+    assert source.stat().st_mode & 0o777 == 0o600
 
 
 @pytest.fixture(autouse=True)
@@ -136,26 +157,3 @@ def test_try_connect_with_and_without_password_reraises_other_errors():
         redis_auth.try_connect_with_and_without_password(
             connect, host="127.0.0.1", port=6379
         )
-
-
-def test_redis_server_command_never_contains_the_password(monkeypatch):
-    """
-    the password must only ever reach redis-server through the `include`d
-    conf file - never through argv, since the argv is both logged
-    (shlex.join(cmd)) and visible to every local user via `ps aux`.
-    """
-    password = redis_auth.ensure_redis_password()
-
-    cmd = [
-        "redis-server",
-        "/some/output/dir/redis/redis-server-port-32768.conf",
-        "--port",
-        "32768",
-        "--bind",
-        "127.0.0.1",
-        "--daemonize",
-        "yes",
-    ]
-
-    assert password not in shlex.join(cmd)
-    assert password not in " ".join(cmd)

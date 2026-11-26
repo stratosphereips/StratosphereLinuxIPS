@@ -64,10 +64,8 @@ Check the alerts slips generated that are stored in the host:
 
 ##### Native installation
 
-Run the following commands from the repository root. Use Python 3.11 in a
-virtual environment: the pinned scientific dependencies in
-`install/requirements.txt` were verified with this version on Apple Silicon.
-Do not use the system's default Python 3.14 with these dependency pins.
+Run from the repository root, using **Python 3.11** in a virtual environment
+(do not use the system's default Python 3.14).
 
 ```bash
 brew install python@3.11 redis zeek yara
@@ -78,29 +76,25 @@ python slips.py -h
 python slips.py -e 1 -f dataset/test7-malicious.pcap -o output/macos-test
 ```
 
-Slips starts its local Redis cache when needed. Zeek is needed for PCAPs and
-interfaces; existing Zeek logs can also be analyzed with `-f`. YARA enables
-the leak detector; extracting details from a matching packet additionally
-requires Wireshark's `tshark` command. Building `netifaces` requires Apple's
-command-line developer tools if they are not already installed.
+**Requirements**
 
-Slips starts its processes with the `spawn` method on every operating system
-(`slips.py` sets it explicitly). Do not force `fork` or disable Apple's
-fork-safety checks. A module only stores picklable configuration in the main
-process; its database connections and background threads are created in its
-own child process.
+- **Redis:** Slips starts its local cache when needed.
+- **Zeek:** needed for PCAPs and interfaces. Existing Zeek logs can be analyzed with `-f` without it.
+- **YARA:** enables the leak detector. Extracting details from a matching packet also needs Wireshark's `tshark`.
+- **Apple command-line developer tools:** needed to build `netifaces`.
 
-On shutdown, the process manager reaps every owned child that is still alive,
-even if it already reported completion or its Redis PID entry was lost. It
-uses the process handles directly so a Redis outage cannot skip cleanup and
-leave an older module consuming traffic after a restart. A malformed DNS
-message is logged by Flow Alerts; the DNS timeout thread continues with the
-next message instead of failing in its error handler.
+**Good to know**
 
-Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
-`output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed
-updates can delay shutdown while downloads finish; that is separate from
-process compatibility.
+- Slips starts its processes with `spawn` on every OS. Do not force `fork` or disable Apple's fork-safety checks.
+- Use your own interface name (for example `en0`).
+- **Not tested yet:** Intel Macs and the optional integrations.
+- **Firewall Blocking (`-p`)** needs root. Slips only uses its own Packet Filter anchor, `com.apple/slips`, and leaves your other firewall rules alone.
+- Runinng slips in Access point mode is available in Linux only.
+
+**Slips Output**
+
+- Alerts: `output/macos-test/alerts/`
+- Logs: `output/macos-test/slips.log` and `output/macos-test/errors.log`
 
 ##### Native global P2P (Iris)
 

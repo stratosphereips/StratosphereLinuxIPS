@@ -279,12 +279,13 @@ def test_get_aid_and_store_flow_in_the_db_submits_only_for_conn_handler():
     )
 
 
+@pytest.mark.parametrize("flow_type", ["conn", "conn.log"])
 @patch("slips_files.core.profiler_worker.FlowHandler")
-def test_store_features_going_out_conn_flow(mock_flow_handler):
+def test_store_features_going_out_conn_flow(mock_flow_handler, flow_type):
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.get_aid_and_store_flow_in_the_db = Mock()
     profiler._update_modified_tws_in_the_db = Mock()
-    flow = make_conn(type_="conn")
+    flow = make_conn(type_=flow_type)
 
     assert (
         profiler.store_features_going_out(flow, "profile_test", "tw1") is True
@@ -295,20 +296,6 @@ def test_store_features_going_out_conn_flow(mock_flow_handler):
     profiler._update_modified_tws_in_the_db.assert_called_once_with(
         "profile_test", "tw1", flow
     )
-
-
-@patch("slips_files.core.profiler_worker.FlowHandler")
-def test_store_features_going_out_matches_substring_type(mock_flow_handler):
-    profiler = ModuleFactory().create_profiler_worker_obj()
-    profiler.get_aid_and_store_flow_in_the_db = Mock()
-    profiler._update_modified_tws_in_the_db = Mock()
-    flow = make_conn(type_="conn.log")
-
-    assert (
-        profiler.store_features_going_out(flow, "profile_test", "tw1") is True
-    )
-
-    mock_flow_handler.return_value.handle_conn.assert_called_once()
 
 
 @patch("slips_files.core.profiler_worker.FlowHandler")

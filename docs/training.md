@@ -23,14 +23,28 @@ trained as Benign. Other values, including `unknown`, are skipped by training.
 The `detailedlabel` field is retained as metadata; it is not the training
 target.
 
+## Where trained artifacts are saved
+
+Slips chooses where trained artifacts are saved; it is not configurable:
+
+| How Slips runs | Trained artifacts are saved in |
+|---|---|
+| On a file or directory (`-f`) | `<output dir>/<module name>/models/` |
+| Non-stop: an interface (`-i`) or a growing directory (`-g`) | `<permanent_dir>/<module name>/models/` |
+
+A file analysis never writes to the permanent directory, so it cannot replace
+the models a non-stop Slips is training.
+
+The saved files are `model.bin`, `scaler.bin` and `pca.bin`.
+
 ## Reproducible training workflow
 
 1. Choose one module and set only that module's `mode: train`.
 2. Use one of the input-label approaches below.
 3. Set `training_batch_size` to a value no greater than the number of labeled
    flows you expect to process per training batch.
-4. Keep the module's custom store paths; they prevent overwriting the shipped
-   artifacts.
+4. Slips saves the trained artifacts for you without overwriting the shipped
+   ones. See [Where trained artifacts are saved](#where-trained-artifacts-are-saved).
 5. End Slips gracefully or let the time window close so it writes the trained
    artifacts.
 6. To evaluate your result, set `mode: test` and change that module's load
@@ -67,9 +81,10 @@ known-malicious input. If these are separate runs, continue from the custom
 artifacts after the first run:
 
 - `ml_linear_model`: set `model_load_path`, `preprocess_load_path`, and
-  `pca_load_path` to its `*_custom.bin` files.
-- `ml_online_model`: set `model_load_path` and `preprocess_load_path` to its
-  `*_custom.bin` files.
+  `pca_load_path` to the `model.bin`, `scaler.bin` and `pca.bin` files in the
+  first run's models directory.
+- `ml_online_model`: set `model_load_path`, `preprocess_load_path` and
+  `pca_load_path` to the same three files in its models directory.
 - Set `train_from_scratch: false` before the next run.
 
 Without this handoff, the next run loads the reference artifacts again and does

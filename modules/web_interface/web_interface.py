@@ -16,6 +16,9 @@ import redis
 
 from modules.web_interface.history import HistoryCollector
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.parsers.analysis_config import (
+    is_isolated_run,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.redis_auth import redis_auth_kwargs
 
@@ -246,7 +249,10 @@ class WebInterface(IModule):
         """
         utils.drop_root_privs_permanently()
         port = self.conf.web_interface_port
-        bind_mode = self.conf.web_interface_bind
+        # isolated runs only listen on localhost
+        bind_mode = (
+            "localhost" if is_isolated_run() else self.conf.web_interface_bind
+        )
         bind_address = self._bind_address(bind_mode)
         if not bind_address:
             self.print(
@@ -302,6 +308,8 @@ class WebInterface(IModule):
             bind_address,
             "--port",
             str(port),
+            "--permanent-dir",
+            os.path.abspath(self.conf.permanent_dir()),
             "--redis-port",
             str(self.redis_port),
             "--output-dir",

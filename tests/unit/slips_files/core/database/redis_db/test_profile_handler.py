@@ -12,112 +12,25 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    "hscan_return_value, expected_out_tuples",
+    "getter_name, hash_name",
     [
-        # Testcase 1: Existing OutTuples
-        (
-            [(b"tupleid1", b"ABA")],
-            [(b"tupleid1", b"ABA")],
-        ),
-        # Testcase 2: No OutTuples found
-        (
-            [],
-            [],
-        ),
-        # Testcase 3: Multiple OutTuples
-        (
-            [(b"t1", b"AB"), (b"t2", b"BAA")],
-            [(b"t1", b"AB"), (b"t2", b"BAA")],
-        ),
+        ("get_outtuples_from_profile_tw", "OutTuples"),
+        ("get_intuples_from_profile_tw", "InTuples"),
     ],
 )
-def test_get_outtuples_from_profile_tw(
-    hscan_return_value, expected_out_tuples
-):
+def test_get_tuples_from_profile_tw(getter_name, hash_name):
     handler = ModuleFactory().create_profile_handler_obj()
     profileid = "profile_1"
     twid = "timewindow1"
+    scanned = [(b"t1", b"AB"), (b"t2", b"BAA")]
+    handler._hscan = Mock(return_value=iter(scanned))
 
-    handler._hscan = Mock(return_value=iter(hscan_return_value))
-
-    out_tuples = list(handler.get_outtuples_from_profile_tw(profileid, twid))
+    tuples = list(getattr(handler, getter_name)(profileid, twid))
 
     handler._hscan.assert_called_once_with(
-        f"{profileid}_{twid}:OutTuples:symbols"
+        f"{profileid}_{twid}:{hash_name}:symbols"
     )
-    assert out_tuples == expected_out_tuples
-
-
-@pytest.mark.parametrize(
-    "hscan_return_value, expected_in_tuples",
-    [
-        # Testcase 1: Existing InTuples
-        (
-            [(b"tupleid1", b"ABA")],
-            [(b"tupleid1", b"ABA")],
-        ),
-        # Testcase 2: No InTuples found
-        (
-            [],
-            [],
-        ),
-        # Testcase 3: Multiple InTuples
-        (
-            [(b"t1", b"AB"), (b"t2", b"BAA")],
-            [(b"t1", b"AB"), (b"t2", b"BAA")],
-        ),
-    ],
-)
-def test_get_intuples_from_profile_tw(hscan_return_value, expected_in_tuples):
-    handler = ModuleFactory().create_profile_handler_obj()
-    profileid = "profile_1"
-    twid = "timewindow1"
-    handler._hscan = Mock(return_value=iter(hscan_return_value))
-
-    in_tuples = list(handler.get_intuples_from_profile_tw(profileid, twid))
-
-    handler._hscan.assert_called_once_with(
-        f"{profileid}_{twid}:InTuples:symbols"
-    )
-    assert in_tuples == expected_in_tuples
-
-
-@pytest.mark.parametrize(
-    "zrange_return_value, expected_dhcp_flows",
-    [  # Testcase 1: Existing DHCP flows
-        ([b"192.168.1.100"], [b"192.168.1.100"]),
-        # Testcase 2: No DHCP flows found
-        ([], []),
-    ],
-)
-def test_get_dhcp_flows(zrange_return_value, expected_dhcp_flows):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-
-    handler.r.zrange.return_value = zrange_return_value
-    dhcp_flows = handler.get_dhcp_requested_addrs(profileid, twid)
-    handler.r.zrange.assert_called_once_with(
-        f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}", 0, -1
-    )
-    assert dhcp_flows == expected_dhcp_flows
-
-
-def test_add_dhcp_requested_addr():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.zadd_but_keep_n_entries = Mock()
-
-    profileid = "profile_1"
-    twid = "timewindow1"
-    requested_addr = "192.168.1.100"
-    handler.add_dhcp_requested_addr(profileid, twid, requested_addr)
-
-    handler.zadd_but_keep_n_entries.assert_called_once_with(
-        f"{handler.constants.REQUESTED_DHCP_ADDRS}:{profileid}_{twid}",
-        {requested_addr: ANY},
-        max_entries=50,
-    )
+    assert tuples == scanned
 
 
 @pytest.mark.parametrize(
@@ -201,25 +114,6 @@ def test_mark_profile_and_timewindow_as_blocked(
 
 
 @pytest.mark.parametrize(
-    "hget_return_value, expected_tws",
-    [  # Testcase 1: TWs exist for the profile
-        (
-            json.dumps(["timewindow1", "timewindow2"]).encode(),
-            b'["timewindow1", "timewindow2"]',
-        ),
-        # Testcase 2: No TWs exist for the profile
-        (None, None),
-    ],
-)
-def test_get_blocked_profiles_and_timewindows(hget_return_value, expected_tws):
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.r.hgetall.return_value = hget_return_value
-    tws = handler.get_blocked_profiles_and_timewindows()
-    handler.r.hgetall.assert_called_once_with("BlockedProfTW")
-    assert tws == expected_tws
-
-
-@pytest.mark.parametrize(
     "hget_return_value, expected_total_flows",
     [  # Test case 1: Total flows exist
         (b"1000", 1000),
@@ -260,29 +154,6 @@ def test_get_profiles(smembers_return_value, expected_profiles):
     profiles = handler.get_profiles()
     handler.r.zrange.assert_called_once_with("profiles", 0, -1)
     assert profiles == expected_profiles
-
-
-@pytest.mark.parametrize(
-    "profileid, expected_num_tws",
-    [  # Testcase 1: Profile with multiple timewindows
-        (
-            "profile_1",
-            2,
-        ),
-        # Testcase 2: Profile with no timewindows
-        (
-            "profile_2",
-            0,
-        ),
-    ],
-)
-def test_get_number_of_tws_in_profile(profileid, expected_num_tws):
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.r.zcard.return_value = expected_num_tws
-
-    num_tws = handler.get_number_of_tws(profileid)
-    handler.r.zcard.assert_called_once_with(f"tws{profileid}")
-    assert num_tws == expected_num_tws
 
 
 @pytest.mark.parametrize(
@@ -487,43 +358,6 @@ def test_get_number_of_tws_without_profileid():
 
 
 @pytest.mark.parametrize(
-    "time, expected_modified_tws, zrangebyscore_return_value",
-    [  # Testcase 1: Modified TWs exist after given time
-        (
-            1200.0,
-            [("profile_1_timewindow2", 1250.0)],
-            [("profile_1_timewindow2", 1250.0)],
-        ),
-        # Testcase 2: No modified TWs after given time
-        (
-            1300.0,
-            [],
-            [],
-        ),
-        # Testcase 3: Get all modified TWs since the beginning
-        (
-            0,
-            [("profile_1_timewindow1", 1100.0)],
-            [("profile_1_timewindow1", 1100.0)],
-        ),
-    ],
-)
-def test_get_modified_tw_since_time(
-    time, expected_modified_tws, zrangebyscore_return_value
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.r.zrangebyscore.return_value = zrangebyscore_return_value
-
-    modified_tws = handler._get_modified_tw_since_time(time)
-
-    handler.r.zrangebyscore.assert_called_once_with(
-        "modified_timewindows", time, float("+inf"), withscores=True
-    )
-    assert modified_tws == expected_modified_tws
-
-
-@pytest.mark.parametrize(
     "hmget_return_value, expected_software",
     [  # Test case 1: Software data exists
         (
@@ -660,47 +494,6 @@ def test_get_user_agent_from_profile(
 
     handler.get_first_user_agent.assert_called_once_with(profileid)
     assert user_agent == expected_user_agent
-
-
-@pytest.mark.parametrize(
-    "get_profile_modules_labels_return_value, " "module, label, expected_data",
-    [
-        # Testcase 1: No existing module labels
-        ({}, "test_module", "test_label", {"test_module": "test_label"}),
-        # Testcase 2: Existing module labels, adding a new one
-        (
-            {"module1": "label1"},
-            "test_module",
-            "test_label",
-            {"module1": "label1", "test_module": "test_label"},
-        ),
-        # Testcase 3: Existing module labels,
-        # overwriting an existing one
-        (
-            {"test_module": "old_label"},
-            "test_module",
-            "new_label",
-            {"test_module": "new_label"},
-        ),
-    ],
-)
-def test_set_profile_module_label(
-    get_profile_modules_labels_return_value, module, label, expected_data
-):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.get_modules_labels_of_a_profile = MagicMock(
-        return_value=get_profile_modules_labels_return_value
-    )
-
-    profileid = "profile_1"
-
-    handler.set_module_label_for_profile(profileid, module, label)
-
-    expected_data_str = json.dumps(expected_data)
-    handler.r.hset.assert_called_once_with(
-        profileid, "modules_labels", expected_data_str
-    )
 
 
 @pytest.mark.parametrize(
@@ -886,48 +679,6 @@ def test_get_timeline_last_lines(
 
 
 @pytest.mark.parametrize(
-    "profileid, ip, expected_hset_call",
-    [  # Test Case 1: Single IPv6 address
-        (
-            "profile_1",
-            ["2001:db8::1"],
-            ("profile_1", "IPv6", '["2001:db8::1"]'),
-        ),
-        # Test Case 2: Multiple IPv6 addresses
-        (
-            "profile_2",
-            ["2001:db8::1", "2001:db8::2"],
-            ("profile_2", "IPv6", '["2001:db8::1", "2001:db8::2"]'),
-        ),
-        # Test Case 3: Empty list of IPv6 addresses
-        ("profile_3", [], ("profile_3", "IPv6", "[]")),
-    ],
-)
-def test_set_ipv6_of_profile(profileid, ip, expected_hset_call):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.set_ipv6_of_profile(profileid, ip)
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-@pytest.mark.parametrize(
-    "profileid, ip, expected_hset_call",
-    [  # Test Case 1: Valid IPv4 address
-        ("profile_1", "192.168.1.1", ("profile_1", "IPv4", '["192.168.1.1"]')),
-        # Test Case 2: Another valid IPv4 address
-        ("profile_2", "10.0.0.1", ("profile_2", "IPv4", '["10.0.0.1"]')),
-        # Test Case 3: Special case - 0.0.0.0
-        ("profile_3", "0.0.0.0", ("profile_3", "IPv4", '["0.0.0.0"]')),
-    ],
-)
-def test_set_ipv4_of_profile(profileid, ip, expected_hset_call):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.set_ipv4_of_profile(profileid, ip)
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-@pytest.mark.parametrize(
     "get_modified_tw_since_time_return_value, "
     "expected_profiles, expected_last_modified_time",
     [
@@ -975,98 +726,6 @@ def test_get_modified_profiles_since(
     handler._get_modified_tw_since_time.assert_called_once_with(time)
     assert profiles == expected_profiles
     assert last_modified_time == expected_last_modified_time
-
-
-@pytest.mark.parametrize(
-    "profileid, mac, expected_hset_call",
-    [  # Test case 1: Valid profileid and MAC address
-        (
-            "profile_192.168.1.100",
-            "00:11:22:33:44:55",
-            ("profile_192.168.1.100", "MAC", "00:11:22:33:44:55"),
-        ),
-        # Test case 2: Valid profileid, None MAC address
-        (
-            "profile_192.168.1.100",
-            None,
-            ("profile_192.168.1.100", "MAC", None),
-        ),
-        # Test case 3: None profileid, valid MAC address
-        (
-            None,
-            "00:11:22:33:44:55",
-            (None, "MAC", "00:11:22:33:44:55"),
-        ),
-        # Test case 4: Both None
-        (None, None, (None, "MAC", None)),
-    ],
-)
-def test_update_mac_of_profile(profileid, mac, expected_hset_call):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    handler.update_mac_of_profile(profileid, mac)
-    handler.r.hset.assert_called_once_with(*expected_hset_call)
-
-
-@pytest.mark.parametrize(
-    "hget_return_value, expected_mac_addr",
-    [  # Testcase 1: MAC address exists
-        ("00:11:22:33:44:55", "00:11:22:33:44:55"),
-        # Testcase 2: MAC address does not exist
-        (None, None),
-    ],
-)
-def test_get_mac_addr_from_profile(hget_return_value, expected_mac_addr):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hget.return_value = hget_return_value
-    result = handler.get_mac_addr_from_profile(profileid)
-    handler.r.hget.assert_called_once_with(profileid, "MAC")
-    assert result == expected_mac_addr
-
-
-@pytest.mark.parametrize(
-    "user_agent, expected_hset_call",
-    [  # Test case 1: Typical user agent dictionary
-        (
-            {
-                "user_agent": "Mozilla/5.0",
-                "os_type": "Windows",
-                "os_name": "Windows 10",
-                "agent_name": "Chrome",
-            },
-            call(
-                "profile_1",
-                "first user-agent",
-                {
-                    "user_agent": "Mozilla/5.0",
-                    "os_type": "Windows",
-                    "os_name": "Windows 10",
-                    "agent_name": "Chrome",
-                },
-            ),
-        ),
-        # Test case 2: User agent string
-        (
-            "OpenSSH_8.6",
-            call("profile_1", "first user-agent", "OpenSSH_8.6"),
-        ),
-        # Test case 3: User agent is None
-        (
-            None,
-            call("profile_1", "first user-agent", None),
-        ),
-    ],
-)
-def test_add_user_agent_to_profile(user_agent, expected_hset_call):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.add_user_agent_to_profile(profileid, user_agent)
-    handler.r.hset.assert_called_once_with(*expected_hset_call.args)
 
 
 @pytest.mark.parametrize(
@@ -1159,30 +818,6 @@ def test_set_mac_vendor_to_profile_no_existing_vendor_mac_mismatch():
     handler.r.hset.assert_not_called()
 
 
-def test_add_mac_addr_to_profile_no_existing_mac():
-    """
-    testing when no cached_ips found in the db
-    """
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_192.168.1.100"
-    mac_addr = "00:11:22:33:44:55"
-    handler._determine_gw_mac = Mock()
-    handler._is_gw_mac = MagicMock(return_value=False)
-    handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
-
-    handler.r.hmget.return_value = [None]
-    handler.update_mac_of_profile = MagicMock()
-    result = handler.add_mac_addr_to_profile(profileid, mac_addr, "eth0")
-
-    handler.r.hmget.assert_called_once_with("MAC", mac_addr)
-    handler.r.hset.assert_called_once_with(
-        "MAC", mac_addr, json.dumps([profileid.split("_")[1]])
-    )
-    handler.update_mac_of_profile.assert_called_once_with(profileid, mac_addr)
-    assert result is True
-
-
 @pytest.mark.parametrize("ip", ["147.32.82.228", "8.8.8.8", "2606:4700:4700::1111"])
 def test_public_endpoint_is_not_saved_as_mac_owner(ip: str) -> None:
     """Reject public ownership even before a worker knows the gateway."""
@@ -1216,26 +851,6 @@ def test_mac_ownership_requires_valid_unicast_endpoints(ip: str, mac: str, expec
     handler.get_gateway_ip = Mock(return_value="192.168.1.1")
 
     assert handler._should_associate_this_mac_with_this_ip(ip, mac, "eth0") is expected
-
-
-def test_add_mac_addr_to_profile_existing_mac():
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_192.168.1.100"
-    mac_addr = "00:11:22:33:44:55"
-    handler._determine_gw_mac = Mock()
-    handler._is_gw_mac = MagicMock(return_value=False)
-    handler.get_gateway_ip = MagicMock(return_value="192.168.1.1")
-    # mimic having an ip for the given mac
-    # this should make [incoming_ip in cached_ips] True
-    handler.r.hmget.return_value = [json.dumps([profileid.split("_")[1]])]
-    handler.update_mac_of_profile = MagicMock()
-    result = handler.add_mac_addr_to_profile(profileid, mac_addr, "eth0")
-    assert result is False
-
-    handler.r.hmget.assert_called_once_with("MAC", mac_addr)
-    handler.r.hset.assert_not_called()
-    handler.update_mac_of_profile.assert_not_called()
 
 
 def test_add_user_agent_to_profile_first_one():
@@ -1314,50 +929,6 @@ def test_add_existing_user_agent_to_profile():
     assert not handler.r.hset.called
 
 
-@pytest.mark.parametrize(
-    "hget_return_value, expected_data",
-    [  # Testcase1: data exists
-        (
-            json.dumps({"module1": "label1", "module2": "label2"}).encode(),
-            {"module1": "label1", "module2": "label2"},
-        ),
-        # Testcase2: data does not exist
-        (None, {}),
-    ],
-)
-def test_get_profile_modules_labels(hget_return_value, expected_data):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hget.return_value = hget_return_value
-
-    data = handler.get_modules_labels_of_a_profile(profileid)
-    handler.r.hget.assert_called_once_with(profileid, "modules_labels")
-    assert data == expected_data
-
-
-@pytest.mark.parametrize(
-    "hget_return_value, expected_mac_vendor",
-    [  # Testcase 1: MAC vendor exists
-        ("Cisco", "Cisco"),
-        # Testcase 2: MAC vendor does not exist
-        (None, None),
-    ],
-)
-def test_get_mac_vendor_from_profile(hget_return_value, expected_mac_vendor):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hget.return_value = hget_return_value
-
-    mac_vendor = handler.get_mac_vendor_from_profile(profileid)
-
-    handler.r.hget.assert_called_once_with(profileid, "MAC_vendor")
-    assert mac_vendor == expected_mac_vendor
-
-
 def test_add_host_name_to_profile_when_hostname_does_not_exist():
     handler = ModuleFactory().create_profile_handler_obj()
 
@@ -1384,45 +955,6 @@ def test_add_host_name_to_profile_when_hostname_exists():
     handler.add_host_name_to_profile(hostname, profileid)
 
     handler.r.hset.assert_not_called()
-
-
-def test_get_ipv6_from_ipv4():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_ipv6_from_profile = MagicMock(return_value="2001:db8::1")
-    handler.get_ipv4_from_profile = MagicMock()
-
-    profileid = "profile_192.168.1.100"
-    ip = handler.get_the_other_ip_version(profileid)
-
-    handler.get_ipv6_from_profile.assert_called_once_with(profileid)
-    handler.get_ipv4_from_profile.assert_not_called()
-    assert ip == "2001:db8::1"
-
-
-def test_get_ipv4_from_ipv6():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_ipv6_from_profile = MagicMock()
-    handler.get_ipv4_from_profile = MagicMock(return_value="192.168.1.100")
-
-    profileid = "profile_2001:db8::1"
-    ip = handler.get_the_other_ip_version(profileid)
-
-    handler.get_ipv4_from_profile.assert_called_once_with(profileid)
-    handler.get_ipv6_from_profile.assert_not_called()
-    assert ip == "192.168.1.100"
-
-
-def test_invalid_ip():
-    handler = ModuleFactory().create_profile_handler_obj()
-    handler.get_ipv6_from_profile = MagicMock()
-    handler.get_ipv4_from_profile = MagicMock()
-
-    profileid = "profile_invalid_ip"
-    ip = handler.get_the_other_ip_version(profileid)
-
-    handler.get_ipv6_from_profile.assert_not_called()
-    handler.get_ipv4_from_profile.assert_not_called()
-    assert ip is False
 
 
 @pytest.mark.parametrize(
@@ -1726,26 +1258,6 @@ def test_add_out_http(host, uri, expected_give_threat_intelligence_calls):
     )
 
 
-@pytest.mark.parametrize(
-    "hmget_return_value, expected_ipv4",
-    [  # Testcase 1: IPv4 exists
-        (["192.168.1.100"], "192.168.1.100"),
-        # Testcase 2: IPv4 does not exist
-        ([None], None),
-    ],
-)
-def test_get_ipv4_from_profile(hmget_return_value, expected_ipv4):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hmget.return_value = hmget_return_value
-
-    ipv4 = handler.get_ipv4_from_profile(profileid)
-    handler.r.hmget.assert_called_once_with(profileid, "IPv4")
-    assert ipv4 == expected_ipv4
-
-
 def test_get_tw_of_ts():
     handler = ModuleFactory().create_profile_handler_obj()
 
@@ -1933,36 +1445,6 @@ def test_mark_profile_tw_as_modified_allows_missing_timestamp():
     )
     pipe.execute.assert_called_once_with()
     handler.publish.assert_not_called()
-
-
-def test_mark_profile_as_gateway():
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.mark_profile_as_gateway(profileid)
-    handler.r.hset.assert_called_once_with(profileid, "gateway", "true")
-
-
-@pytest.mark.parametrize(
-    "hget_return_value, expected_hostname",
-    [  # Testcase 1: Hostname exists
-        ("myhost.local", "myhost.local"),
-        # Testcase 2: Hostname does not exist
-        (None, None),
-    ],
-)
-def test_get_hostname_from_profile(hget_return_value, expected_hostname):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hget.return_value = hget_return_value
-
-    hostname = handler.get_hostname_from_profile(profileid)
-
-    handler.r.hget.assert_called_once_with(profileid, "host_name")
-    assert hostname == expected_hostname
 
 
 @pytest.mark.parametrize(
@@ -2179,27 +1661,3 @@ def test_get_first_flow_time(hget_return_value, expected_first_flow_time):
     first_flow_time = handler.get_first_flow_time()
     handler.r.hget.assert_called_once_with("analysis", "file_start")
     assert first_flow_time == expected_first_flow_time
-
-
-@pytest.mark.parametrize(
-    "hmget_return_value, expected_ipv6",
-    [  # Testcase 1: IPv6 address exists
-        (
-            [json.dumps(["2001:db8::1"])],
-            '["2001:db8::1"]',
-        ),
-        # Testcase 2: IPv6 address does not exist
-        ([None], None),
-    ],
-)
-def test_get_ipv6_from_profile(hmget_return_value, expected_ipv6):
-    handler = ModuleFactory().create_profile_handler_obj()
-
-    profileid = "profile_1"
-
-    handler.r.hmget.return_value = hmget_return_value
-
-    ipv6 = handler.get_ipv6_from_profile(profileid)
-
-    handler.r.hmget.assert_called_once_with(profileid, "IPv6")
-    assert ipv6 == expected_ipv6

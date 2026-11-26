@@ -29,16 +29,6 @@ def full_history_policy() -> dict:
     }
 
 
-def test_init_reads_the_cleanup_policies() -> None:
-    """Read both policies and stay idle until start() is called."""
-    manager = ModuleFactory().create_flow_cleanup_manager_obj()
-
-    assert manager.flow_retention_policy["enabled"] is True
-    assert manager.detection_history_policy == {"enabled": False}
-    assert manager.is_running is False
-    assert manager.last_cleanup_pass_time == 0.0
-
-
 @pytest.mark.parametrize(
     "interface, flow_retention_enabled, history_enabled, expected",
     [

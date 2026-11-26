@@ -8,6 +8,167 @@ import argparse
 import textwrap
 
 
+def parse_web_port(value: str) -> int:
+    """Check that the web port given on the command line is valid.
+
+    Parameters:
+        value: The port the user typed.
+
+    Returns:
+        The port as a number from 1 to 65535. Anything else is an argparse error.
+    """
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        ) from error
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        )
+    return port
+
+
+def get_web_port_override(arguments: list[str] | None = None) -> int | None:
+    """Read --web-port from the command line, ignoring all other arguments.
+
+    Parameters:
+        arguments: Command-line arguments, or None to read sys.argv.
+
+    Returns:
+        The web port, or None if --web-port wasn't given.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--web-port", type=parse_web_port)
+    return parser.parse_known_args(arguments)[0].web_port
+
+
+def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
+    """Add --list-instances, --stop and --restart to a parser.
+
+    Only one of the three can be used at a time.
+
+    Parameters:
+        parser: The parser to add the options to.
+    """
+    commands = parser.add_mutually_exclusive_group()
+    commands.add_argument(
+        "--list-instances",
+        action="store_true",
+        help="List running Slips instances from this Slips folder without "
+        "starting a run or connecting to Redis.",
+    )
+    commands.add_argument(
+        "--stop",
+        nargs="?",
+        const="auto",
+        metavar="PID|all",
+        help="Gracefully stop a Slips instance in any mode from this Slips folder. "
+        "Omit PID when only one is running, or use all to stop every instance.",
+    )
+    commands.add_argument(
+        "--restart",
+        nargs="?",
+        const="auto",
+        metavar="PID",
+        help="Stop a running daemon and relaunch it with its original "
+        "arguments. Omit PID when only one daemon is running. Use the same "
+        "Python environment that started it.",
+    )
+
+
+def create_instance_parser() -> argparse.ArgumentParser:
+    """Build a small parser that only knows --list-instances, --stop and
+    --restart. It is used before Slips opens any database.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
+    add_instance_arguments(parser)
+    return parser
+
+
+def create_launch_parser() -> argparse.ArgumentParser:
+    """Build a parser that knows every option of slips.py.
+
+    It is only used to look up how each option can be spelled when reading
+    the command line of other Slips processes, never to parse our own.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("-D", "--daemon", action="store_true")
+    parser.add_argument("-i", "--interface")
+    parser.add_argument("-f", "--filepath")
+    parser.add_argument("-g", "--growing")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("--view")
+    parser.add_argument("-k", "--killall", action="store_true")
+    parser.add_argument("-V", "--version", action="store_true")
+    parser.add_argument("-h", "--help", action="store_true")
+    parser.add_argument(
+        "-S", "--stopdaemon", dest="stop_daemon", action="store_true"
+    )
+    add_instance_arguments(parser)
+    return parser
+
+
+def create_web_server_parser() -> argparse.ArgumentParser:
+    """Build a parser that knows the options of the web interface server.
+
+    It is used to read the command line of a running web server.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--output-dir")
+    return parser
+
+
+def create_isolated_analysis_parser() -> argparse.ArgumentParser:
+    """Build a parser that knows only the options that decide if a run is an
+    isolated file analysis.
+
+    An isolated run analyzes a file next to an instance that analyzes an
+    interface. It needs -m and -o together (with -f); without -m it isn't
+    isolated.
+
+    Returns:
+        The parser.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("-m", "--multiinstance", action="store_true")
+    parser.add_argument("-f", "--filepath")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("-i", "--interface")
+    parser.add_argument("-g", "--growing")
+    return parser
+
+
+def create_run_conflict_parser() -> argparse.ArgumentParser:
+    """Build a parser that reads the options another run shares with us
+    (Redis port, output dir, web port...).
+
+    Returns:
+        The parser. It raises argparse.ArgumentError instead of exiting.
+    """
+    parser = argparse.ArgumentParser(
+        add_help=False, allow_abbrev=False, exit_on_error=False
+    )
+    parser.add_argument("-m", "--multiinstance", action="store_true")
+    parser.add_argument("-P", "--port")
+    parser.add_argument("-o", "--output")
+    parser.add_argument("-c", "--config", default="config/slips.yaml")
+    parser.add_argument("-cc", "--clearcache", action="store_true")
+    parser.add_argument("-w", "--webinterface", action="store_true")
+    parser.add_argument("--web-port", type=int)
+    return parser
+
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self.options = []
@@ -212,13 +373,6 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Store Slips logs in the given folder.",
         )
         self.add_argument(
-            "-s",
-            "--save",
-            action="store_true",
-            required=False,
-            help="Save the analysed file db to disk.",
-        )
-        self.add_argument(
             "-d",
             "--db",
             action="store",
@@ -235,20 +389,13 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Run slips in daemon mode",
         )
         self.add_argument(
-            "-S",
-            "--stopdaemon",
-            required=False,
-            default=False,
-            action="store_true",
-            help="Stop slips daemon",
-        )
-        self.add_argument(
             "-k",
             "--killall",
             action="store_true",
             required=False,
             help="Kill all unused redis servers",
         )
+        add_instance_arguments(self)
         self.add_argument(
             "-m",
             "--multiinstance",
@@ -256,7 +403,9 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help="Run multiple instances of slips, don't overwrite the old "
             "one. This option run redis using a random unused port "
-            "instead of the default one (6379).",
+            "instead of the default one (6379). With -f and -o, also isolate "
+            "runtime data and copy the whitelist and credentials automatically "
+            "under the output directory; reuse the same -c file.",
         )
         self.add_argument(
             "-P",
@@ -265,6 +414,15 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store",
             required=False,
             help="The redis-server port to use",
+        )
+        self.add_argument(
+            "--keep-history",
+            action="store_true",
+            required=False,
+            help="Keep detections and flows from a previous live run in the "
+            "same output directory, or start fresh if none exist. "
+            "Requires -i and -o; concurrent runs "
+            "need separate data directories and ports.",
         )
         self.add_argument(
             "-t",
@@ -288,6 +446,13 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store_true",
             required=False,
             help="Enable the local web interface for this Slips run",
+        )
+        self.add_argument(
+            "--web-port",
+            type=parse_web_port,
+            metavar="PORT",
+            help="Override web_interface.port for this run (1-65535). "
+            "Enable the web interface with -w or in the configuration.",
         )
         self.add_argument(
             "-V",

@@ -176,6 +176,12 @@ class WorkerManagerMixin:
         if self.max_workers_started():
             return
 
+        # no more flows are coming, the running workers drain what's left.
+        # a worker started now can't even load, because the input and the
+        # profiler are already closing the queues/locks it would get.
+        if self._is_input_done():
+            return
+
         if not self._throughput_check_due():
             return
 

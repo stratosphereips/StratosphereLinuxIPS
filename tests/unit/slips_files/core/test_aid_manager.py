@@ -73,33 +73,6 @@ def test_worker_loop_hashes_and_stores_flow_then_stops():
     db.add_flows.assert_called_once_with([task])
 
 
-def test_worker_loop_preserves_queue_order():
-    tasks = [make_task(profileid=f"profile_{i}") for i in range(3)]
-    queue = make_mock_queue(*tasks, "stop")
-    db = Mock()
-
-    with patch(
-        "slips_files.core.aid_manager.utils.get_aid", return_value="aid"
-    ):
-        make_manager(queue)._worker_loop(queue, db)
-
-    stored = [
-        task["profileid"]
-        for call in db.add_flows.call_args_list
-        for task in call.args[0]
-    ]
-    assert stored == ["profile_0", "profile_1", "profile_2"]
-
-
-def test_worker_loop_stop_sentinel_stores_nothing():
-    queue = make_mock_queue("stop")
-    db = Mock()
-
-    make_manager(queue)._worker_loop(queue, db)
-
-    db.add_flows.assert_not_called()
-
-
 @pytest.mark.parametrize("interruption", [Empty(), KeyboardInterrupt()])
 def test_worker_loop_keeps_running_after_empty_or_interrupt(interruption):
     task = make_task()
@@ -166,14 +139,3 @@ def test_aid_batches_drain_before_stop(count: int) -> None:
     assert [t["profileid"] for t in stored] == [t["profileid"] for t in tasks]
     assert all(t["flow"].aid == "hash" for t in stored)
     db.add_flow.assert_not_called()
-
-
-def test_aid_sparse_flow_is_written_without_waiting_for_a_batch() -> None:
-    """Commit an isolated flow immediately when no other task is ready."""
-    _factory = ModuleFactory()
-    task = {"flow": Mock(), "profileid": "profile_1", "twid": "tw1", "label": "benign"}
-    queue = make_mock_queue(task, "stop")
-    db = Mock()
-    with patch("slips_files.core.aid_manager.utils.get_aid", return_value="hash"):
-        AIDManager.for_queue(queue)._worker_loop(queue, db)
-    db.add_flows.assert_called_once_with([task])

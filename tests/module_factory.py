@@ -39,23 +39,6 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 class ModuleFactory:
 
-    def create_module_process_obj(
-        self, module: type | str, *args: object, **kwargs: object
-    ) -> object:
-        """Create an unstarted module process for process-boundary tests.
-
-        Parameters:
-            module: Module class or import path.
-            args: Module constructor arguments.
-            kwargs: Module constructor keyword arguments.
-
-        Returns:
-            Process that initializes the module in its child.
-        """
-        from slips_files.core.module_process import ModuleProcess
-
-        return ModuleProcess(module, *args, **kwargs)
-
     def __init__(self):
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -680,10 +663,10 @@ class ModuleFactory:
         with (
             patch(f"{daemon_module}.Daemon.read_pidfile", return_value=None),
             patch(f"{daemon_module}.Daemon.read_configuration"),
+            patch(f"{daemon_module}.Daemon.prepare_output_dir"),
             patch("builtins.open", mock_open(read_data=None)),
         ):
             slips = MagicMock()
-            slips.args.stopdaemon = True
             slips.args.is_slips_started_by_an_update = False
             slips.args.output = "output"
             daemon = Daemon(slips)
@@ -1773,6 +1756,7 @@ class ModuleFactory:
 
         conf = Mock()
         conf.web_interface_port = 55000
+        conf.permanent_dir = Mock(return_value="permanent")
         module = WebInterface(
             logger=self.logger,
             output_dir="output",

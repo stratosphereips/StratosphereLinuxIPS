@@ -8,7 +8,6 @@ from typing import Any, Optional
 
 from slips_files.common.log_rotation import rotate_log
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
-from slips_files.core.output import Output
 
 # Internal tuning values, intentionally not user-configurable.
 # Seconds between passes that rotate the logs that got too big.
@@ -76,7 +75,7 @@ class LogRotationManager:
         logs: list[tuple[Path, Optional[Any]]] = [
             (
                 Path(self.main.logger.errors_logfile),
-                Output.errors_logfile_lock,
+                self.main.logger.errors_logfile_lock,
             ),
             # the evidence logger reopens these two once they're rotated
             (alerts_dir / "alerts.log", None),
@@ -86,7 +85,7 @@ class LogRotationManager:
             logs.append(
                 (
                     Path(self.main.logger.slips_logfile),
-                    Output.slips_logfile_lock,
+                    self.main.logger.slips_logfile_lock,
                 )
             )
         return logs

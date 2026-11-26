@@ -37,23 +37,6 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process and handed to every
-    # child process. These multiprocessing locks are sent along with it
-    # (see __getstate__) so they actually serialize writes to the shared
-    # stdout/logfiles across processes. threading.Lock() would not do
-    # that, since each process gets its own independent copy of it,
-    # letting concurrent prints from different processes interleave
-    # and corrupt each other's output (e.g. a partial in-place \r update
-    # from one process landing in the middle of another process' line).
-    slips_logfile_lock = multiprocessing.Lock()
-    errors_logfile_lock = multiprocessing.Lock()
-    cli_lock = multiprocessing.Lock()
-    # set while a single-line, in-place-refreshing status line (e.g. the
-    # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all processes so that any of them
-    # printing a normal line first closes it out with a newline instead
-    # of overwriting/merging with it.
-    _cli_has_dangling_line = multiprocessing.Value("b", False)
     _SHARED_STATE = (
         "slips_logfile_lock",
         "errors_logfile_lock",
@@ -64,22 +47,8 @@ class Output(IObserver):
         "_startup_in_progress",
         "_startup_queue_lock",
         "_startup_deadline",
+        "_startup_queued",
     )
-
-    def __getstate__(self) -> dict:
-        """
-        Carry the shared locks to a spawned child.
-        Class attributes are not pickled, so without this, the child would
-        create its own locks and theyd be useless :D
-        """
-        state = self.__dict__.copy()
-        for name in self._SHARED_STATE:
-            state[name] = getattr(self, name)
-        return state
-
-    def __setstate__(self, state: dict) -> None:
-        self.__dict__.update(state)
-
     # While slips' processes/modules are still announcing their startup
     # (see begin_startup_announcements()), every OTHER printed message
     # is held here instead of going straight to the cli/logfiles, so it
@@ -97,7 +66,24 @@ class Output(IObserver):
     # announcing itself, which would otherwise stall all cli/logfile
     # output for the rest of the run
     _startup_deadline = multiprocessing.Value("d", 0.0)
+    # Each run explicitly shares its logger locks and startup queue with children.
     STARTUP_QUEUE_TIMEOUT_SECS = 120
+    # max time a flush may take to read every queued message
+    STARTUP_FLUSH_TIMEOUT_SECS = 10
+
+    def __getstate__(self) -> dict:
+        """
+        Carry the shared locks to a spawned child.
+        Class attributes are not pickled, so without this, the child would
+        create its own locks and theyd be useless :D
+        """
+        state = self.__dict__.copy()
+        for name in self._SHARED_STATE:
+            state[name] = getattr(self, name)
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
 
     def __init__(
         self,
@@ -111,6 +97,33 @@ class Output(IObserver):
         slips_args=None,
     ):
         super().__init__()
+        # Instance attributes travel with the logger under spawn/forkserver.
+        # Class attributes alone would be recreated independently in children.
+
+        # Output is instantiated once in the main process and handed to every
+        # child process. These multiprocessing locks are sent along with it
+        # (see __getstate__) so they actually serialize writes to the shared
+        # stdout/logfiles across processes. threading.Lock() would not do
+        # that, since each process gets its own independent copy of it,
+        # letting concurrent prints from different processes interleave
+        # and corrupt each other's output (e.g. a partial in-place \r update
+        # from one process landing in the middle of another process' line).
+        self.slips_logfile_lock = multiprocessing.Lock()
+        self.errors_logfile_lock = multiprocessing.Lock()
+        self.cli_lock = multiprocessing.Lock()
+        # set while a single-line, in-place-refreshing status line (e.g. the
+        # "Total analyzed IPs" summary) is left on screen without a trailing
+        # newline. shared across all processes so that any of them
+        # printing a normal line first closes it out with a newline instead
+        # of overwriting/merging with it.
+        self._cli_has_dangling_line = multiprocessing.Value("b", False)
+        self._startup_queue = multiprocessing.Queue()
+        self._startup_in_progress = multiprocessing.Value("b", False)
+        self._startup_queue_lock = multiprocessing.Lock()
+        self._startup_deadline = multiprocessing.Value("d", 0.0)
+        # how many msgs are in _startup_queue, so a flush knows when it
+        # got all of them
+        self._startup_queued = multiprocessing.Value("Q", 0)
         # a fresh Output() means a fresh run for whichever process
         # constructed it - no startup announcements are in progress yet
         self._startup_in_progress.value = False
@@ -285,6 +298,28 @@ class Output(IObserver):
         """
         return 0 < debug <= 3 and debug <= self.debug
 
+    def _will_be_printed_or_logged(self, msg: dict) -> bool:
+        """
+        Check if _dispatch() would print or log the given msg at all, using
+        the same rules as log_line() and output_line_to_cli_and_logfiles().
+
+        Parameters:
+            msg: The msg given to update().
+
+        Returns:
+            False if the msg would be dropped because of its verbose and
+            debug levels.
+        """
+        if msg.get("log_to_logfiles_only", False):
+            return True
+        verbose = msg.get("verbose", self.verbose)
+        debug = msg.get("debug", self.debug)
+        return (
+            self.enough_verbose(verbose)
+            or self.enough_debug(debug)
+            or debug == 1
+        )
+
     def output_line_to_cli_and_logfiles(self, msg: dict):
         """
         Prints to terminal and logfiles depending on the debug and verbose
@@ -358,19 +393,28 @@ class Output(IObserver):
 
             print_separator()
 
-            # a multiprocessing.Queue delivers items to get() slightly
-            # after put() returns on another process - a short grace
-            # period avoids treating a message that was queued a
-            # moment ago, but isn't visible yet, as if it never was
-            consecutive_empty_checks = 0
-            while consecutive_empty_checks < 3:
+            # read exactly as many msgs as were queued. a put() returns
+            # before the msg reaches the pipe, so stopping at the first
+            # empty get() can leave msgs behind in a slow process. those
+            # msgs are lost, and that process can't exit until someone
+            # reads them, which never happens.
+            # nothing can be queued while we hold the lock, so the count
+            # doesn't change during this loop.
+            received = 0
+            deadline = time.monotonic() + self.STARTUP_FLUSH_TIMEOUT_SECS
+            while received < self._startup_queued.value:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
                 try:
-                    queued_msg = self._startup_queue.get(timeout=0.05)
+                    queued_msg = self._startup_queue.get(
+                        timeout=min(0.5, remaining)
+                    )
                 except Empty:
-                    consecutive_empty_checks += 1
                     continue
-                consecutive_empty_checks = 0
+                received += 1
                 self._dispatch(queued_msg)
+            self._startup_queued.value = 0
             self._startup_in_progress.value = False
 
     def update(self, msg: dict):
@@ -392,6 +436,12 @@ class Output(IObserver):
                 self._flush_startup_queue()
             return
 
+        if not self._will_be_printed_or_logged(msg):
+            # e.g. per-flow debug msgs with the default -d 0. queueing
+            # them during startup only to drop them later can be
+            # thousands of msgs per second
+            return
+
         if self._startup_in_progress.value:
             if time.monotonic() >= self._startup_deadline.value:
                 # a module/worker likely died before announcing itself,
@@ -404,6 +454,10 @@ class Output(IObserver):
                     # have finished between the check above and here
                     if self._startup_in_progress.value:
                         self._startup_queue.put(msg)
+                        self._startup_queued.value += 1
+                        # if a msg is ever left unread, don't let it
+                        # keep this process from exiting
+                        self._startup_queue.cancel_join_thread()
                         return
 
         self._dispatch(msg)
