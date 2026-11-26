@@ -258,3 +258,18 @@ def test_get_flows_per_second_handles_database_values(
     profiler.db.get_core_module_flows_per_second.return_value = stored_value
 
     assert profiler._get_flows_per_second("Input") == expected_fps
+
+
+def test_no_workers_are_added_after_the_input_is_done() -> None:
+    """A worker started after the input stops can't load, so none is started."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.is_input_done_event.is_set.return_value = True
+    profiler.profiler_queue = Mock()
+    profiler.profiler_queue.empty.return_value = False
+    profiler._throughput_check_due = Mock(return_value=True)
+    profiler.start_profiler_worker = Mock()
+    profiler.db.get_core_module_flows_per_second.side_effect = [10, 100]
+
+    profiler._check_if_high_throughput_and_add_workers()
+
+    profiler.start_profiler_worker.assert_not_called()
