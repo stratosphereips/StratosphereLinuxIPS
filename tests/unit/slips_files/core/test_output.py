@@ -297,7 +297,8 @@ def _hold_lock_in_child(output: Output, result_queue) -> None:
 
 def test_output_locks_are_shared_with_spawned_child() -> None:
     """A spawned child must use the parent's locks, not create its own."""
-    output = Output.__new__(Output)
+    # the locks are created in __init__, a bare Output.__new__ has none
+    output = ModuleFactory().create_output_obj()
     output.cli_lock.acquire()
     output._cli_has_dangling_line.value = True
     try:

@@ -378,7 +378,9 @@ def run_daemon_startup_probe(folder: str, scenario: str) -> None:
 
     slips.start = run
     daemon = daemon_class(slips)
-    daemon.daemon_start_lock = "daemon-test-" + location.name
+    # every parametrized case gets the same tmp dir name on its own xdist
+    # worker, so the lock name needs the probe's PID to stay unique
+    daemon.daemon_start_lock = f"daemon-test-{os.getpid()}"
     daemon.start()
 
 

@@ -594,6 +594,24 @@ def test_restart_handles_failures(tmp_path: Path, case: str) -> None:
         launch.assert_not_called()
 
 
+def _pid_is_gone(pid: int) -> bool:
+    """Tell if a process is gone, counting zombies as gone like Slips does.
+
+    Inside a CI container, PID 1 may never reap orphans, so a stopped
+    daemon can stay a zombie forever.
+
+    Parameters:
+        pid: Process to check.
+    """
+    try:
+        return psutil.Process(pid).status() in {
+            psutil.STATUS_ZOMBIE,
+            psutil.STATUS_DEAD,
+        }
+    except psutil.NoSuchProcess:
+        return True
+
+
 @pytest.mark.parametrize("cleanup_delay", [0, 46])
 def test_native_restart_preserves_arguments_and_waits_for_worker(tmp_path: Path, cleanup_delay: int) -> None:
     """Restart a fake daemon for real and check the whole sequence.
@@ -698,8 +716,8 @@ while True:
         assert current["cwd"] == str(tmp_path.resolve())
         assert current["prefix"] == sys.prefix
         assert current["previous_stop"] == {"pid": previous["pid"]}
-        assert not psutil.pid_exists(previous["pid"])
-        assert not psutil.pid_exists(previous["worker"])
+        assert _pid_is_gone(previous["pid"])
+        assert _pid_is_gone(previous["worker"])
         assert json.loads(saved.read_text()) == {"pid": previous["pid"]}
         assert (history / "databases" / "flows.sqlite").read_text() == "retained history"
     finally:
@@ -711,7 +729,8 @@ while True:
         for record in (previous, current):
             if record:
                 for pid in (record["pid"], record["worker"]):
-                    if psutil.pid_exists(pid):
+                    # a zombie that isn't our child can't be waited on
+                    if not _pid_is_gone(pid):
                         process = psutil.Process(pid)
                         process.kill()
                         process.wait(timeout=5)

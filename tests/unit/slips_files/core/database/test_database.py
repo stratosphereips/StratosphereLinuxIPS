@@ -1434,17 +1434,19 @@ def test_setup_config_file_writes_a_per_port_conf(
     assert not any(line.startswith("requirepass") for line in lines)
 
 
-def test_setup_config_file_enables_autosave_when_save_is_requested(
+def test_setup_config_file_never_enables_autosave(
     redis_conf_setup: Dict[str, Any],
 ) -> None:
+    # -s was removed, the db is saved once on shutdown instead of by
+    # redis autosave, so a leftover save arg must not change the conf
     RedisDB.args = Mock(save=True)
 
     RedisDB._setup_config_file()
 
     lines = redis_conf_setup["conf"].read_text(encoding="utf-8").splitlines()
-    assert "save 30 500" in lines
-    assert "appendonly yes" in lines
-    assert 'save ""' not in lines
+    assert 'save ""' in lines
+    assert "appendonly no" in lines
+    assert "save 30 500" not in lines
 
 
 def test_setup_config_file_uses_absolute_paths(
