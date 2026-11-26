@@ -25,7 +25,7 @@ from managers.ui_manager import UIManager
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.parsers.analysis_config import (
-    get_isolated_analysis_output_dir,
+    is_isolated_run,
     validate_analysis_paths,
 )
 from slips_files.common.performance_paths import get_performance_plots_dir
@@ -78,8 +78,10 @@ class Main:
             self.args = self.conf.get_args()
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
+            # isolated run: -m with -o and -f, to analyze a file while
+            # another instance analyzes an interface. Not isolated without -m.
             # redis isn't up yet, so tell from the CLI args
-            if get_isolated_analysis_output_dir() is not None:
+            if is_isolated_run():
                 validate_analysis_paths(
                     self.conf.config,
                     self.args.output,

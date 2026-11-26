@@ -176,10 +176,13 @@ def get_verified_instance(
         script = Path(command[position])
         if not script.is_absolute():
             script = Path(process.cwd()) / script
+
         if script.resolve() != slips_script.resolve():
             return None
+
         if process.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}:
             return None
+
         for parent in process.parents():
             try:
                 parent_command = parent.cmdline()
@@ -358,7 +361,7 @@ def _get_web_ports_of_instance(instance: RunningInstance) -> list[int]:
     return sorted(ports)
 
 
-def _print_instances(instances: list[RunningInstance]) -> None:
+def _print_running_slips_instances(instances: list[RunningInstance]) -> None:
     """Print a table of running instances so the user can pick one.
 
     Parameters:
@@ -409,6 +412,7 @@ def _signal_instance_to_stop(
             or process.status() == psutil.STATUS_ZOMBIE
         ):
             return [], False
+
         if get_verified_instance(process, slips_script) != instance:
             print(
                 f"PID {instance.pid} changed or cannot be verified; not stopped."
@@ -590,7 +594,7 @@ def _is_positive_pid(value: str) -> bool:
     return value.isdecimal() and int(value) > 0
 
 
-def _parse_instance_command(arguments: list[str]) -> argparse.Namespace:
+def _validate_instance_command(arguments: list[str]) -> argparse.Namespace:
     """Parse the arguments of a list, stop or restart command.
 
     Exits with an error message if the PID is invalid.
@@ -607,6 +611,7 @@ def _parse_instance_command(arguments: list[str]) -> argparse.Namespace:
         options.stop
     ):
         parser.error(f"{FLAG.stop} expects a positive PID or all")
+
     if options.restart not in {None, "auto"} and not _is_positive_pid(
         options.restart
     ):
@@ -700,19 +705,23 @@ def handle_instance_command(arguments: list[str]) -> int | None:
             f"{'/'.join(ARGS.stop_daemon)} was removed; "
             f"use {FLAG.stop} [PID|all] instead"
         )
+
     if not any(
         arg in COMMAND_ARGS or arg.startswith(COMMAND_PREFIXES)
         for arg in arguments
     ):
         return None
-    options = _parse_instance_command(arguments)
+
+    options = _validate_instance_command(arguments)
     slips_script = Path(__file__).resolve().parents[2] / "slips.py"
     instances = list_instances(slips_script)
-    _print_instances(instances)
+    _print_running_slips_instances(instances)
     if options.list_instances:
         return 0
+
     if options.restart is not None:
         return _restart_selected_daemon(
             instances, options.restart, slips_script
         )
+
     return _stop_selected_instances(instances, options.stop, slips_script)

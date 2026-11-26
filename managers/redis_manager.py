@@ -27,7 +27,7 @@ from slips_files.common.parsers.arg_parser import (
     create_run_conflict_parser,
 )
 from slips_files.common.parsers.analysis_config import (
-    get_isolated_analysis_output_dir,
+    is_isolated_run,
 )
 from managers.process_manager.instance_control import (
     get_slips_run_arguments,
@@ -169,7 +169,7 @@ class RedisManager:
             config = yaml.safe_load(source) or {}
         if not isinstance(config, dict):
             raise ValueError("Invalid Slips configuration")
-        is_isolated = get_isolated_analysis_output_dir(arguments) is not None
+        is_isolated = is_isolated_run(arguments)
         parameters = config.get("parameters") or {}
         web_config = config.get("web_interface") or {}
         if not isinstance(parameters, dict) or not isinstance(
@@ -230,11 +230,10 @@ class RedisManager:
         output = Path(self.main.args.output).resolve()
         other_output = (other.cwd / other.args.output).resolve()
         permanent = Path(self.main.conf.permanent_dir()).resolve()
-        # isolated analyses (-f) reuse the configured permanent dir (redis
+        # isolated analyses (-m with -o and -f, run next to an interface
+        # instance; -m is required) reuse the configured permanent dir (redis
         # password, web login) and never write learned data to it
-        sharing_is_expected = (
-            get_isolated_analysis_output_dir() is not None or other.is_isolated
-        )
+        sharing_is_expected = is_isolated_run() or other.is_isolated
         other_permanent = (
             other.cwd / (other.parameters.get("permanent_dir") or "permanent")
         ).resolve()
@@ -313,8 +312,10 @@ class RedisManager:
         """Stop this run if it would clash with a running --keep-history run."""
         if getattr(self.main.args, "keep_history", False) is True:
             return
+        # an isolated run (-m with -o and -f) is meant to run next to an
+        # interface instance, so check it against all running instances.
         # runs before redis is up, so tell from the CLI args
-        if get_isolated_analysis_output_dir() is not None:
+        if is_isolated_run():
             for instance in list_instances(Path("slips.py")):
                 self._assert_history_run_isolated(psutil.Process(instance.pid))
             return

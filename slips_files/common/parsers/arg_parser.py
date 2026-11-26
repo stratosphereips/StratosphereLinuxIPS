@@ -133,6 +133,10 @@ def create_isolated_analysis_parser() -> argparse.ArgumentParser:
     """Build a parser that knows only the options that decide if a run is an
     isolated file analysis.
 
+    An isolated run analyzes a file next to an instance that analyzes an
+    interface. It needs -m and -o together (with -f); without -m it isn't
+    isolated.
+
     Returns:
         The parser.
     """
@@ -142,10 +146,6 @@ def create_isolated_analysis_parser() -> argparse.ArgumentParser:
     parser.add_argument("-o", "--output")
     parser.add_argument("-i", "--interface")
     parser.add_argument("-g", "--growing")
-    parser.add_argument("-P", "--port")
-    parser.add_argument("-c", "--config")
-    parser.add_argument("-cc", "--clearcache", action="store_true")
-    parser.add_argument("--keep-history", action="store_true")
     return parser
 
 

@@ -8,6 +8,9 @@ import time
 
 from modules.supported_module_names import Modules
 from modules.web_interface.web_interface import WebInterface
+from slips_files.common.parsers.analysis_config import (
+    is_isolated_run,
+)
 from slips_files.common.slips_utils import utils
 
 
@@ -148,8 +151,8 @@ class WebInterfaceShutdownMixin:
         bind_mode = getattr(self.main.conf, "web_interface_bind", "localhost")
         if not isinstance(bind_mode, str):
             bind_mode = "localhost"
-        # file analyses only listen on localhost
-        if bind_mode != "interface" or not self.main.db.is_running_non_stop():
+        # isolated runs only listen on localhost
+        if bind_mode != "interface" or is_isolated_run():
             return "localhost"
         for interface in utils.get_all_interfaces(self.main.args):
             candidate = self.main.db.get_host_ip(interface)

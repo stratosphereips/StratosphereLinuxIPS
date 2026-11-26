@@ -13,6 +13,9 @@ from pathlib import Path
 from re import split
 from typing import Any, Dict, List, Optional, Tuple, Union
 
+from slips_files.common.parsers.analysis_config import (
+    is_isolated_run,
+)
 from slips_files.common.slips_utils import utils
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
@@ -433,10 +436,10 @@ class ZeekInputUtils:
         """
 
         without_ext = Path(self.input.given_path).stem
-        # file analyses always keep zeek files in their own output dir
+        # isolated runs always keep zeek files in their own output dir
         if (
             self.input.conf.store_zeek_files_in_the_output_dir()
-            or not self.is_running_non_stop
+            or is_isolated_run()
         ):
             zeek_dir = Path(self.input.args.output) / "zeek_files"
         else:

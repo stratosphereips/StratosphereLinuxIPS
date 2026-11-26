@@ -1,6 +1,7 @@
 """Keep analyses of files, run next to other Slips instances, from mixing
 with the data of live runs."""
 
+from argparse import Namespace
 from copy import deepcopy
 from pathlib import Path
 
@@ -9,48 +10,49 @@ from slips_files.common.parsers.arg_parser import (
 )
 
 
-def get_isolated_analysis_output_dir(
-    arguments: list[str] | None = None,
-) -> str | None:
-    """Check if this is an isolated file analysis, and get its output directory.
+def _is_isolated_file_analysis(options: Namespace) -> bool:
+    """Check if the parsed options describe an isolated file analysis.
+    isolated runs require -f -i and -m together.
 
-    An isolated analysis reads a file (not an interface), is started with
-    --multiinstance and its own output directory, and gets its own Redis
-    server so it doesn't share data with other runs.
+    Parameters:
+        options: The parsed command-line options.
+    """
+    return bool(
+        options.multiinstance
+        and options.filepath
+        and options.output
+        and not options.interface
+        and not options.growing
+    )
+
+
+def is_isolated_run(arguments: list[str] | None = None) -> bool:
+    """Check if a Slips run is isolated.
+
+    An isolated run analyzes a file while another instance can be analyzing
+    an interface, so it must not share that instance's data. It needs -m
+    , -o  AND -f, and no -i or -g.
 
     Parameters:
         arguments: Command-line arguments. If None, the arguments of the
             current process are used.
 
     Returns:
-        The output directory, or None if this isn't an isolated analysis.
+        True if the run is isolated.
     """
     parser = create_isolated_analysis_parser()
     options, _ = parser.parse_known_args(arguments)
-    if not (
-        options.multiinstance
-        and options.filepath
-        and options.output
-        and not options.interface
-        and not options.growing
-    ):
-        return None
-    if options.clearcache or options.keep_history or options.port == "6379":
-        parser.error(
-            "An isolated file analysis cannot use --clearcache, "
-            "--keep-history or Redis port 6379"
-        )
-    return str(Path(options.output))
+    return _is_isolated_file_analysis(options)
 
 
 def build_isolated_analysis_config(config: dict, output: str) -> dict:
-    """Build the config that an isolated analysis runs with.
+    """Build the config to record for an isolated analysis.
 
     ConfigParser only reads slips.yaml, so it doesn't know about the
-    overrides below. The code that reads these settings checks
-    db.is_running_non_stop() and applies the same override for file
-    analyses. This function only records them in the metadata dir, so
-    keep both in sync.
+    overrides below. This function doesn't apply them, its result is only
+    recorded in the metadata dir. The code that reads these settings applies
+    them to isolated runs, so keep both in sync. auto_update_slips needs no
+    extra check, since Slips only updates itself on non-stop runs.
 
     Path settings (permanent dir, whitelist, feed downloads, persistent
     stores) are left as configured. Modules that must not write into the

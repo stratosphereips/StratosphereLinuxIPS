@@ -35,12 +35,16 @@ class OwnedProcesses:
         """
         if pid in self.processes or pid <= 1 or pid == self.owner_pid:
             return
+
         try:
             process = psutil.Process(pid)
+            # verify that the PID we're about to track actually belongs to
+            # slips, rather than an unrelated process.
             if self.owner_pid not in {
                 parent.pid for parent in process.parents()
             }:
                 return
+
             self.processes[pid] = process
             for child in process.children(recursive=True):
                 self.processes.setdefault(child.pid, child)
@@ -104,7 +108,8 @@ class OwnedProcesses:
         alive = self._wait_for_exit(pending, 2)
         if alive:
             raise RuntimeError(
-                f"Slips processes still running after cleanup: {[process.pid for process in alive]}"
+                f"Slips processes still running after cleanup: "
+                f"{[process.pid for process in alive]}"
             )
 
     def _wait_for_exit(
