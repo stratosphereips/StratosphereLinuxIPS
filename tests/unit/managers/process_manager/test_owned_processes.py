@@ -206,8 +206,10 @@ def run_shutdown_coordinator(connection: Any, double_interrupt: bool) -> None:
     if double_interrupt:
         manager.shutdown_interactive = Mock(side_effect=KeyboardInterrupt())
     signal.signal(signal.SIGINT, signal.default_int_handler)
-    connection.send((worker.pid, detached_pid))
     try:
+        # the test presses Ctrl-C as soon as it gets the PIDs, which can be
+        # before we reach pause(), so it must already be caught here
+        connection.send((worker.pid, detached_pid))
         signal.pause()
     except KeyboardInterrupt:
         manager.handle_keyboard_interrupt()
