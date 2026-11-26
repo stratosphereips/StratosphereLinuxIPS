@@ -885,7 +885,7 @@ or
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
 - ```-D``` or  ```--daemon``` Run slips in daemon mode
 - ```-k``` or  ```--killall``` Kill all unused redis servers
-- `--list-instances` List accessible running Slips instances from this checkout.
+- `--list-instances` List accessible running Slips instances from this Slips folder.
 - `--stop [PID|all]` Stop the only running instance, a chosen PID, or all instances from this folder.
 - `--restart [PID]` Stop a running daemon and start it again with its original arguments.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one

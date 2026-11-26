@@ -15,11 +15,15 @@ from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 
 
-def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
-    """Write the paths the run really used, without changing the original YAML.
+@pytest.mark.parametrize("isolated", [True, False])
+def test_metadata_records_overrides_only_for_isolated_runs(
+    tmp_path: Path, isolated: bool
+) -> None:
+    """Record the overrides of isolated runs, keeping the original YAML.
 
     Parameters:
         tmp_path: Original config and independent run output.
+        isolated: Whether the run is an isolated file analysis.
     """
     manager = ModuleFactory().create_metadata_manager_obj()
     source = tmp_path / "slips.yaml"
@@ -35,11 +39,17 @@ def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
     manager.main.conf.config = original
     manager.main.conf.web_interface_port = 55012
     manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
-    manager._add_metadata()
+    with patch(
+        "managers.metadata_manager.is_isolated_run",
+        return_value=isolated,
+    ):
+        manager._add_metadata()
     captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
     assert captured["parameters"]["permanent_dir"] == "live-state"
     assert not (output / "permanent").exists()
-    assert captured["web_interface"]["bind"] == "localhost"
+    assert captured["web_interface"].get("bind") == (
+        "localhost" if isolated else None
+    )
     assert captured["web_interface"]["port"] == 55012
     assert yaml.safe_load(source.read_text()) == original
 

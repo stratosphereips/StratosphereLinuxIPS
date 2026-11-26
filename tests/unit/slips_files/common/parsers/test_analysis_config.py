@@ -8,7 +8,7 @@ import pytest
 import yaml
 
 from slips_files.common.parsers.analysis_config import (
-    build_isolated_analysis_config, get_isolated_analysis_output_dir,
+    build_isolated_analysis_config, is_isolated_run,
     validate_analysis_paths,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -16,37 +16,25 @@ from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize("arguments, expected", [
-    (["-m", "-f", "test.pcap", "-o", "output/test"], "output/test"),
-    (["--multiinstance", "--filepath=logs", "--output=output/logs"], "output/logs"),
-    (["-mfake"], None),
-    (["-m", "-i", "eth0", "-o", "output/live"], None),
-    (["-f", "test.pcap", "-o", "output/test"], None),
-    (["-m", "-f", "test.pcap"], None),
-    (["-m", "-f", "test.pcap", "-o", "output/test", "-g", "logs"], None),
-    (["--list-instances"], None),
+    (["-m", "-f", "test.pcap", "-o", "output/test"], True),
+    (["--multiinstance", "--filepath=logs", "--output=output/logs"], True),
+    (["-m", "-f", "test.pcap", "-o", "output/test", "-cc"], True),
+    (["-mfake"], False),
+    (["-m", "-i", "eth0", "-o", "output/live"], False),
+    (["-f", "test.pcap", "-o", "output/test"], False),
+    (["-m", "-f", "test.pcap"], False),
+    (["-m", "-f", "test.pcap", "-o", "output/test", "-g", "logs"], False),
+    (["--list-instances"], False),
 ])
-def test_isolated_analysis_selection(arguments: list[str], expected: str | None) -> None:
+def test_isolated_analysis_selection(arguments: list[str], expected: bool) -> None:
     """A run is isolated only if it has all of -m, -f and -o and no -i or -g.
 
     Parameters:
         arguments: The command-line arguments of the run.
-        expected: The output directory, or None if the run is not isolated.
+        expected: Whether the run is isolated.
     """
     _factory = ModuleFactory()
-    assert get_isolated_analysis_output_dir(arguments) == expected
-
-
-@pytest.mark.parametrize("extra", [["--clearcache"], ["--keep-history"], ["-P", "6379"]])
-def test_isolated_analysis_rejects_shared_cache_operations(extra: list[str]) -> None:
-    """Options that touch shared data are rejected in an isolated analysis.
-
-    Parameters:
-        extra: The option that can't be used with an isolated analysis.
-    """
-    _factory = ModuleFactory()
-    with pytest.raises(SystemExit) as error:
-        get_isolated_analysis_output_dir(["-m", "-f", "test.pcap", "-o", "output/test", *extra])
-    assert error.value.code == 2
+    assert is_isolated_run(arguments) is expected
 
 
 def test_isolated_configuration_preserves_detection_settings(tmp_path: Path) -> None:

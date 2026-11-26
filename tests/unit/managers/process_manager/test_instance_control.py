@@ -235,13 +235,13 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
         instances = control.list_instances(slips_script)
     assert [instance.pid for instance in instances] == [41001, 41002]
     with patch.object(control, "_get_web_ports_of_instance", side_effect=[[55000], []]):
-        control._print_instances(instances)
+        control._print_running_slips_instances(instances)
     listing = capsys.readouterr().out
     assert "eth0" in listing and "test.pcap" in listing
     assert "daemon" in listing and "output/test" in listing
     assert "WEB PORT" in listing and "55000" in listing
     assert "41003" not in listing
-    control._print_instances([])
+    control._print_running_slips_instances([])
     assert "No accessible running" in capsys.readouterr().out
 
 
@@ -260,7 +260,7 @@ def test_saved_viewer_discovery_and_listing(background: bool, capsys: pytest.Cap
     instance = control.get_verified_instance(process, slips_script)
     assert instance is not None
     assert control.get_slips_run_arguments(process.cmdline()) is None
-    control._print_instances([instance])
+    control._print_running_slips_instances([instance])
     listing = capsys.readouterr().out
     assert "saved results" in listing and "output/saved" in listing
     assert ("view-bg" if background else "viewer") in listing
