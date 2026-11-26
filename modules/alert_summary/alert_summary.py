@@ -67,6 +67,7 @@ class AlertSummary(IModule):
         """Initialize channels, queues, and runtime configuration."""
         self.enabled = False
         self.allowed_backends = []
+        self.prompt_style = "standard"
         self.llm_temperature = 0.2
         self.llm_max_tokens = 220
         self.llm_response_timeout_seconds = 120
@@ -112,6 +113,7 @@ class AlertSummary(IModule):
         self.enabled = conf.alert_summary_enabled()
         self.explain_alerts = conf.alert_summary_explain_alerts()
         self.allowed_backends = conf.alert_summary_allowed_backends()
+        self.prompt_style = conf.alert_summary_prompt_style()
         self.llm_temperature = conf.alert_summary_llm_temperature()
         self.llm_max_tokens = conf.alert_summary_llm_max_tokens()
         self.llm_response_timeout_seconds = (
@@ -488,7 +490,11 @@ class AlertSummary(IModule):
         self._dispatch_llm_request(
             phase="reduction",
             messages=messages,
-            max_tokens=REDUCTION_MAX_TOKENS,
+            max_tokens=(
+                min(self.llm_max_tokens, 512)
+                if self.prompt_style == "slips_incident"
+                else REDUCTION_MAX_TOKENS
+            ),
             metadata={
                 "alert_id": job["alert"].id,
                 "profileid": str(job["alert"].profile),
@@ -568,6 +574,14 @@ class AlertSummary(IModule):
         :param reduction_layer: Number of prior reduction layers applied.
         :return: Chat messages for the shared LLM module.
         """
+        if self.prompt_style == "slips_incident":
+            return self._build_slips_incident_messages(
+                alert,
+                evidence_items,
+                evidence_count,
+                grouped_item_count,
+                reduction_layer,
+            )
         history_context = self._build_recent_history_text(
             alert, evidence_items
         )
@@ -605,6 +619,85 @@ class AlertSummary(IModule):
             {"role": "user", "content": user_prompt},
         ]
 
+    def _build_slips_incident_messages(
+        self,
+        alert,
+        evidence_items: list[str],
+        evidence_count: int,
+        grouped_item_count: int,
+        reduction_layer: int,
+    ) -> list[dict[str, str]]:
+        """Build the single-message prompt expected by the Slips summary model.
+
+        Parameters:
+            alert: Alert being summarized.
+            evidence_items: Grouped current evidence lines.
+            evidence_count: Number of current evidence records.
+            grouped_item_count: Number of grouped evidence patterns.
+            reduction_layer: Number of prior reduction layers.
+
+        Returns:
+            One user message with incident metadata and current events.
+        """
+        start_time = self._format_timestamp_for_prompt(
+            getattr(alert.timewindow, "start_time", "")
+        )
+        end_time = self._format_timestamp_for_prompt(
+            getattr(alert.timewindow, "end_time", "")
+        )
+        timeline = f"{start_time} to {end_time}"
+        incident_header = (
+            f"Incident: {alert.id}\n"
+            f"Source IP: {alert.profile.ip} | Timewindow: {alert.timewindow.number}\n"
+            f"Timeline: {timeline}\n"
+            f"Threat Level: {alert.accumulated_threat_level} | Events: {evidence_count}"
+        )
+        event_lines = (
+            "\n".join(
+                f"• {item.replace(' | ', ' - ', 1)}" for item in evidence_items
+            )
+            or "• No event details available [INFO]"
+        )
+        history_context = self._build_recent_history_text(
+            alert, evidence_items
+        ).replace("CURRENT ALERT EVIDENCE DIGEST", "RAW EVENTS")
+        prompt = (
+            "You are a security analyst. Turn Slips incident events into clear, "
+            "concise summaries and assess their severity.\n\n"
+            "INCIDENT METADATA:\n"
+            f"- Incident ID: {alert.id}\n"
+            f"- Source IP: {alert.profile.ip}\n"
+            f"- Timewindow: {alert.timewindow.number}\n"
+            f"- Accumulated Threat Level: {alert.accumulated_threat_level}\n"
+            f"- Time Range: {timeline}\n"
+            f"- Total Events: {evidence_count}\n\n"
+            "RAW EVENTS (Time | Description):\n"
+            f"{incident_header}\n\n{event_lines}\n\n"
+            "YOUR TASK:\n"
+            "1. Merge identical or similar events into one summary line.\n"
+            "2. Explain each event or group in plain language.\n"
+            "3. Rate each line by observed impact: CRITICAL for confirmed "
+            "exploitation or malware; HIGH for scanning or strong suspicious "
+            "behavior; MEDIUM for anomalous behavior; LOW for weak findings; "
+            "INFO for context or normal traffic.\n"
+            "4. Give a severity breakdown. Informational evidence alone "
+            "does not establish a threat.\n\n"
+            "OUTPUT FORMAT (use this structure):\n"
+            f"{incident_header}\n"
+            "• HH:MM-HH:MM - concise grouped event [SEVERITY]\n"
+            f"Total Evidence: {evidence_count} events\n"
+            "Severity breakdown: High: N, Medium: N, Low: N, Info: N\n\n"
+            "EXAMPLES:\n"
+            "- Repeated port scans across hosts → Scanned several hosts on a port [HIGH]\n"
+            "- Multicast group traffic → Multicast traffic [INFO]\n\n"
+            "RULES:\n"
+            "Use only current incident events for the event lines. Do not invent "
+            "facts or repeat events. Keep descriptions short. Do not include "
+            "performance statistics.\n"
+            f"{history_context}"
+        )
+        return [{"role": "user", "content": prompt}]
+
     def _build_reduction_messages(
         self,
         alert,
@@ -625,6 +718,14 @@ class AlertSummary(IModule):
         :param source_item_count: Number of digest items before chunking.
         :return: Chat messages for the shared LLM module.
         """
+        if self.prompt_style == "slips_incident":
+            return self._build_slips_incident_messages(
+                alert,
+                evidence_items,
+                len(evidence_items),
+                len(evidence_items),
+                reduction_layer,
+            )
         user_prompt = (
             "Compress this alert evidence subset into a compact intermediate "
             "digest for a later final analyst summary.\n\n"
@@ -961,6 +1062,8 @@ class AlertSummary(IModule):
 
             if len(group) == 1:
                 line = f"{time_range} | {description}"
+                if severity_text:
+                    line += f" [severity: {severity_text}]"
             else:
                 line = (
                     f"{time_range} | {description} " f"({len(group)}x similar"
@@ -1495,7 +1598,12 @@ class AlertSummary(IModule):
         )
 
         if response.get("success") and str(response.get("text", "")).strip():
-            text = self._normalize_summary_text(response["text"])
+            if self.prompt_style == "slips_incident":
+                text = self._normalize_slips_incident_summary_text(
+                    response["text"]
+                )
+            else:
+                text = self._normalize_summary_text(response["text"])
             if phase == "final_summary":
                 self._write_summary_entry(job["alert"], f"LLM summary: {text}")
                 self._remember_alert_summary(
@@ -1560,6 +1668,28 @@ class AlertSummary(IModule):
         """
         normalized = " ".join(str(text or "").split())
         return normalized.strip()
+
+    def _normalize_slips_incident_summary_text(self, text: str) -> str:
+        """Turn the model's structured incident lines into one alert paragraph.
+
+        Parameters:
+            text: Structured model response.
+
+        Returns:
+            Distinct event summaries in a single plain-text paragraph.
+        """
+        events = []
+        seen = set()
+        for line in str(text or "").splitlines():
+            if not line.lstrip().startswith("•"):
+                continue
+            event = self._normalize_summary_text(line.lstrip()[1:])
+            if event and event not in seen:
+                events.append(event)
+                seen.add(event)
+        if events:
+            return "; ".join(events)
+        return self._normalize_summary_text(text)
 
     def _fail_active_job(self, reason: str):
         """

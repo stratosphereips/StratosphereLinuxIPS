@@ -9,6 +9,7 @@ backend, and publishes the reply on `llm_response`.
 ## Supported providers
 
 - `ollama`
+- `llama_cpp` (local llama.cpp server with an OpenAI-compatible endpoint)
 - `openai`
 - `anthropic`
 
@@ -28,6 +29,11 @@ llm:
       model: qwen2.5:3b
       base_url: http://127.0.0.1:11434
       timeout: 120
+    slips_summary_q4:
+      provider: llama_cpp
+      model: slips-summary-q4
+      base_url: http://127.0.0.1:8080/v1
+      timeout: 300
     openai_default:
       provider: openai
       model: gpt-4o-mini
@@ -53,7 +59,7 @@ Configuration reference:
 
 Per-backend options:
 
-- `provider`: one of `ollama`, `openai`, or `anthropic`.
+- `provider`: one of `ollama`, `llama_cpp`, `openai`, or `anthropic`.
 - `model`: default model used by that backend alias.
 - `base_url`: provider endpoint. If omitted, the module uses the provider
   default.
@@ -63,6 +69,27 @@ Per-backend options:
 - `api_key_file`: optional file path containing the API key.
 - `anthropic_version`: optional Anthropic API version header. Default is
   `2023-06-01`.
+
+`llama_cpp` requires a loopback HTTP endpoint and does not require an API key.
+The server must be started separately before Slips sends requests. The
+`slips_summary_q4` alias selects the locally hosted summary model; keep the
+general LLM backend for regex generation and other tasks.
+
+On macOS, install `llama.cpp` with `brew install llama.cpp`. From the repository
+root, download the 505 MiB Q4_K_M model into a sibling directory and start the
+local server:
+
+```sh
+mkdir -p ../slips-models
+curl -fL https://huggingface.co/stratosphere/qwen3.5-0.8b-slips-immune-summarization/resolve/main/gguf/qwen3.5-0.8b-slips-immune-summarization-Q4_K_M.gguf -o ../slips-models/qwen3.5-0.8b-slips-immune-summarization-Q4_K_M.gguf
+llama-server -m ../slips-models/qwen3.5-0.8b-slips-immune-summarization-Q4_K_M.gguf -c 8192 -t 4 -np 1 -fa off --jinja -ngl 99 -a slips-summary-q4 --host 127.0.0.1 --port 8080
+```
+
+On Linux or Raspberry Pi, install a current llama.cpp build for that platform
+and use the same model and server options. Omit `-ngl 99` if GPU offloading is
+unavailable. The model is trained for incident summaries, not general regex
+generation. See the [model card](https://huggingface.co/stratosphere/qwen3.5-0.8b-slips-immune-summarization)
+and [llama.cpp server documentation](https://github.com/ggml-org/llama.cpp/tree/master/tools/server).
 
 Backend aliases are the names that caller modules use in the request field
 `backend`. The alias is the stable selector. The `model` field inside a request

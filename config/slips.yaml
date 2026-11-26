@@ -302,6 +302,12 @@ llm_proxy:
 
   # Each backend is a named connection that other modules select by alias through the request field backend.
   backends:
+    slips_summary_q4:
+      provider: llama_cpp
+      model: slips-summary-q4
+      base_url: http://127.0.0.1:8080/v1
+      timeout: 300
+
     slips-goldilock:
       # slips-goldilock is the fine-tunned model in Slips for general summary and detection.
       # It is fast enough and good enough
@@ -335,7 +341,7 @@ llm_proxy:
 
 
     local_qwen:
-      # Supported providers: ollama, openai, anthropic
+      # Supported providers: ollama, llama_cpp, openai, anthropic
       provider: ollama
       # Default model for this backend alias. Caller modules may override the
       # model in an individual request while still using this connection.
@@ -385,15 +391,15 @@ alert_summary:
 
   # Preferred LLM backend aliases for alert summaries. If empty, the module
   # falls back to the runtime-ready LLM default backend.
-  #allowed_backends: [local_qwen]
-  allowed_backends: [slips-goldilock]
+  allowed_backends: [slips_summary_q4]
+  prompt_style: slips_incident
 
   # Keep the sampling conservative because this module writes one analyst
   # summary paragraph per alert.
-  llm_temperature: 0.2
+  llm_temperature: 0
 
   # Token budget for the final analyst summary paragraph.
-  llm_max_tokens: 220
+  llm_max_tokens: 1024
 
   # Hard timeout in seconds for one in-flight shared-LLM request.
   # Large alerts may require several internal reduction requests before the
