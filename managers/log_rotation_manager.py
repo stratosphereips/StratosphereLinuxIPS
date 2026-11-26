@@ -145,8 +145,7 @@ class LogRotationManager:
                         f"log_max_size_mb="
                         f"{self.detection_history_policy['log_max_size_mb']}."
                         f" Old copies are kept in {path.parent / 'rotated'}.",
-                        0,
-                        1,
+                        log_to_logfiles_only=True,
                     )
             except Exception as error:
                 self.main.print(

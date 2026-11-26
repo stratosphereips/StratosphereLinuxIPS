@@ -200,7 +200,11 @@ def test_rotate_logs_if_due_reports_a_failure_and_continues() -> None:
 
     failure, success = manager.main.print.call_args_list
     assert "Failed to rotate a.log" in failure.args[0]
+    # failures are errors, so they go to errors.log
+    assert failure.args[1:] == (0, 1)
     assert "Rotated b.log" in success.args[0]
+    # successes are only logged to slips.log
+    assert success.kwargs == {"log_to_logfiles_only": True}
 
 
 def test_rotate_logs_if_due_rotates_a_full_log(tmp_path: Path) -> None:

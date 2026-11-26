@@ -313,10 +313,10 @@ def test_expired_rotated_logs_are_reported_with_the_reason() -> None:
     with patch(f"{MANAGER}.expire_rotated_logs", return_value=2):
         manager._expire_rotated_logs_if_due(1000)
 
-    message, verbosity, debug = manager.main.print.call_args.args
+    message = manager.main.print.call_args.args[0]
     assert "Deleted 2 expired rotated log file(s)" in message
     assert "archive_retention_days=30" in message
-    assert (verbosity, debug) == (0, 1)
+    assert manager.main.print.call_args.kwargs == {"log_to_logfiles_only": True}
 
 
 def test_expired_history_archives_are_reported_with_the_reason() -> None:
@@ -329,6 +329,88 @@ def test_expired_history_archives_are_reported_with_the_reason() -> None:
     message = manager.main.print.call_args.args[0]
     assert "Deleted expired detection history archive(s)" in message
     assert "archive_retention_days=30" in message
+    assert manager.main.print.call_args.kwargs == {"log_to_logfiles_only": True}
+
+
+def test_deleted_flows_are_reported_to_the_log_files_only() -> None:
+    """Keep the flow deletion message out of errors.log and the cli."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.last_flow_cleanup_time = 0
+    manager.main.db.maintain_flow_retention.return_value = ["uid1", "uid2"]
+
+    manager._delete_old_flows_if_due(1000)
+
+    message = manager.main.print.call_args.args[0]
+    assert "Deleted 2 old flow(s)" in message
+    assert manager.main.print.call_args.kwargs == {"log_to_logfiles_only": True}
+
+
+@pytest.mark.parametrize(
+    "size_pressure, expected_reason",
+    [
+        (True, "max_active_size_mb=2048"),
+        (False, "active_days=90"),
+    ],
+)
+def test_new_archive_file_is_reported_with_the_reason(
+    size_pressure: bool, expected_reason: str
+) -> None:
+    """Log once per new archive file, with the limit that caused it.
+
+    Parameters:
+        size_pressure: Whether the archiving was caused by the size limit.
+        expected_reason: Setting expected in the logged reason.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+    manager.main.args.output = "output/run"
+    manager.main.db.maintain_detection_history.return_value = {
+        "deferred": False,
+        "new_archive_file": "detections-2026-11-0001.sqlite",
+        "size_pressure": size_pressure,
+    }
+
+    manager._maintain_detection_history(1000)
+
+    message = manager.main.print.call_args.args[0]
+    assert (
+        "output/run/databases/archives/detections-2026-11-0001.sqlite"
+        in message
+    )
+    assert expected_reason in message
+    assert "archive_file_size_mb=256" in message
+    assert manager.main.print.call_args.kwargs == {"log_to_logfiles_only": True}
+
+
+def test_new_archive_file_is_reported_even_when_the_pass_is_deferred() -> None:
+    """A file started before the pass was deferred must still be logged."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+    manager.main.args.output = "output/run"
+    manager.main.db.maintain_detection_history.return_value = {
+        "deferred": True,
+        "new_archive_file": "detections-2026-11-0001.sqlite",
+    }
+
+    manager._maintain_detection_history(1000)
+
+    assert "detections-2026-11-0001.sqlite" in (
+        manager.main.print.call_args_list[0].args[0]
+    )
+
+
+def test_passes_without_a_new_archive_file_stay_silent() -> None:
+    """Archiving into an existing file must not log anything."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+    manager.main.db.maintain_detection_history.return_value = {
+        "deferred": False,
+        "units": 5,
+    }
+
+    manager._maintain_detection_history(1000)
+
+    manager.main.print.assert_not_called()
 
 
 def test_routine_history_steps_are_not_reported() -> None:
