@@ -138,6 +138,45 @@ def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path:
     assert published["version"] == utils.get_current_version()
 
 
+def test_on_click_slips_incident_explanation_uses_model_format(tmp_path: Path) -> None:
+    """Send on-click evidence in the summary model's incident format."""
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._run_config = lambda: ({"alert_summary": {
+        "enabled": True, "prompt_style": "slips_incident",
+        "allowed_backends": ["slips_summary_q4"],
+    }}, None)
+    with sqlite3.connect(reader.sqlite_path) as db:
+        db.execute("CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY,data TEXT)")
+        db.execute("INSERT INTO evidence VALUES (?,?)", ("e1", json.dumps({
+            "profile": {"ip": "192.168.1.25"},
+            "timestamp": "2026-04-28 10:00:00",
+            "evidence_type": "Horizontal Port Scan",
+            "threat_level": "high",
+            "description": "Scanned 30 local hosts on port 22/TCP",
+        })))
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local", "backends": {
+            "slips_summary_q4": {"provider": "llama_cpp"}}})
+        if key == "available_llm_backends" else None
+    )
+    reader.redis.exists.return_value = False
+    reader.redis.set.return_value = True
+    reader.redis.publish.return_value = 1
+
+    reader.request_explanation({"kind": "evidence", "id": "e1"})
+
+    published = json.loads(reader.redis.publish.call_args.args[1])
+    assert published["backend"] == "slips_summary_q4"
+    assert published["temperature"] == 0
+    assert published["messages"][0]["role"] == "user"
+    assert "RAW EVENTS (Time | Description):" in published["messages"][0]["content"]
+    assert "Scanned 30 local hosts" in published["messages"][0]["content"]
+
+
 def test_group_explanation_keeps_time_and_interface_scope(tmp_path: Path) -> None:
     """Explain only a bounded sample from the selected visible group."""
     _factory = ModuleFactory()

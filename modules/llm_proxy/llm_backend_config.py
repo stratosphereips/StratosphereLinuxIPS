@@ -5,6 +5,7 @@
 import os
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from slips_files.common.ips import IPV4_LOCALHOST
 from modules.llm_proxy.llm_errors import LLMConfigurationError
@@ -38,7 +39,7 @@ class LLMBackendConfig:
             raise LLMConfigurationError(f"Backend {alias} must be a mapping.")
 
         provider = str(data.get("provider", "")).strip().lower()
-        if provider not in {"ollama", "openai", "anthropic"}:
+        if provider not in {"ollama", "openai", "anthropic", "llama_cpp"}:
             raise LLMConfigurationError(
                 f"Backend {alias} has unsupported provider {provider!r}."
             )
@@ -60,8 +61,21 @@ class LLMBackendConfig:
                 "ollama": f"http://{IPV4_LOCALHOST}:11434",
                 "openai": "https://api.openai.com/v1",
                 "anthropic": "https://api.anthropic.com",
+                "llama_cpp": f"http://{IPV4_LOCALHOST}:8080/v1",
             }[provider]
         base_url = base_url.rstrip("/")
+
+        if provider == "llama_cpp":
+            parsed = urlsplit(base_url)
+            if (
+                parsed.scheme != "http"
+                or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}
+                or parsed.username
+                or parsed.password
+            ):
+                raise LLMConfigurationError(
+                    f"Backend {alias} must use a localhost HTTP endpoint."
+                )
 
         api_key = cls._resolve_api_key(data)
         if provider in {"openai", "anthropic"} and not api_key:

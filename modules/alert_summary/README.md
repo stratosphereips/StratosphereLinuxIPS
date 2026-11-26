@@ -59,6 +59,7 @@ alert_summary:
   enabled: false
   log_verbosity: 2
   allowed_backends: []
+  prompt_style: standard
   llm_temperature: 0.2
   llm_max_tokens: 220
   llm_response_timeout_seconds: 120
@@ -77,6 +78,9 @@ Configuration reference:
   and `3` for prompt-budget and reduction-layer details.
 - `allowed_backends`: preferred runtime-ready LLM backend aliases for this
   module. If empty, the module falls back to the shared LLM default backend.
+- `prompt_style`: `standard` for the existing two-message prompt, or
+  `slips_incident` for the single-user-message format used by the local
+  Qwen3.5 Slips summary model.
 - `llm_temperature`: low-temperature setting used to keep summaries stable and
   analyst-oriented.
 - `llm_max_tokens`: output budget for the final analyst paragraph.
@@ -112,6 +116,15 @@ The final prompt is built around:
 Intermediate reduction prompts use the same incident metadata but ask the model
 to compress one evidence chunk into a shorter digest for the next reduction
 layer or the final summary while preserving those threat-level distinctions.
+
+To use the local Qwen3.5 summary model, start llama.cpp as described in the
+[LLM module guide](../llm_proxy/README.md), enable `llm_proxy` and
+`alert_summary`, set `allowed_backends: [slips_summary_q4]`, and set
+`prompt_style: slips_incident`. Use `llm_temperature: 0` and
+`llm_max_tokens: 1024`. Keep a separate general-purpose backend for regex
+generation; this model is trained for incident summaries. On-click evidence
+and group explanations use the same incident-style prompt when this style is
+selected.
 
 
 ## Recent alert history

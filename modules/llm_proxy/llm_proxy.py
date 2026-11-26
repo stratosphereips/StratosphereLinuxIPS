@@ -90,7 +90,7 @@ class LLMProxy(IModule):
         # Keep the reusable HTTP connection pool comfortably above the
         # worker concurrency so busy runs do not spam pool-discard warnings.
         pool_maxsize = max(2, self.worker_threads * 2)
-        if config.provider == "openai":
+        if config.provider in {"openai", "llama_cpp"}:
             return OpenAIBackend(config, pool_maxsize=pool_maxsize)
         if config.provider == "anthropic":
             return AnthropicBackend(config, pool_maxsize=pool_maxsize)

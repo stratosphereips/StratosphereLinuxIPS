@@ -1686,6 +1686,23 @@ class ConfigParser(object):
             str(backend).strip() for backend in value if str(backend).strip()
         ]
 
+    def alert_summary_prompt_style(self) -> str:
+        """Select the prompt format used for generated alert summaries.
+
+        Returns:
+            Configured format, falling back to the standard alert prompt.
+        """
+        value = (
+            str(
+                self.read_configuration(
+                    "alert_summary", "prompt_style", "standard"
+                )
+            )
+            .strip()
+            .lower()
+        )
+        return value if value in {"standard", "slips_incident"} else "standard"
+
     def alert_summary_llm_temperature(self) -> float:
         value = self.read_configuration(
             "alert_summary", "llm_temperature", 0.2

@@ -70,6 +70,7 @@ def test_alert_summary_config_defaults():
     assert parser.alert_summary_explain_evidence() is True
     assert parser.alert_summary_explain_evidence_groups() is True
     assert parser.alert_summary_allowed_backends() == []
+    assert parser.alert_summary_prompt_style() == "standard"
     assert parser.alert_summary_log_verbosity() == 2
     assert parser.alert_summary_llm_temperature() == 0.2
     assert parser.alert_summary_llm_max_tokens() == 220
@@ -172,6 +173,43 @@ def test_build_prompt_messages_uses_incident_metadata_and_digest():
     )
     assert "Prompt version: alert-summary-v4" in messages[1]["content"]
     assert "RECENT ALERT HISTORY" not in messages[1]["content"]
+
+
+def test_slips_incident_prompt_uses_single_user_message() -> None:
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    alert_summary.prompt_style = "slips_incident"
+    evidence = _build_evidence()
+
+    messages = alert_summary._build_prompt_messages(
+        _build_alert(evidence),
+        ["10:00 | Connection to 203.0.113.10 without a preceding DNS lookup."],
+        1, 1, 0,
+    )
+
+    assert len(messages) == 1
+    assert messages[0]["role"] == "user"
+    assert "INCIDENT METADATA:" in messages[0]["content"]
+    assert "RAW EVENTS (Time | Description):" in messages[0]["content"]
+    assert "Incident:" in messages[0]["content"]
+    assert "Severity breakdown:" in messages[0]["content"]
+    assert "Connection to 203.0.113.10" in messages[0]["content"]
+    assert "Informational evidence alone" in messages[0]["content"]
+
+
+def test_slips_incident_summary_keeps_distinct_event_lines() -> None:
+    alert_summary = ModuleFactory().create_alert_summary_obj()
+    reply = (
+        "Incident: example\n"
+        "• 09:10 - Port scan of several hosts [HIGH]\n"
+        "• 09:10 - Port scan of several hosts [HIGH]\n"
+        "• 09:40 - Successful login [INFO]\n"
+        "Severity breakdown: High: 1, Info: 1"
+    )
+
+    assert alert_summary._normalize_slips_incident_summary_text(reply) == (
+        "09:10 - Port scan of several hosts [HIGH]; "
+        "09:40 - Successful login [INFO]"
+    )
 
 
 def test_build_reduction_messages_preserves_info_threat_level_guidance():

@@ -31,14 +31,14 @@ class MixinOpenAIBackend(LLMBackend):
         if request.get("max_tokens") is not None:
             payload["max_tokens"] = request["max_tokens"]
 
+        headers = {"Content-Type": "application/json"}
+        if self.config.api_key:
+            headers["Authorization"] = f"Bearer {self.config.api_key}"
         response = self._request_json(
             "POST",
             url,
             payload,
-            headers={
-                "Authorization": f"Bearer {self.config.api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
         )
 
         choices = response.get("choices") or []
