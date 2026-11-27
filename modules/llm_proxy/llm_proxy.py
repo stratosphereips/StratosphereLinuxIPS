@@ -5,6 +5,7 @@ import logging
 import os
 import queue
 import re
+import sqlite3
 import threading
 import time
 import uuid
@@ -21,6 +22,10 @@ from modules.llm_proxy.llm_backend_config import LLMBackendConfig
 from modules.llm_proxy.llm_errors import LLMConfigurationError, LLMRequestError
 from modules.llm_proxy.ollama_backend_mixin import MixinOllamaBackend
 from modules.llm_proxy.openai_backend_mixin import MixinOpenAIBackend
+from modules.llm_proxy.response_cache import (
+    LLMResponseCache,
+    response_cache_path,
+)
 
 
 AnthropicBackend = MixinAnthropicBackend
@@ -49,6 +54,7 @@ class LLMProxy(IModule):
         self.queue_size = 100
         self.last_request_activity = time.time()
         self.operation_log = None
+        self.response_cache: LLMResponseCache | None = None
         self.operation_log_path = self.get_module_specific_output_path(
             "llm_proxy.log"
         )
@@ -173,6 +179,13 @@ class LLMProxy(IModule):
             1,
             0,
         )
+
+        try:
+            self.response_cache = LLMResponseCache(
+                response_cache_path(self.conf.permanent_dir())
+            )
+        except (OSError, sqlite3.Error) as exc:
+            self._log_operation(f"Persistent LLM cache unavailable: {exc}")
 
         for idx in range(self.worker_threads):
             worker = threading.Thread(
@@ -320,7 +333,40 @@ class LLMProxy(IModule):
         try:
             request = self._prepare_request(payload)
             backend = self.backends[request["backend"]]
-            result = backend.generate(request)
+            cache_key = ""
+            cached_result = None
+            if payload.get("cache") is True and self.response_cache:
+                cache_key = self.response_cache.key(request, backend.config)
+                try:
+                    cached_result = self.response_cache.get(cache_key)
+                except (OSError, sqlite3.Error, ValueError) as exc:
+                    self._log_operation(
+                        f"Persistent LLM cache read failed: {exc}"
+                    )
+            if cached_result:
+                result = {**cached_result, "usage": {}}
+            else:
+                result = backend.generate(request)
+                if cache_key and result.get("text"):
+                    try:
+                        self.response_cache.put(
+                            cache_key,
+                            {
+                                "text": result["text"],
+                                "provider": result["provider"],
+                                "model": result["model"],
+                                "backend": request["backend"],
+                            },
+                            (
+                                str(metadata.get("cache_key") or "")
+                                if requester == "web_explain"
+                                else ""
+                            ),
+                        )
+                    except (OSError, sqlite3.Error, ValueError) as exc:
+                        self._log_operation(
+                            f"Persistent LLM cache write failed: {exc}"
+                        )
             response = {
                 "request_id": request_id,
                 "requester": requester,
@@ -330,6 +376,7 @@ class LLMProxy(IModule):
                 "success": True,
                 "text": result["text"],
                 "usage": result["usage"],
+                "cached": bool(cached_result),
                 "metadata": metadata,
                 "ts": time.time(),
             }
@@ -338,6 +385,7 @@ class LLMProxy(IModule):
                 f"request_id={request_id} "
                 f"backend={request['backend']} "
                 f"success=True "
+                f"cached={bool(cached_result)} "
                 f"output_chars={len(response['text'])}"
             )
         except (LLMRequestError, KeyError, ValueError) as exc:

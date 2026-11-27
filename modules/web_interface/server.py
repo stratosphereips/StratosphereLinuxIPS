@@ -57,6 +57,10 @@ from slips_files.core.structures.evidence import (
     is_icmp_protocol,
 )
 from modules.supported_module_names import Modules
+from modules.llm_proxy.response_cache import (
+    LLMResponseCache,
+    response_cache_path,
+)
 from modules.smb_analyzer.settings import RULES as SMB_RULES
 from modules.arp.scan_settings import ARP_SCAN_EXPLANATIONS
 from modules.p2p_trust.trust.base_model import (
@@ -581,6 +585,9 @@ class RunDataReader:
             **flags,
             "ready": bool(backend),
             "backend": backend,
+            "model": (
+                backends.get(backend, {}).get("model", "") if backend else ""
+            ),
             "prompt_style": settings.get("prompt_style", "standard"),
         }
 
@@ -634,7 +641,7 @@ class RunDataReader:
         return {"available": False, "text": "", "error": ""}
 
     def explanation_result(self, digest: str) -> Dict[str, Any]:
-        """Read one expiring on-demand explanation result.
+        """Read a saved on-demand explanation result.
 
         Parameters:
             digest: SHA-256 cache identifier returned to the browser.
@@ -653,6 +660,24 @@ class RunDataReader:
                 "error": payload.get("error", ""),
                 "backend": payload.get("backend", ""),
             }
+        config, snapshot = self._run_config()
+        if snapshot is not None:
+            settings = config.get("parameters", {})
+            settings = settings if isinstance(settings, dict) else {}
+            permanent_dir = settings.get("permanent_dir") or "permanent"
+            try:
+                saved = LLMResponseCache(
+                    response_cache_path(str(permanent_dir)), create=False
+                ).get_web(digest)
+            except (OSError, sqlite3.Error, ValueError):
+                saved = None
+            if saved:
+                return {
+                    "status": "ready",
+                    "text": saved.get("text", ""),
+                    "error": "",
+                    "backend": saved.get("backend", ""),
+                }
         if self.redis.exists(f"web:explain:pending:{digest}"):
             return {"status": "pending"}
         return {"status": "expired"}
@@ -810,14 +835,6 @@ class RunDataReader:
             sort_keys=True,
             ensure_ascii=False,
         )
-        digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
-        current = self.explanation_result(digest)
-        if current["status"] in {"ready", "pending"}:
-            return {"id": digest, **current}
-        if not self.redis.set(
-            f"web:explain:pending:{digest}", "1", nx=True, ex=600
-        ):
-            return {"id": digest, "status": "pending"}
         prompt = (
             "Explain the observed network evidence for an analyst in plain English. "
             "State what happened and why Slips flagged it. Distinguish observation "
@@ -834,10 +851,28 @@ class RunDataReader:
             prompt = self._build_slips_incident_explanation_prompt(
                 str(source_ip), scope, facts
             )
+        digest_material = json.dumps(
+            {
+                "prompt": prompt,
+                "backend": status["backend"],
+                "model": status.get("model", ""),
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        digest = hashlib.sha256(digest_material.encode("utf-8")).hexdigest()
+        current = self.explanation_result(digest)
+        if current["status"] in {"ready", "pending"}:
+            return {"id": digest, **current}
+        if not self.redis.set(
+            f"web:explain:pending:{digest}", "1", nx=True, ex=600
+        ):
+            return {"id": digest, "status": "pending"}
         request = {
             "request_id": str(uuid.uuid4()),
             "requester": "web_explain",
             "backend": status["backend"],
+            "cache": True,
             "messages": [{"role": "user", "content": prompt}],
             "temperature": (
                 0 if status["prompt_style"] == "slips_incident" else 0.2

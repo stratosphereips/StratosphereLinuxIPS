@@ -525,6 +525,7 @@ class AlertSummary(IModule):
             "request_id": request_id,
             "requester": self.name,
             "backend": self.active_job["backend"],
+            "cache": True,
             "messages": messages,
             "temperature": self.llm_temperature,
             "max_tokens": max_tokens,

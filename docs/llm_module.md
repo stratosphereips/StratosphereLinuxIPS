@@ -17,6 +17,19 @@ The module:
 4. Sends each request to the selected backend
 5. Publishes the result to `llm_response`
 
+## Reusing answers
+
+Alert summaries and explanations requested from the web save successful LLM
+answers in `permanent/databases/llm_responses.sqlite`, under the configured
+`parameters.permanent_dir`. Slips reuses an answer when the prompt, model,
+backend, temperature, and token limit match, including after a restart. If the
+evidence or prompt changes, it asks the model again. Failed or empty answers
+are not saved. Regex generation continues to generate fresh patterns.
+
+The cache is limited to 50,000 responses or 256 MiB of response data. Slips
+removes the oldest response when the limit is reached. On-click explanations
+remain available from this database after their temporary Redis result expires.
+
 Supported providers:
 
 - `ollama`
