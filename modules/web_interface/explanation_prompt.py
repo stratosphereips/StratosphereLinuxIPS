@@ -171,6 +171,61 @@ def explain_https_anomaly_group(
     )
 
 
+def explain_unknown_port_group(
+    matching_total: int, records: list[dict[str, Any]]
+) -> str | None:
+    """Explain Unknown Port findings using counts across the selected records.
+
+    Parameters:
+        matching_total: Number of records matching the group filters.
+        records: Complete small group or bounded sample of a large group.
+
+    Returns:
+        Grounded explanation, or None for another detection type.
+    """
+    if not records or any(
+        record.get("evidence_type") != "UNKNOWN_PORT" for record in records
+    ):
+        return None
+    protocols: Counter[str] = Counter()
+    ports: set[tuple[str, int]] = set()
+    destinations: set[str] = set()
+    for record in records:
+        protocol = str(record.get("proto") or "").upper()
+        try:
+            port = int(record.get("dst_port"))
+        except (TypeError, ValueError):
+            continue
+        victim = record.get("victim") or {}
+        destination = (
+            str(victim.get("value") or "") if isinstance(victim, dict) else ""
+        )
+        if not protocol or not destination:
+            continue
+        protocols[protocol] += 1
+        ports.add((protocol, port))
+        destinations.add(destination)
+    observed = sum(protocols.values())
+    if not observed:
+        return None
+    scope = (
+        f"Across all {matching_total:,} records in this group"
+        if len(records) == matching_total
+        else f"In {len(records)} sampled records from this group of {matching_total:,}"
+    )
+    protocol_text = ", ".join(
+        f"{count} {protocol}" for protocol, count in protocols.most_common()
+    )
+    return (
+        f"{scope}, Slips reported {observed} Unknown Port findings "
+        f"({protocol_text}) involving {len(destinations)} destination IPs "
+        f"and {len(ports)} distinct destination ports. Slips flagged each "
+        "because its destination port was not recognized as a known service "
+        "or an organization-specific port. Check the linked flows and the "
+        "application responsible for this traffic."
+    )
+
+
 def build_explanation_prompt(
     kind: str, matching_total: int, records: list[dict[str, Any]]
 ) -> str:

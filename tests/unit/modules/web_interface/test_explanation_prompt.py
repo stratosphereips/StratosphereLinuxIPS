@@ -8,6 +8,7 @@ from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
     explain_https_anomaly_group,
     explain_localnet_group,
+    explain_unknown_port_group,
 )
 from tests.module_factory import ModuleFactory
 
@@ -137,3 +138,26 @@ def test_https_anomaly_explanation_requires_its_own_module() -> None:
     }]
 
     assert explain_https_anomaly_group(1, records) is None
+
+
+def test_unknown_port_group_counts_all_ports_and_destinations() -> None:
+    """Describe the whole group rather than one repeated port in a sample."""
+    _factory = ModuleFactory()
+    records = [
+        {
+            "evidence_type": "UNKNOWN_PORT",
+            "proto": "udp",
+            "dst_port": 19295 + (index % 37),
+            "victim": {"value": f"104.29.159.{index % 44}"},
+        }
+        for index in range(50)
+    ]
+
+    explanation = explain_unknown_port_group(50, records)
+
+    assert explanation is not None
+    assert "Across all 50 records" in explanation
+    assert "50 Unknown Port findings (50 UDP)" in explanation
+    assert "44 destination IPs and 37 distinct destination ports" in explanation
+    assert "3 contacts" not in explanation
+    assert "DIFFERENT_LOCALNET" not in explanation

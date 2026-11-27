@@ -338,6 +338,66 @@ def test_https_anomaly_group_uses_its_recorded_reasons(tmp_path: Path) -> None:
     reader.redis.publish.assert_not_called()
 
 
+def test_small_unknown_port_group_counts_every_record(tmp_path: Path) -> None:
+    """Fetch all matching records before counting an Unknown Port group.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True}}, None)
+    records = [
+        {
+            "id": f"e{index}",
+            "evidence_type": "UNKNOWN_PORT",
+            "profile_ip": "192.168.1.158",
+            "proto": "udp",
+            "dst_port": 19295 + (index % 37),
+            "victim": {"value": f"104.29.159.{index % 44}"},
+        }
+        for index in range(50)
+    ]
+    reader.evidence = Mock(
+        side_effect=lambda query: {
+            "total": 50,
+            "items": records[: int(query["limit"][0])],
+        }
+    )
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps(
+            {
+                "default_backend": "local_qwen",
+                "backends": {
+                    "local_qwen": {"model": "qwen2.5-3b"},
+                },
+            }
+        )
+        if key == "available_llm_backends"
+        else None
+    )
+    reader.redis.exists.return_value = False
+
+    result = reader.request_explanation(
+        {
+            "kind": "group",
+            "query": {
+                "profile": "192.168.1.158",
+                "type": "UNKNOWN_PORT",
+            },
+        }
+    )
+
+    assert result["status"] == "ready"
+    assert "50 Unknown Port findings" in result["text"]
+    assert "44 destination IPs and 37 distinct destination ports" in result["text"]
+    assert reader.evidence.call_count == 2
+    assert reader.evidence.call_args.args[0]["limit"] == ["50"]
+    reader.redis.publish.assert_not_called()
+
+
 def test_alert_explanation_reads_only_matching_summary(tmp_path: Path) -> None:
     """Show the saved summary for the selected alert ID only."""
     _factory = ModuleFactory()

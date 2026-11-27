@@ -61,6 +61,7 @@ from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
     explain_https_anomaly_group,
     explain_localnet_group,
+    explain_unknown_port_group,
 )
 from modules.llm_proxy.response_cache import (
     LLMResponseCache,
@@ -779,17 +780,27 @@ class RunDataReader:
             ]
             matching_total = int(page.get("total", len(records)))
             if matching_total > len(records):
-                oldest_query = {**query, "order": ["asc"]}
-                oldest_page = self.evidence(oldest_query)
-                for item in oldest_page.get("items", []):
-                    if isinstance(item, dict) and item not in records:
-                        records.append(item)
+                if matching_total <= MAX_PAGE_SIZE:
+                    complete_query = {**query, "limit": [str(matching_total)]}
+                    complete_page = self.evidence(complete_query)
+                    records = [
+                        item
+                        for item in complete_page.get("items", [])
+                        if isinstance(item, dict)
+                    ]
+                else:
+                    oldest_query = {**query, "order": ["asc"]}
+                    oldest_page = self.evidence(oldest_query)
+                    for item in oldest_page.get("items", []):
+                        if isinstance(item, dict) and item not in records:
+                            records.append(item)
         if not records:
             raise ValueError("No evidence records are available to explain")
         direct = (
             (
                 explain_localnet_group(matching_total, records)
                 or explain_https_anomaly_group(matching_total, records)
+                or explain_unknown_port_group(matching_total, records)
             )
             if kind == "group"
             else None

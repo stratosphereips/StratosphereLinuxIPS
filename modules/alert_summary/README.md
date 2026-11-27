@@ -129,6 +129,9 @@ directly so the model cannot echo thousands of near-identical IP records.
 HTTPS Anomalous Flow groups use the detector's recorded baseline reasons
 instead of inferring a scan from common HTTPS ports. Model-generated replies
 that name an unselected detector are rejected before they are cached.
+Unknown Port groups count the selected destinations and ports directly. Groups
+with at most 100 records use all matching records; larger groups identify their
+counts as a bounded sample.
 Set `explanation_backend` to a ready general-purpose backend if you want
 on-click explanations to use a different model from automatic alert summaries.
 
