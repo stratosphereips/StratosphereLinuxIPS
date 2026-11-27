@@ -820,6 +820,8 @@ class RunDataReader:
         current = self.explanation_result(digest)
         if current["status"] in {"ready", "pending"}:
             return {"id": digest, **current}
+        if payload.get("cache_only") is True:
+            return {"id": digest, **current}
         if direct:
             result = {
                 "success": True,

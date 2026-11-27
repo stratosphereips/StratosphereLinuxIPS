@@ -127,6 +127,9 @@ def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path:
     reader.redis.exists.return_value = False
     reader.redis.set.side_effect = [True, False]
     reader.redis.publish.return_value = 1
+    preview = reader.request_explanation({"kind": "evidence", "id": "e1", "cache_only": True})
+    assert preview["status"] == "expired"
+    reader.redis.publish.assert_not_called()
     first = reader.request_explanation({"kind": "evidence", "id": "e1"})
     second = reader.request_explanation({"kind": "evidence", "id": "e1"})
     assert first["status"] == second["status"] == "pending"

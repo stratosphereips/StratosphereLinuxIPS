@@ -3377,36 +3377,75 @@ async function showAlertExplanation(alertId) {
   check().catch(() => {});
 }
 
+const explanationMemory = new Map();
+
+/** Identify an explanation within the active Slips run.
+ * @param {string} kind Evidence or group.
+ * @param {Object} request Selected evidence or group query.
+ * @returns {string} Stable browser-session cache key.
+ */
+function explanationCacheKey(kind, request) {
+  return JSON.stringify([state.runIdentity, kind, request]);
+}
+
 /** Create an analyst-triggered explanation card for one evidence or group.
  * @param {string} kind Evidence or group.
  * @param {Function} requestData Returns the current request body.
  * @returns {HTMLElement} An explanation card with its own request status.
  */
 function explanationCard(kind, requestData) {
+  const request = requestData();
+  const cacheKey = explanationCacheKey(kind, request);
   const card = document.createElement("section");
   card.className = "surface ai-explanation";
+  card.dataset.explanationKey = cacheKey;
   const heading = text("h3", kind === "group" ? "Explain this group" : "Explain this evidence");
   const button = text("button", "Explain", "secondary");
   button.type = "button";
   const message = text("p", "Generated only when requested. The explanation describes observed behavior and detection reasons.", "muted");
   card.append(heading, button, message);
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    message.textContent = "Preparing explanation…";
+  let generation = 0;
+  /** Display a completed explanation and retain a bounded browser copy.
+   * @param {Object} result Completed explanation response.
+   */
+  function showReady(result) {
+    message.classList.remove("muted");
+    message.textContent = result.text || "The model returned an empty explanation.";
+    button.textContent = "Show explanation";
+    if (result.text) {
+      explanationMemory.delete(cacheKey);
+      explanationMemory.set(cacheKey, result.text);
+      if (explanationMemory.size > 100) explanationMemory.delete(explanationMemory.keys().next().value);
+    }
+  }
+  /** Read a saved result, or generate one only after an explicit click.
+   * @param {boolean} cacheOnly Whether this is a read-only restore.
+   * @returns {Promise<void>} Completes after the result or cache miss.
+   */
+  async function loadExplanation(cacheOnly) {
+    const currentGeneration = ++generation;
+    if (!cacheOnly) {
+      button.disabled = true;
+      message.textContent = "Preparing explanation…";
+    }
     try {
-      const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
-      const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
-      if (!enabled || !options.ready) throw new Error(enabled
-        ? "The LLM backend is not ready." : "This explanation type is disabled in the run configuration.");
+      if (!cacheOnly) {
+        const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
+        const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
+        if (!enabled || !options.ready) throw new Error(enabled
+          ? "The LLM backend is not ready." : "This explanation type is disabled in the run configuration.");
+      }
       const response = await fetch("/api/explanations", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, ...requestData() }),
+        body: JSON.stringify({ kind, ...request, cache_only: cacheOnly }),
       });
       const started = await response.json();
       if (!response.ok) throw new Error(started.detail || started.error || "Could not start explanation");
       let result = started;
       const deadline = Date.now() + 600000;
+      if (result.status === "expired") return;
       while (card.isConnected && result.status === "pending" && Date.now() < deadline) {
+        if (currentGeneration !== generation) return;
         message.textContent = "Generating explanation…";
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
         if (!card.isConnected) return;
@@ -3414,20 +3453,22 @@ function explanationCard(kind, requestData) {
         result = await poll.json();
         if (!poll.ok) throw new Error(result.detail || "Could not read explanation");
       }
-      if (!card.isConnected) return;
+      if (!card.isConnected || currentGeneration !== generation) return;
       if (result.status === "ready") {
-        message.classList.remove("muted");
-        message.textContent = result.text || "The model returned an empty explanation.";
-        button.textContent = "Show explanation";
-      } else {
+        showReady(result);
+      } else if (!cacheOnly) {
         throw new Error(result.error || "The explanation did not complete. Try again.");
       }
     } catch (error) {
-      if (card.isConnected) message.textContent = error.message;
+      if (!cacheOnly && card.isConnected && currentGeneration === generation) message.textContent = error.message;
     } finally {
-      button.disabled = false;
+      if (currentGeneration === generation) button.disabled = false;
     }
-  });
+  }
+  button.addEventListener("click", () => { void loadExplanation(false); });
+  const remembered = explanationMemory.get(cacheKey);
+  if (remembered) showReady({ text: remembered });
+  else void loadExplanation(true);
   return card;
 }
 
@@ -4059,12 +4100,13 @@ function renderEvidenceGroup() {
       ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
     ]));
     if (!state.archiveSource) {
+      const params = evidenceGroupQuery();
+      applyNetworkSelection(params);
+      const request = { query: Object.fromEntries(params) };
+      const cacheKey = explanationCacheKey("group", request);
       const explanation = priorExplanation?.dataset.groupId === String(group.id)
-        ? priorExplanation : explanationCard("group", () => {
-          const params = evidenceGroupQuery();
-          applyNetworkSelection(params);
-          return { query: Object.fromEntries(params) };
-        });
+        && priorExplanation.dataset.explanationKey === cacheKey
+        ? priorExplanation : explanationCard("group", () => request);
       explanation.dataset.groupId = String(group.id);
       summary.append(explanation);
     }

@@ -135,6 +135,9 @@ counts as a bounded sample.
 An individual Unknown Port finding is explained from its recorded endpoints.
 Other individual evidence prompts use singular language and the selected
 record's facts only.
+The web restores previously generated evidence and group explanations from
+its bounded browser memory or persistent response cache without generating
+another reply.
 Set `explanation_backend` to a ready general-purpose backend if you want
 on-click explanations to use a different model from automatic alert summaries.
 

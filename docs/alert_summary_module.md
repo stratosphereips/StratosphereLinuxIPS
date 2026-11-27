@@ -80,6 +80,8 @@ Configuration reference:
   An individual Unknown Port finding uses its own source, destination, and
   port. Individual evidence prompts use singular language and omit group
   patterns and sampled-record counts.
+  Returning to an explained evidence or group restores its saved text without
+  starting another model request. A new explanation is generated only on click.
 - `log_verbosity`: controls how much operational detail is written to
   `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
   `1` for startup, shutdown, and failures, `2` for per-alert queueing and
