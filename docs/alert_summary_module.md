@@ -77,6 +77,9 @@ Configuration reference:
   Unknown Port groups report the number of selected findings, destination IPs,
   and distinct ports from the evidence records. Groups of up to 100 records
   are counted in full; larger groups use a bounded newest-and-oldest sample.
+  An individual Unknown Port finding uses its own source, destination, and
+  port. Individual evidence prompts use singular language and omit group
+  patterns and sampled-record counts.
 - `log_verbosity`: controls how much operational detail is written to
   `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
   `1` for startup, shutdown, and failures, `2` for per-alert queueing and

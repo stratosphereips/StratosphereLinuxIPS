@@ -140,6 +140,41 @@ def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path:
     assert published["version"] == utils.get_current_version()
 
 
+def test_single_unknown_port_explanation_uses_selected_record(tmp_path: Path) -> None:
+    """Explain one flow without passing it to the group language model.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True}}, None)
+    with sqlite3.connect(reader.sqlite_path) as db:
+        db.execute("CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY,data TEXT)")
+        db.execute("INSERT INTO evidence VALUES (?,?)", ("one", json.dumps({
+            "evidence_type": "UNKNOWN_PORT", "profile": {"ip": "192.168.1.158"},
+            "victim": {"value": "104.29.159.166"},
+            "proto": "udp", "dst_port": 19333,
+            "description": "Connection to unknown destination port 19333/UDP.",
+        })))
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local_qwen", "backends": {
+            "local_qwen": {"model": "qwen2.5-3b"},
+        }}) if key == "available_llm_backends" else None
+    )
+    reader.redis.exists.return_value = False
+
+    result = reader.request_explanation({"kind": "evidence", "id": "one"})
+
+    assert result["status"] == "ready"
+    assert "destination port 19333" in result["text"]
+    assert "sampled" not in result["text"].lower()
+    reader.redis.publish.assert_not_called()
+
+
 def test_web_explanation_reads_permanent_cache_after_redis_expiry(
     tmp_path: Path,
 ) -> None:

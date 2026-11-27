@@ -61,6 +61,7 @@ from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
     explain_https_anomaly_group,
     explain_localnet_group,
+    explain_unknown_port_evidence,
     explain_unknown_port_group,
 )
 from modules.llm_proxy.response_cache import (
@@ -796,15 +797,14 @@ class RunDataReader:
                             records.append(item)
         if not records:
             raise ValueError("No evidence records are available to explain")
-        direct = (
-            (
+        if kind == "group":
+            direct = (
                 explain_localnet_group(matching_total, records)
                 or explain_https_anomaly_group(matching_total, records)
                 or explain_unknown_port_group(matching_total, records)
             )
-            if kind == "group"
-            else None
-        )
+        else:
+            direct = explain_unknown_port_evidence(records[0])
         prompt = build_explanation_prompt(kind, matching_total, records)
         digest_material = json.dumps(
             {

@@ -8,6 +8,7 @@ from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
     explain_https_anomaly_group,
     explain_localnet_group,
+    explain_unknown_port_evidence,
     explain_unknown_port_group,
 )
 from tests.module_factory import ModuleFactory
@@ -161,3 +162,28 @@ def test_unknown_port_group_counts_all_ports_and_destinations() -> None:
     assert "44 destination IPs and 37 distinct destination ports" in explanation
     assert "3 contacts" not in explanation
     assert "DIFFERENT_LOCALNET" not in explanation
+
+
+def test_single_unknown_port_explains_only_its_flow() -> None:
+    """Use one record's endpoints without claiming repeated contacts."""
+    _factory = ModuleFactory()
+    record = {
+        "evidence_type": "UNKNOWN_PORT",
+        "profile": {"ip": "192.168.1.158"},
+        "victim": {"value": "104.29.159.166"},
+        "proto": "udp", "dst_port": 19333,
+        "description": "Connection to unknown destination port 19333/UDP.",
+    }
+
+    explanation = explain_unknown_port_evidence(record)
+    prompt = build_explanation_prompt("evidence", 1, [record])
+
+    assert explanation is not None
+    assert "192.168.1.158 to 104.29.159.166" in explanation
+    assert "destination port 19333" in explanation
+    assert "sampled records" not in explanation.lower()
+    assert "sweep" not in explanation.lower()
+    assert "local subnet" not in explanation.lower()
+    assert "exactly one evidence record" in prompt
+    assert "In the sampled records" not in prompt
+    assert "Destination: 104.29.159.166" in prompt

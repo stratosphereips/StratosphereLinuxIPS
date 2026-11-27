@@ -132,6 +132,9 @@ that name an unselected detector are rejected before they are cached.
 Unknown Port groups count the selected destinations and ports directly. Groups
 with at most 100 records use all matching records; larger groups identify their
 counts as a bounded sample.
+An individual Unknown Port finding is explained from its recorded endpoints.
+Other individual evidence prompts use singular language and the selected
+record's facts only.
 Set `explanation_backend` to a ready general-purpose backend if you want
 on-click explanations to use a different model from automatic alert summaries.
 
