@@ -8,6 +8,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
+from modules.supported_module_names import Modules
+
 
 def explain_localnet_group(
     matching_total: int, records: list[dict[str, Any]]
@@ -80,6 +82,92 @@ def explain_localnet_group(
         "Check whether the sweep was intended and inspect flow outcomes; "
         "these evidence records alone do not show a successful connection "
         "or login."
+    )
+
+
+def explain_https_anomaly_group(
+    matching_total: int, records: list[dict[str, Any]]
+) -> str | None:
+    """Explain HTTPS anomaly reasons from the detector's structured details.
+
+    Parameters:
+        matching_total: Number of matching records in the selected group.
+        records: Bounded newest and oldest evidence sample.
+
+    Returns:
+        Grounded HTTPS explanation, or None for another detector.
+    """
+    if not records or any(
+        record.get("evidence_type") != "ANOMALOUS_FLOW"
+        or record.get("source_module") != Modules.ANOMALY_DETECTION_HTTPS.value
+        for record in records
+    ):
+        return None
+    features: Counter[str] = Counter()
+    larger = 0
+    smaller = 0
+    for record in records:
+        details = record.get("detection_details") or {}
+        https = (
+            details.get("https_anomaly") if isinstance(details, dict) else None
+        )
+        reasons = https.get("reasons") if isinstance(https, dict) else None
+        if not isinstance(reasons, list):
+            continue
+        seen: set[str] = set()
+        for reason in reasons:
+            if not isinstance(reason, dict):
+                continue
+            feature = str(reason.get("feature") or "")
+            if not feature or feature in seen:
+                continue
+            seen.add(feature)
+            features[feature] += 1
+            if feature == "bytes_to_known_server":
+                try:
+                    value = float(reason["value"])
+                    mean = float(reason["mean"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if value > mean:
+                    larger += 1
+                elif value < mean:
+                    smaller += 1
+    if not features:
+        return None
+    labels = {
+        "bytes_to_known_server": "unusual transfer sizes to familiar servers",
+        "new_server": "servers not previously seen for this host",
+        "new_ja3s": "new TLS fingerprints",
+        "ssl_flows": "an unusual HTTPS connection count",
+        "unique_servers": "an unusual number of distinct servers",
+        "new_servers": "an unusual number of new servers",
+        "ja3_changes": "changes in TLS fingerprints",
+        "known_server_avg_bytes": "an unusual average transfer size",
+    }
+    reason_parts = [
+        f"{count} with {labels[feature]}"
+        for feature, count in features.most_common(3)
+        if feature in labels
+    ]
+    if not reason_parts:
+        return None
+    size_detail = ""
+    if larger or smaller:
+        size_detail = (
+            f" Of the sampled size deviations, {larger} transferred more "
+            f"and {smaller} transferred less than the learned average."
+        )
+    return (
+        f"In {len(records)} sampled records from this group of "
+        f"{matching_total:,}, Slips found HTTPS activity that differed from "
+        "this host's learned baseline: "
+        + "; ".join(reason_parts)
+        + "."
+        + size_detail
+        + " These are Anomalous Flow findings based on changes in this host's "
+        "usual HTTPS behavior. Review the linked flows and the recent use of "
+        "those services to decide whether the change was expected."
     )
 
 
@@ -196,7 +284,9 @@ def build_explanation_prompt(
                 for network, count in networks.most_common(4)
             )
         )
-    if services:
+    if services and (
+        any("SCAN" in name for name in types) or "DIFFERENT_LOCALNET" in types
+    ):
         dominant, dominant_count = services.most_common(1)[0]
         dominant_hosts = len(service_destinations.get(dominant, set()))
         if dominant_count >= 3 and dominant_hosts >= 3:
@@ -230,14 +320,10 @@ def build_explanation_prompt(
         "Start with 'In the sampled records' for a group. Lead with the "
         "behavior pattern, then explain the detector's actual reason, "
         "what the evidence establishes, and one useful verification step. "
-        "Interpret repeated same-port contacts to many hosts as a possible "
-        "service sweep, not a proven attack or a separate Slips finding. "
-        "For DIFFERENT_LOCALNET, Slips' reason is that a private destination "
-        "lies outside the observed local subnet; the possible sweep is your "
-        "inference from repeated contacts. A destination outside the local "
-        "subnet can be reached through normal routing or a VPN; do not call it "
-        "malicious on that fact alone. Detector labels describe Slips' rating, "
-        "not an observed outcome. Distinguish attempts from successful "
+        "Use only the detection types listed under observed facts. Do not "
+        "introduce a different detector or infer a port scan merely because "
+        "many connections use a common service port. Detector labels describe "
+        "Slips' rating, not an observed outcome. Distinguish attempts from successful "
         "connections or logins. Do not list individual IPs, repeat event lines, "
         "copy this prompt, or output an incident template. Write 2 to 4 "
         "sentences, at most 100 words. Focus on the dominant pattern instead "

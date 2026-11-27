@@ -297,6 +297,47 @@ def test_repeated_localnet_group_returns_grounded_explanation(
     reader.redis.setex.assert_called_once()
 
 
+def test_https_anomaly_group_uses_its_recorded_reasons(tmp_path: Path) -> None:
+    """Explain the selected HTTPS anomalies without naming another detector.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"alert_summary": {"enabled": True}}, None)
+    records = [{
+        "id": f"e{index}", "evidence_type": "ANOMALOUS_FLOW",
+        "source_module": Modules.ANOMALY_DETECTION_HTTPS.value,
+        "profile_ip": "192.168.1.247", "proto": "tcp", "dst_port": 443,
+        "detection_details": {"https_anomaly": {"reasons": [{
+            "feature": "bytes_to_known_server", "value": 8192,
+            "mean": 4096,
+        }]}},
+    } for index in range(20)]
+    reader.evidence = Mock(return_value={"total": 136, "items": records})
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local_qwen", "backends": {
+            "local_qwen": {"model": "qwen2.5-3b"},
+        }}) if key == "available_llm_backends" else None
+    )
+    reader.redis.exists.return_value = False
+
+    result = reader.request_explanation({
+        "kind": "group", "query": {
+            "profile": "192.168.1.247", "type": "ANOMALOUS_FLOW",
+        },
+    })
+
+    assert result["status"] == "ready"
+    assert "136" in result["text"]
+    assert "unusual transfer sizes" in result["text"]
+    assert "DIFFERENT_LOCALNET" not in result["text"]
+    reader.redis.publish.assert_not_called()
+
+
 def test_alert_explanation_reads_only_matching_summary(tmp_path: Path) -> None:
     """Show the saved summary for the selected alert ID only."""
     _factory = ModuleFactory()

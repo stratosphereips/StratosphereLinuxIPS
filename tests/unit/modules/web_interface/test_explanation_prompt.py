@@ -6,6 +6,7 @@ import pytest
 
 from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
+    explain_https_anomaly_group,
     explain_localnet_group,
 )
 from tests.module_factory import ModuleFactory
@@ -92,3 +93,47 @@ def test_group_prompt_summarizes_patterns_instead_of_event_lines() -> None:
     assert "172.20.1.40" not in prompt
     assert prompt.count("private destination outside") == 1
     assert len(prompt) < 2500
+
+
+def test_https_anomaly_group_explains_baseline_features() -> None:
+    """Use the HTTPS detector's reasons without importing another detector."""
+    _factory = ModuleFactory()
+    records = []
+    for index in range(40):
+        feature = "bytes_to_known_server" if index < 25 else "new_server"
+        records.append({
+            "evidence_type": "ANOMALOUS_FLOW",
+            "source_module": "anomaly_detection_https",
+            "proto": "tcp", "dst_port": 443,
+            "victim": {"value": "chatgpt.com"},
+            "description": "Unusual HTTPS connection to chatgpt.com.",
+            "detection_details": {"https_anomaly": {"reasons": [{
+                "feature": feature, "value": 8192, "mean": 4096,
+            }]}},
+        })
+
+    explanation = explain_https_anomaly_group(136, records)
+    prompt = build_explanation_prompt("group", 136, records)
+
+    assert explanation is not None
+    assert "40 sampled records from this group of 136" in explanation
+    assert "25 with unusual transfer sizes" in explanation
+    assert "15 with servers not previously seen" in explanation
+    assert "Anomalous Flow" in explanation
+    assert "DIFFERENT_LOCALNET" not in explanation
+    assert "DIFFERENT_LOCALNET" not in prompt
+    assert "service sweep" not in prompt
+
+
+def test_https_anomaly_explanation_requires_its_own_module() -> None:
+    """Avoid applying HTTPS baseline wording to another anomaly detector."""
+    _factory = ModuleFactory()
+    records = [{
+        "evidence_type": "ANOMALOUS_FLOW",
+        "source_module": "other_detector",
+        "detection_details": {"https_anomaly": {"reasons": [
+            {"feature": "new_server"}
+        ]}},
+    }]
+
+    assert explain_https_anomaly_group(1, records) is None

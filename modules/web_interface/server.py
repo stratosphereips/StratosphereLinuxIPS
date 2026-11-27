@@ -59,6 +59,7 @@ from slips_files.core.structures.evidence import (
 from modules.supported_module_names import Modules
 from modules.web_interface.explanation_prompt import (
     build_explanation_prompt,
+    explain_https_anomaly_group,
     explain_localnet_group,
 )
 from modules.llm_proxy.response_cache import (
@@ -786,7 +787,10 @@ class RunDataReader:
         if not records:
             raise ValueError("No evidence records are available to explain")
         direct = (
-            explain_localnet_group(matching_total, records)
+            (
+                explain_localnet_group(matching_total, records)
+                or explain_https_anomaly_group(matching_total, records)
+            )
             if kind == "group"
             else None
         )
@@ -833,7 +837,7 @@ class RunDataReader:
                         {
                             "text": direct,
                             "provider": "observed facts",
-                            "model": "different-localnet-v1",
+                            "model": "observed-facts-v2",
                             "backend": "observed facts",
                         },
                         digest,
@@ -853,7 +857,12 @@ class RunDataReader:
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0,
             "max_tokens": 300,
-            "metadata": {"cache_key": digest},
+            "metadata": {
+                "cache_key": digest,
+                "allowed_evidence_types": sorted(
+                    {str(item.get("evidence_type") or "") for item in records}
+                ),
+            },
         }
         message = json.dumps(
             {**request, "version": utils.get_current_version()}

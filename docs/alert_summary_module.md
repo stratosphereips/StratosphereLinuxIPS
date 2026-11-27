@@ -71,6 +71,9 @@ Configuration reference:
   The shared `llm_proxy` module must also be enabled with a ready backend.
   Repeated Different Localnet service sweeps use a direct explanation from
   observed facts so the page never shows copied incident-template text.
+  HTTPS Anomalous Flow groups use the detector's recorded baseline reasons,
+  such as unusual transfer size or a newly seen server. Other model-generated
+  explanations reject replies that name a detector absent from the selection.
 - `log_verbosity`: controls how much operational detail is written to
   `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
   `1` for startup, shutdown, and failures, `2` for per-alert queueing and
