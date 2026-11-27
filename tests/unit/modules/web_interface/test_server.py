@@ -206,7 +206,7 @@ def test_on_click_slips_incident_explanation_uses_model_format(tmp_path: Path) -
     assert published["backend"] == "slips_summary_q4"
     assert published["temperature"] == 0
     assert published["messages"][0]["role"] == "user"
-    assert "RAW EVENTS (Time | Description):" in published["messages"][0]["content"]
+    assert "OBSERVED FACTS:" in published["messages"][0]["content"]
     assert "Scanned 30 local hosts" in published["messages"][0]["content"]
 
 
@@ -237,8 +237,64 @@ def test_group_explanation_keeps_time_and_interface_scope(tmp_path: Path) -> Non
     assert query["interface"] == ["en0"]
     assert "untrusted" not in query
     published = json.loads(reader.redis.publish.call_args.args[1])
-    assert "sampled 1 newest records" in published["messages"][0]["content"]
+    assert "1 sampled from the newest and oldest records" in published["messages"][0]["content"]
     assert result["status"] == "pending"
+
+
+def test_repeated_localnet_group_returns_grounded_explanation(
+    tmp_path: Path,
+) -> None:
+    """Explain a repeated localnet sweep without sending raw IP lines to the model.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader._run_config = lambda: ({"alert_summary": {
+        "enabled": True, "allowed_backends": ["slips_summary_q4"],
+        "explanation_backend": "local_qwen",
+    }}, None)
+    records = [
+        {
+            "id": f"e{index}", "evidence_type": "DIFFERENT_LOCALNET",
+            "profile_ip": "192.168.1.247",
+            "victim": {"value": f"172.20.1.{index + 1}"},
+            "proto": "tcp", "dst_port": 23,
+            "description": (
+                "Private destination is outside the local network "
+                "192.168.1.0/24."
+            ),
+        }
+        for index in range(40)
+    ]
+    reader.evidence = Mock(side_effect=lambda query: {
+        "total": 22537,
+        "items": records[20:] if query.get("order") == ["asc"] else records[:20],
+    })
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: (
+        json.dumps({"default_backend": "local_qwen", "backends": {
+            "local_qwen": {"model": "qwen2.5-3b"},
+            "slips_summary_q4": {"model": "slips-summary-q4"},
+        }}) if key == "available_llm_backends" else None
+    )
+    reader.redis.exists.return_value = False
+
+    result = reader.request_explanation({
+        "kind": "group", "query": {
+            "profile": "192.168.1.247", "type": "DIFFERENT_LOCALNET",
+        },
+    })
+
+    assert reader.explanation_status()["backend"] == "local_qwen"
+    assert result["status"] == "ready"
+    assert "40 sampled records" in result["text"]
+    assert "TCP/23 (telnet) on 40 distinct hosts" in result["text"]
+    assert reader.evidence.call_count == 2
+    reader.redis.publish.assert_not_called()
+    reader.redis.setex.assert_called_once()
 
 
 def test_alert_explanation_reads_only_matching_summary(tmp_path: Path) -> None:

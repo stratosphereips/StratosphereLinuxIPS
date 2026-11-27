@@ -123,8 +123,11 @@ To use the local Qwen3.5 summary model, start llama.cpp as described in the
 `prompt_style: slips_incident`. Use `llm_temperature: 0` and
 `llm_max_tokens: 1024`. Keep a separate general-purpose backend for regex
 generation; this model is trained for incident summaries. On-click evidence
-and group explanations use the same incident-style prompt when this style is
-selected.
+and group explanations use a compact behavior-focused prompt. For large,
+repetitive Different Localnet groups, the web explains the observed pattern
+directly so the model cannot echo thousands of near-identical IP records.
+Set `explanation_backend` to a ready general-purpose backend if you want
+on-click explanations to use a different model from automatic alert summaries.
 
 
 ## Recent alert history

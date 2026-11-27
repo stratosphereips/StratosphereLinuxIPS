@@ -53,6 +53,7 @@ alert_summary:
   explain_evidence_groups: true
   log_verbosity: 2
   allowed_backends: []
+  explanation_backend: local_qwen
   llm_temperature: 0.2
   llm_max_tokens: 220
   llm_response_timeout_seconds: 120
@@ -65,14 +66,21 @@ Configuration reference:
   `false` to leave automatic alert summaries off while keeping web explanations.
 - `explain_evidence` and `explain_evidence_groups`: allow analyst-triggered
   explanations in the Evidence tab. These never generate on page load. Group
-  explanations sample at most 20 matching records and state the sample size.
+  explanations compare up to 20 newest and 20 oldest matching records, group
+  repeated behavior, and state the sample size.
   The shared `llm_proxy` module must also be enabled with a ready backend.
+  Repeated Different Localnet service sweeps use a direct explanation from
+  observed facts so the page never shows copied incident-template text.
 - `log_verbosity`: controls how much operational detail is written to
   `<output-dir>/llm-summary/alert_summary.log`. Use `0` for an empty file,
   `1` for startup, shutdown, and failures, `2` for per-alert queueing and
   request flow, and `3` for prompt-budget and reduction-layer details.
 - `allowed_backends`: preferred runtime-ready LLM backend aliases for this
   module. If empty, the module falls back to the shared LLM default backend.
+- `explanation_backend`: optional backend alias for on-click evidence and group
+  explanations. If unavailable or empty, the first ready `allowed_backends`
+  alias is used. A general-purpose model can explain patterns better than a
+  small model trained for alert summaries.
 - `llm_temperature`: low-temperature setting used to keep summaries stable and
   analyst-oriented.
 - `llm_max_tokens`: output budget for the final analyst paragraph.

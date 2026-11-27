@@ -3386,13 +3386,13 @@ function explanationCard(kind, requestData) {
   const card = document.createElement("section");
   card.className = "surface ai-explanation";
   const heading = text("h3", kind === "group" ? "Explain this group" : "Explain this evidence");
-  const button = text("button", "Explain with AI", "secondary");
+  const button = text("button", "Explain", "secondary");
   button.type = "button";
-  const message = text("p", "Generated only when requested. The explanation summarizes observed facts and detection reasons.", "muted");
+  const message = text("p", "Generated only when requested. The explanation describes observed behavior and detection reasons.", "muted");
   card.append(heading, button, message);
   button.addEventListener("click", async () => {
     button.disabled = true;
-    message.textContent = "Checking the LLM service…";
+    message.textContent = "Preparing explanation…";
     try {
       const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
       const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
@@ -3418,7 +3418,7 @@ function explanationCard(kind, requestData) {
       if (result.status === "ready") {
         message.classList.remove("muted");
         message.textContent = result.text || "The model returned an empty explanation.";
-        button.textContent = "Refresh explanation";
+        button.textContent = "Show explanation";
       } else {
         throw new Error(result.error || "The explanation did not complete. Try again.");
       }
