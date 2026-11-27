@@ -1,4 +1,4 @@
-maxminddb==3.0.0
+maxminddb==3.2.0
 setuptools==84.1.0
 # do NOT build river from source. Only install it if a wheel exists.
 --only-binary=river
