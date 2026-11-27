@@ -24,6 +24,7 @@ from pytest_mock import MockerFixture
 from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY, HistoryCollector
 from modules.web_interface.network_scope import NetworkScope, NetworkSelection
 from modules.supported_module_names import Modules
+from modules.llm_proxy.response_cache import LLMResponseCache, response_cache_path
 from modules.web_interface.server import (
     RequestHandler,
     RunDataReader,
@@ -134,8 +135,40 @@ def test_on_click_explanation_publishes_once_with_expiring_pending_key(tmp_path:
     assert reader.redis.set.call_args.kwargs == {"nx": True, "ex": 600}
     published = json.loads(reader.redis.publish.call_args.args[1])
     assert published["requester"] == "web_explain"
+    assert published["cache"] is True
     assert published["metadata"]["cache_key"] == first["id"]
     assert published["version"] == utils.get_current_version()
+
+
+def test_web_explanation_reads_permanent_cache_after_redis_expiry(
+    tmp_path: Path,
+) -> None:
+    """Show a saved explanation when its short-lived Redis result is gone.
+
+    Parameters:
+        tmp_path: Isolated permanent directory.
+    """
+    _factory = ModuleFactory()
+    digest = "a" * 64
+    cache = LLMResponseCache(response_cache_path(tmp_path))
+    cache.put("b" * 64, {
+        "text": "One observed event.", "provider": "llama_cpp",
+        "model": "summary", "backend": "local",
+    }, digest)
+    reader = object.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader._run_config = lambda: (
+        {"parameters": {"permanent_dir": str(tmp_path)}}, tmp_path
+    )
+
+    result = reader.explanation_result(digest)
+
+    assert result == {
+        "status": "ready", "text": "One observed event.",
+        "error": "", "backend": "local",
+    }
+    reader.redis.exists.assert_not_called()
 
 
 def test_on_click_slips_incident_explanation_uses_model_format(tmp_path: Path) -> None:

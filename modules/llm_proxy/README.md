@@ -95,6 +95,21 @@ Backend aliases are the names that caller modules use in the request field
 `backend`. The alias is the stable selector. The `model` field inside a request
 is only an optional override for that chosen backend.
 
+## Saved responses
+
+Requests with `"cache": true` reuse a successful response when the normalized
+messages, backend, model, temperature, and token limit match. Slips saves these
+responses in `permanent/databases/llm_responses.sqlite` (or the configured
+`parameters.permanent_dir`). This survives Slips restarts. The cache holds at
+most 50,000 responses or 256 MiB of response data and removes the oldest when
+full. It stores generated text, not the input prompt. Failed and empty replies
+are never saved. A changed prompt or model gets a new response.
+
+Alert summaries and on-click evidence explanations opt in. Regex generation
+does not, because each request must be able to produce a new pattern. The web
+can retrieve a saved explanation from this database after its seven-day Redis
+result expires.
+
 ## Implementation Layout
 
 `llm.py` contains the `LLM` service class that implements `IModule`. Backend
