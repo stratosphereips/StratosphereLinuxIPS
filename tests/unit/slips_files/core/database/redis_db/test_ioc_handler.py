@@ -158,3 +158,17 @@ def test_set_feed_last_update_time(mocker, cached_info, expected_data):
     ioc_handler.rcache.hset.assert_called_with(
         "TI_files_info", "feed1.txt", json.dumps(expected_data)
     )
+
+
+def test_set_info_for_domains_add_mode_with_str_prev_value(mocker):
+    ioc_handler = ModuleFactory().create_ioc_handler_obj()
+    ioc_handler.get_domain_data = mocker.Mock(
+        return_value={"CNAME": "old.example.com"}
+    )
+    ioc_handler.set_info_for_domains(
+        "example.com", {"CNAME": ["new.example.com"]}, "add"
+    )
+    expected = {"CNAME": ["old.example.com", "new.example.com"]}
+    ioc_handler.rcache.hset.assert_called_with(
+        "DomainsInfo", "example.com", json.dumps(expected)
+    )
