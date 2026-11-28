@@ -14,6 +14,7 @@ from typing import Any, Dict, List
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
 
 from modules.llm_proxy.anthropic_backend_mixin import MixinAnthropicBackend
@@ -343,10 +344,27 @@ class LLMProxy(IModule):
                     self._log_operation(
                         f"Persistent LLM cache read failed: {exc}"
                     )
+            if cached_result and requester == "web_explain":
+                unexpected = self._unexpected_evidence_type(
+                    str(cached_result.get("text") or ""),
+                    metadata.get("allowed_evidence_types"),
+                )
+                if unexpected:
+                    cached_result = None
             if cached_result:
                 result = {**cached_result, "usage": {}}
             else:
                 result = backend.generate(request)
+                if requester == "web_explain":
+                    unexpected = self._unexpected_evidence_type(
+                        str(result.get("text") or ""),
+                        metadata.get("allowed_evidence_types"),
+                    )
+                    if unexpected:
+                        raise LLMRequestError(
+                            "LLM explanation mentioned an unrelated detector: "
+                            f"{unexpected}"
+                        )
                 if cache_key and result.get("text"):
                     try:
                         self.response_cache.put(
@@ -425,6 +443,31 @@ class LLMProxy(IModule):
             )
 
         self._publish_response(response)
+
+    @staticmethod
+    def _unexpected_evidence_type(text: str, allowed: object) -> str:
+        """Find a detector name in a web reply that was absent from its evidence.
+
+        Parameters:
+            text: Generated explanation.
+            allowed: Detector identifiers attached to the selected records.
+
+        Returns:
+            Unexpected detector identifier, or an empty string.
+        """
+        if not isinstance(allowed, list):
+            return ""
+        selected = {str(name).upper() for name in allowed}
+        for evidence_type in EvidenceType:
+            name = evidence_type.name
+            if name in selected:
+                continue
+            display_name = name.replace("_", " ").title()
+            if re.search(rf"(?<!\w){re.escape(name)}(?!\w)", text, re.I):
+                return name
+            if re.search(rf"(?<!\w){re.escape(display_name)}(?!\w)", text):
+                return name
+        return ""
 
     def _prepare_request(self, payload: dict) -> dict:
         backend_name = str(

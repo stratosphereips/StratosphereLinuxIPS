@@ -123,8 +123,23 @@ To use the local Qwen3.5 summary model, start llama.cpp as described in the
 `prompt_style: slips_incident`. Use `llm_temperature: 0` and
 `llm_max_tokens: 1024`. Keep a separate general-purpose backend for regex
 generation; this model is trained for incident summaries. On-click evidence
-and group explanations use the same incident-style prompt when this style is
-selected.
+and group explanations use a compact behavior-focused prompt. For large,
+repetitive Different Localnet groups, the web explains the observed pattern
+directly so the model cannot echo thousands of near-identical IP records.
+HTTPS Anomalous Flow groups use the detector's recorded baseline reasons
+instead of inferring a scan from common HTTPS ports. Model-generated replies
+that name an unselected detector are rejected before they are cached.
+Unknown Port groups count the selected destinations and ports directly. Groups
+with at most 100 records use all matching records; larger groups identify their
+counts as a bounded sample.
+An individual Unknown Port finding is explained from its recorded endpoints.
+Other individual evidence prompts use singular language and the selected
+record's facts only.
+The web restores previously generated evidence and group explanations from
+its bounded browser memory or persistent response cache without generating
+another reply.
+Set `explanation_backend` to a ready general-purpose backend if you want
+on-click explanations to use a different model from automatic alert summaries.
 
 
 ## Recent alert history

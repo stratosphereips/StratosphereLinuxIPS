@@ -12,7 +12,8 @@ creates one T Cell per:
 
 Main behavior:
 
-- only `PAMP` evidence starts antigen recognition and cell creation
+- `PAMP` and `DAMP` evidence with an extracted antigen can create a cell;
+  accepted regex matches start recognition, with weaker priming for `DAMP`
 - antigens are extracted from evidence fields plus linked DNS/HTTP/SSL altflows
 - accepted regexes come from the existing RegexGenerator SQLite store
 - `evidence.profile.ip` is the related host context, while containment and
@@ -105,3 +106,8 @@ What the report tells you:
 
 See [docs/t_cell_module.md](../../docs/t_cell_module.md) for the full design,
 configuration, formulas, and DB schema.
+
+The live web **T Cell** tab shows current state counts, waiting stages, the
+latest 100 non-mature cells, and the latest 100 transitions. Open a cell or
+transition's details to see its saved regex match, scores, wait deadline, and
+triggering evidence ID when available.

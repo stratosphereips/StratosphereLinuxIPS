@@ -3,6 +3,7 @@ from tests.module_factory import ModuleFactory
 from unittest.mock import Mock
 import json
 from pathlib import Path
+import pytest
 
 from modules.llm_proxy.response_cache import LLMResponseCache, response_cache_path
 
@@ -120,3 +121,40 @@ def test_empty_response_is_not_cached(tmp_path: Path) -> None:
     llm_proxy._handle_request({**payload, "request_id": "second"})
 
     assert backend.generate.call_count == 2
+
+
+@pytest.mark.parametrize("answer,expected", [
+    ("For DIFFERENT_LOCALNET, check routing.", False),
+    ("These Anomalous Flow records show unusual HTTPS sizes.", True),
+])
+def test_web_reply_rejects_unselected_detector_before_caching(
+    tmp_path: Path, answer: str, expected: bool
+) -> None:
+    """Never save an explanation naming a detector absent from the selection.
+
+    Parameters:
+        tmp_path: Isolated permanent directory.
+        answer: Model response text.
+        expected: Whether the response matches the selected detector.
+    """
+    llm_proxy = ModuleFactory().create_llm_obj()
+    llm_proxy.response_cache = LLMResponseCache(response_cache_path(tmp_path))
+    llm_proxy._log_operation = Mock()
+    llm_proxy._publish_response = Mock()
+    llm_proxy.backends["local_qwen"].generate = Mock(return_value={
+        "provider": "ollama", "model": "qwen2.5:3b",
+        "text": answer, "usage": {},
+    })
+    llm_proxy._handle_request({
+        "request_id": "one", "requester": "web_explain",
+        "backend": "local_qwen", "cache": True,
+        "messages": [{"role": "user", "content": "Explain HTTPS anomaly"}],
+        "metadata": {
+            "cache_key": "a" * 64,
+            "allowed_evidence_types": ["ANOMALOUS_FLOW"],
+        },
+    })
+
+    reply = llm_proxy._publish_response.call_args.args[0]
+    assert reply["success"] is expected
+    assert (llm_proxy.response_cache.get_web("a" * 64) is not None) is expected

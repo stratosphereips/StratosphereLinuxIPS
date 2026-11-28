@@ -94,7 +94,7 @@ const state = {
   rangeChoices: new Set(),
   localSorts: {
     "regex-table": { key: "created_at", order: "desc" },
-    "t-cell-cells": { key: "updated_at", order: "desc" },
+    "t-cell-cells": { key: null, order: "desc" },
     "t-cell-transitions": { key: "created_at", order: "desc" },
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
@@ -3377,36 +3377,75 @@ async function showAlertExplanation(alertId) {
   check().catch(() => {});
 }
 
+const explanationMemory = new Map();
+
+/** Identify an explanation within the active Slips run.
+ * @param {string} kind Evidence or group.
+ * @param {Object} request Selected evidence or group query.
+ * @returns {string} Stable browser-session cache key.
+ */
+function explanationCacheKey(kind, request) {
+  return JSON.stringify([state.runIdentity, kind, request]);
+}
+
 /** Create an analyst-triggered explanation card for one evidence or group.
  * @param {string} kind Evidence or group.
  * @param {Function} requestData Returns the current request body.
  * @returns {HTMLElement} An explanation card with its own request status.
  */
 function explanationCard(kind, requestData) {
+  const request = requestData();
+  const cacheKey = explanationCacheKey(kind, request);
   const card = document.createElement("section");
   card.className = "surface ai-explanation";
+  card.dataset.explanationKey = cacheKey;
   const heading = text("h3", kind === "group" ? "Explain this group" : "Explain this evidence");
-  const button = text("button", "Explain with AI", "secondary");
+  const button = text("button", "Explain", "secondary");
   button.type = "button";
-  const message = text("p", "Generated only when requested. The explanation summarizes observed facts and detection reasons.", "muted");
+  const message = text("p", "Generated only when requested. The explanation describes observed behavior and detection reasons.", "muted");
   card.append(heading, button, message);
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    message.textContent = "Checking the LLM service…";
+  let generation = 0;
+  /** Display a completed explanation and retain a bounded browser copy.
+   * @param {Object} result Completed explanation response.
+   */
+  function showReady(result) {
+    message.classList.remove("muted");
+    message.textContent = result.text || "The model returned an empty explanation.";
+    button.textContent = "Show explanation";
+    if (result.text) {
+      explanationMemory.delete(cacheKey);
+      explanationMemory.set(cacheKey, result.text);
+      if (explanationMemory.size > 100) explanationMemory.delete(explanationMemory.keys().next().value);
+    }
+  }
+  /** Read a saved result, or generate one only after an explicit click.
+   * @param {boolean} cacheOnly Whether this is a read-only restore.
+   * @returns {Promise<void>} Completes after the result or cache miss.
+   */
+  async function loadExplanation(cacheOnly) {
+    const currentGeneration = ++generation;
+    if (!cacheOnly) {
+      button.disabled = true;
+      message.textContent = "Preparing explanation…";
+    }
     try {
-      const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
-      const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
-      if (!enabled || !options.ready) throw new Error(enabled
-        ? "The LLM backend is not ready." : "This explanation type is disabled in the run configuration.");
+      if (!cacheOnly) {
+        const options = await fetch("/api/explanations/status", { cache: "no-store" }).then((response) => response.json());
+        const enabled = kind === "group" ? options.explain_evidence_groups : options.explain_evidence;
+        if (!enabled || !options.ready) throw new Error(enabled
+          ? "The LLM backend is not ready." : "This explanation type is disabled in the run configuration.");
+      }
       const response = await fetch("/api/explanations", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind, ...requestData() }),
+        body: JSON.stringify({ kind, ...request, cache_only: cacheOnly }),
       });
       const started = await response.json();
       if (!response.ok) throw new Error(started.detail || started.error || "Could not start explanation");
       let result = started;
       const deadline = Date.now() + 600000;
+      if (result.status === "expired") return;
       while (card.isConnected && result.status === "pending" && Date.now() < deadline) {
+        if (currentGeneration !== generation) return;
         message.textContent = "Generating explanation…";
         await new Promise((resolve) => window.setTimeout(resolve, 2500));
         if (!card.isConnected) return;
@@ -3414,20 +3453,22 @@ function explanationCard(kind, requestData) {
         result = await poll.json();
         if (!poll.ok) throw new Error(result.detail || "Could not read explanation");
       }
-      if (!card.isConnected) return;
+      if (!card.isConnected || currentGeneration !== generation) return;
       if (result.status === "ready") {
-        message.classList.remove("muted");
-        message.textContent = result.text || "The model returned an empty explanation.";
-        button.textContent = "Refresh explanation";
-      } else {
+        showReady(result);
+      } else if (!cacheOnly) {
         throw new Error(result.error || "The explanation did not complete. Try again.");
       }
     } catch (error) {
-      if (card.isConnected) message.textContent = error.message;
+      if (!cacheOnly && card.isConnected && currentGeneration === generation) message.textContent = error.message;
     } finally {
-      button.disabled = false;
+      if (currentGeneration === generation) button.disabled = false;
     }
-  });
+  }
+  button.addEventListener("click", () => { void loadExplanation(false); });
+  const remembered = explanationMemory.get(cacheKey);
+  if (remembered) showReady({ text: remembered });
+  else void loadExplanation(true);
   return card;
 }
 
@@ -4059,12 +4100,13 @@ function renderEvidenceGroup() {
       ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
     ]));
     if (!state.archiveSource) {
+      const params = evidenceGroupQuery();
+      applyNetworkSelection(params);
+      const request = { query: Object.fromEntries(params) };
+      const cacheKey = explanationCacheKey("group", request);
       const explanation = priorExplanation?.dataset.groupId === String(group.id)
-        ? priorExplanation : explanationCard("group", () => {
-          const params = evidenceGroupQuery();
-          applyNetworkSelection(params);
-          return { query: Object.fromEntries(params) };
-        });
+        && priorExplanation.dataset.explanationKey === cacheKey
+        ? priorExplanation : explanationCard("group", () => request);
       explanation.dataset.groupId = String(group.id);
       summary.append(explanation);
     }
@@ -4778,6 +4820,113 @@ async function loadRegexGenerator() {
   ]);
 }
 
+const tCellReasonNames = {
+  no_regex_match: "No regex match",
+  antigen_recognized: "Recognized",
+  co_stimulation_threshold_met: "Activated",
+  co_stimulation_timeout: "Support timed out",
+  context_timeout: "Context timed out",
+  context_effector: "Effector",
+  context_memory: "Memory",
+  anergy_expired: "Anergy expired",
+};
+
+const tCellReasonLabels = {
+  no_regex_match: "No accepted regex matched this extracted value; the cell became anergic.",
+  antigen_recognized: "An accepted regex matched this extracted value; the cell is waiting for later evidence from the same IP.",
+  co_stimulation_threshold_met: "Later evidence raised the co-stimulation score above this cell's threshold; it activated and is waiting for a context decision.",
+  co_stimulation_timeout: "Later evidence did not raise co-stimulation above its threshold before the wait expired; the cell became anergic.",
+  context_timeout: "Neither the effector nor memory gate passed before the context wait expired; the cell returned to mature.",
+  context_effector: "Novelty, related PAMP count, and effector score passed the containment gate; the cell requested an effector response.",
+  context_memory: "Familiarity, falling danger, related PAMP count, and memory score passed the memory gate; the cell stored memory.",
+  anergy_expired: "The anergy period ended, so the antigen can be evaluated again.",
+};
+
+/** Explain the current state of one stored T Cell.
+ * @param {Object} item Cell state returned by the backend.
+ * @returns {HTMLElement} State label with expandable decision details.
+ */
+function tCellStateDetail(item) {
+  const container = document.createElement("div");
+  const stage = item.waiting_for === "co_stimulation" ? "Waiting for later matching evidence from this IP"
+    : item.waiting_for === "context" ? "Waiting for effector or memory context"
+    : item.state === 2 ? "Temporarily anergic"
+    : item.state === 4 ? "Effector response requested"
+    : item.state === 5 ? "Memory stored" : "Awaiting new evidence";
+  container.append(text("strong", item.state_name), text("small", stage, "muted"));
+  const details = document.createElement("details");
+  details.className = "t-cell-detail";
+  details.append(text("summary", "Details"));
+  if (item.matched_regex) details.append(text("p", [text("strong", "Matched regex: "), text("code", item.matched_regex)]));
+  if (item.matched_value) details.append(text("p", `Matched value: ${item.matched_value}`));
+  for (const [label, value] of [["Last co-stimulation score", item.last_co_stimulation],
+    ["Last effector score", item.last_effector_score], ["Last memory score", item.last_memory_score]]) {
+    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
+  }
+  if (item.wait_deadline) details.append(text("p", ["Wait deadline: ", timeValue(item.wait_deadline)]));
+  if (item.anergic_until) details.append(text("p", ["Anergy expiry: ", timeValue(item.anergic_until)]));
+  if (item.last_evidence_id) details.append(text("p", `Last evidence ID: ${item.last_evidence_id}`));
+  container.append(details);
+  return container;
+}
+
+/** Explain why one T Cell changed state, including saved threshold values.
+ * @param {Object} item Stored transition and score snapshot.
+ * @returns {HTMLElement} Human-readable decision with expandable details.
+ */
+function tCellTransitionDetail(item) {
+  const container = document.createElement("div");
+  container.append(text("span", tCellReasonLabels[item.reason] || String(item.reason || "State changed").replaceAll("_", " ")));
+  const details = document.createElement("details");
+  details.className = "t-cell-detail";
+  details.append(text("summary", "Why and saved scores"));
+  if (item.matched_regex) details.append(text("p", [text("strong", "Accepted regex: "), text("code", item.matched_regex)]));
+  if (item.matched_value) details.append(text("p", `Matched value: ${item.matched_value}`));
+  if (item.priming_signal) details.append(text("p", `Cell primed by: ${item.priming_signal} evidence`));
+  if (item.confidence !== null && item.confidence !== undefined) {
+    details.append(text("p", `Current evidence confidence: ${numeric(item.confidence).toFixed(3)}`));
+  }
+  if (item.related_pamp_count !== null && item.related_pamp_count !== undefined) {
+    details.append(text("p", `Recent related PAMP observations: ${item.related_pamp_count}`));
+  }
+  if (item.profile_danger_score !== null && item.profile_danger_score !== undefined) {
+    details.append(text("p", `Recent PAMP + weighted DAMP danger: ${numeric(item.profile_danger_score).toFixed(3)}`));
+  }
+  if (item.value !== null && item.value !== undefined) {
+    details.append(text("p", `Co-stimulation score: ${numeric(item.value).toFixed(3)}${item.threshold !== null && item.threshold !== undefined ? ` / threshold ${numeric(item.threshold).toFixed(3)}` : ""}`));
+  }
+  if (item.novelty_score !== null && item.novelty_score !== undefined) {
+    details.append(text("p", `Regex at this decision: ${numeric(item.novelty_score) > 0 ? "novel" : "familiar"}`));
+  }
+  if (item.recent_related_count !== null && item.recent_related_count !== undefined) {
+    const required = item.reason === "context_effector" ? item.effector_min_related_count
+      : item.reason === "context_memory" ? item.memory_min_related_count : null;
+    details.append(text("p", `Recent related PAMP observations: ${item.recent_related_count}${required !== null && required !== undefined ? ` / required ${required}` : ""}`));
+  }
+  if (item.reason === "context_timeout") {
+    if (item.effector_min_related_count !== null && item.effector_min_related_count !== undefined) {
+      details.append(text("p", `Effector requires at least ${item.effector_min_related_count} related PAMP observations.`));
+    }
+    if (item.memory_min_related_count !== null && item.memory_min_related_count !== undefined) {
+      details.append(text("p", `Memory requires at least ${item.memory_min_related_count} related PAMP observations.`));
+    }
+  }
+  for (const [label, value] of [["Recent danger pressure", item.recent_pressure],
+    ["Previous danger pressure", item.previous_pressure], ["Recent / previous pressure", item.trend_ratio]]) {
+    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
+  }
+  for (const [label, score, threshold] of [["Effector score", item.effector_score, item.effector_threshold],
+    ["Memory score", item.memory_score, item.memory_threshold]]) {
+    if (score !== null && score !== undefined) {
+      details.append(text("p", `${label}: ${numeric(score).toFixed(3)}${threshold !== null && threshold !== undefined ? ` / threshold ${numeric(threshold).toFixed(3)}` : ""}`));
+    }
+  }
+  if (item.evidence_id) details.append(text("p", `Triggering evidence ID: ${item.evidence_id}`));
+  details.append(text("small", `Stored reason: ${item.reason || "unknown"}`));
+  container.append(details);
+  return container;
+}
+
 /** Load current T Cell states and recent lifecycle transitions.
  * @returns {Promise<void>} Completes after rendering the T Cell tab.
  */
@@ -4788,20 +4937,60 @@ async function loadTCell() {
     ? "Read-only view of stored cells and the newest 100 state transitions. A configured persistent store may include previous runs."
     : "No T Cell store is available for this run.";
   const counts = Object.fromEntries((payload.states || []).map((item) => [item.state, item.count]));
+  const waiting = Object.fromEntries((payload.waiting || []).map((item) => [item.waiting_for, item.count]));
+  const signals = Object.fromEntries((payload.signals || []).map((item) => [item.evidence_signal, item.count]));
   [0, 1, 2, 3, 4, 5].forEach((stateNumber) => {
     byId(`t-cell-count-${stateNumber}`).textContent = compact(counts[stateNumber] || 0);
   });
   const total = Object.values(counts).reduce((sum, count) => sum + numeric(count), 0);
   renderImmuneTotals("t-cell-summary", [
     ["Cells tracked", compact(total)],
-    ["Activated / effector", compact(numeric(counts[3]) + numeric(counts[4]))],
-    ["Memory cells", compact(counts[5] || 0)],
+    ["Waiting for support", compact(waiting.co_stimulation || 0)],
+    ["Waiting for context", compact(waiting.context || 0)],
+    ["Anergic", compact(counts[2] || 0)],
+    ["Effector / memory", `${compact(counts[4] || 0)} / ${compact(counts[5] || 0)}`],
+    ["Stored PAMP / DAMP", `${compact(signals.PAMP || 0)} / ${compact(signals.DAMP || 0)}`],
     ["Store size", formatBytes(payload.store_bytes || 0)],
   ]);
+  const latest = payload.transitions?.[0];
+  const now = byId("t-cell-now");
+  now.replaceChildren();
+  if (!payload.available) {
+    now.textContent = "No T Cell decisions are stored for this run.";
+  } else {
+    if (payload.signals?.length) {
+      now.append(`Stored observations: ${compact(signals.PAMP || 0)} PAMP and ${compact(signals.DAMP || 0)} DAMP. `);
+    }
+    now.append(`${compact(waiting.co_stimulation || 0)} cells are waiting for co-stimulation and ${compact(waiting.context || 0)} for later context. `);
+    if (latest) {
+      now.append(`Latest change for ${latest.profile_ip || "a cell"}: ${tCellReasonLabels[latest.reason] || latest.reason} (`, timeValue(latest.created_at), ").");
+      if (latest.value !== null && latest.value !== undefined && latest.threshold !== null && latest.threshold !== undefined) {
+        now.append(` Co-stimulation: ${numeric(latest.value).toFixed(3)} / threshold ${numeric(latest.threshold).toFixed(3)}.`);
+      }
+      if (latest.reason === "context_effector" && latest.effector_score != null && latest.effector_threshold != null) {
+        now.append(` Effector score: ${numeric(latest.effector_score).toFixed(3)} / threshold ${numeric(latest.effector_threshold).toFixed(3)}.`);
+      }
+      if (latest.reason === "context_memory" && latest.memory_score != null && latest.memory_threshold != null) {
+        now.append(` Memory score: ${numeric(latest.memory_score).toFixed(3)} / threshold ${numeric(latest.memory_threshold).toFixed(3)}.`);
+      }
+    } else {
+      now.append("No state changes have been recorded yet.");
+    }
+  }
+  const reasonCounts = new Map();
+  (payload.transitions || []).forEach((item) => reasonCounts.set(item.reason, (reasonCounts.get(item.reason) || 0) + 1));
+  const reasons = byId("t-cell-reasons");
+  reasons.replaceChildren();
+  [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([reason, count]) => {
+    const pill = text("span", `${tCellReasonNames[reason] || String(reason).replaceAll("_", " ")} · ${compact(count)}`, "immune-type-pill");
+    pill.title = tCellReasonLabels[reason] || reason;
+    reasons.append(pill);
+  });
+  if (!reasonCounts.size) reasons.append(text("span", "No state changes stored yet.", "muted"));
   renderTable("t-cell-cells", sortLocalRows("t-cell-cells", payload.cells || []), [
     (item) => item.profile_ip, (item) => item.regex_type,
     (item) => text("code", item.antigen_value, "immune-antigen"),
-    (item) => item.state_name, (item) => timeValue(item.updated_at),
+    (item) => tCellStateDetail(item), (item) => timeValue(item.updated_at),
   ]);
   const stateNames = {0: "mature", 1: "recognized", 2: "anergic",
     3: "activated", 4: "effector", 5: "memory"};
@@ -4809,7 +4998,7 @@ async function loadTCell() {
     (item) => timeValue(item.created_at), (item) => item.profile_ip,
     (item) => text("code", item.antigen_value, "immune-antigen"),
     (item) => `${stateNames[item.from_state] || "start"} → ${stateNames[item.to_state] || item.to_state}`,
-    (item) => item.reason,
+    (item) => tCellTransitionDetail(item),
   ]);
 }
 

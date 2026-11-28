@@ -393,6 +393,7 @@ alert_summary:
   # falls back to the runtime-ready LLM default backend.
   allowed_backends: [slips_summary_q4]
   prompt_style: slips_incident
+  explanation_backend: local_qwen
 
   # Keep the sampling conservative because this module writes one analyst
   # summary paragraph per alert.
