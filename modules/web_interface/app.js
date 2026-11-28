@@ -4863,8 +4863,8 @@ function tCellStateDetail(item) {
     ["Effector score", item.last_effector_score], ["Memory score", item.last_memory_score]]) {
     if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
   }
-  if (item.wait_deadline) details.append(text("p", `Wait deadline: ${timeValue(item.wait_deadline)}`));
-  if (item.anergic_until) details.append(text("p", `Anergy expiry: ${timeValue(item.anergic_until)}`));
+  if (item.wait_deadline) details.append(text("p", ["Wait deadline: ", timeValue(item.wait_deadline)]));
+  if (item.anergic_until) details.append(text("p", ["Anergy expiry: ", timeValue(item.anergic_until)]));
   if (item.last_evidence_id) details.append(text("p", `Last evidence ID: ${item.last_evidence_id}`));
   container.append(details);
   return container;
@@ -4919,11 +4919,21 @@ async function loadTCell() {
     ["Store size", formatBytes(payload.store_bytes || 0)],
   ]);
   const latest = payload.transitions?.[0];
-  byId("t-cell-now").textContent = !payload.available ? "No T Cell decisions are stored for this run."
-    : `${payload.signals?.length ? `Stored observations: ${compact(signals.PAMP || 0)} PAMP and ${compact(signals.DAMP || 0)} DAMP. ` : ""}`
-      + `${compact(waiting.co_stimulation || 0)} cells are waiting for co-stimulation and ${compact(waiting.context || 0)} for later context. `
-      + (latest ? `Latest change: ${tCellReasonLabels[latest.reason] || latest.reason} (${timeValue(latest.created_at)}).`
-        : "No state changes have been recorded yet.");
+  const now = byId("t-cell-now");
+  now.replaceChildren();
+  if (!payload.available) {
+    now.textContent = "No T Cell decisions are stored for this run.";
+  } else {
+    if (payload.signals?.length) {
+      now.append(`Stored observations: ${compact(signals.PAMP || 0)} PAMP and ${compact(signals.DAMP || 0)} DAMP. `);
+    }
+    now.append(`${compact(waiting.co_stimulation || 0)} cells are waiting for co-stimulation and ${compact(waiting.context || 0)} for later context. `);
+    if (latest) {
+      now.append(`Latest change: ${tCellReasonLabels[latest.reason] || latest.reason} (`, timeValue(latest.created_at), ").");
+    } else {
+      now.append("No state changes have been recorded yet.");
+    }
+  }
   const reasonCounts = new Map();
   (payload.transitions || []).forEach((item) => reasonCounts.set(item.reason, (reasonCounts.get(item.reason) || 0) + 1));
   const reasons = byId("t-cell-reasons");

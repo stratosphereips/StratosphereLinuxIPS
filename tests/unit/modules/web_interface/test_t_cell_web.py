@@ -131,7 +131,16 @@ def test_t_cell_page_explains_live_state_and_saved_scores() -> None:
                 "last_co_stimulation": 0.77,
                 "waiting_for": "context",
                 "wait_deadline": 1700003600,
-            }
+            },
+            {
+                "profile_ip": "192.0.2.2",
+                "regex_type": "dns_domain",
+                "antigen_value": "other.test",
+                "state": 2,
+                "state_name": "2 - anergic",
+                "updated_at": 1700000001,
+                "anergic_until": 1700007200,
+            },
         ],
         "transitions": [
             {
@@ -182,11 +191,24 @@ def test_t_cell_page_explains_live_state_and_saved_scores() -> None:
                 "2 cells are waiting for co-stimulation"
                 in page.locator("#t-cell-now").inner_text()
             )
+            assert page.locator("#t-cell-now time").count() == 1
+            assert (
+                "[object HTMLTimeElement]"
+                not in page.locator("#t-cell-now").inner_text()
+            )
             assert "Mature" in page.locator(".t-cell-state-guide").inner_text()
             assert "Activated · 1" in page.locator("#t-cell-reasons").inner_text()
-            page.locator("#t-cell-cells details summary").click()
+            page.locator("#t-cell-cells details summary").first.click()
             assert "Matched regex" in page.locator("#t-cell-cells").inner_text()
             assert "0.770" in page.locator("#t-cell-cells").inner_text()
+            assert page.locator("#t-cell-cells details time").count() == 2
+            assert "Wait deadline" in page.locator("#t-cell-cells").inner_text()
+            assert (
+                "[object HTMLTimeElement]"
+                not in page.locator("#t-cell-cells").inner_text()
+            )
+            page.locator("#t-cell-cells details summary").nth(1).click()
+            assert "Anergy expiry" in page.locator("#t-cell-cells").inner_text()
             page.locator("#t-cell-transitions details summary").click()
             assert "threshold 0.650" in page.locator("#t-cell-transitions").inner_text()
             assert "evidence-1" in page.locator("#t-cell-transitions").inner_text()
