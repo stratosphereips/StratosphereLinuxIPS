@@ -4832,13 +4832,13 @@ const tCellReasonNames = {
 };
 
 const tCellReasonLabels = {
-  no_regex_match: "No accepted regex matched; the cell became anergic.",
-  antigen_recognized: "An accepted regex matched this antigen; the cell began recognition.",
-  co_stimulation_threshold_met: "Supporting evidence reached the co-stimulation threshold; the cell activated.",
-  co_stimulation_timeout: "Supporting evidence stayed below threshold until the wait ended; the cell became anergic.",
-  context_timeout: "Later context did not meet effector or memory criteria in time; the cell returned to mature.",
-  context_effector: "Later context met effector criteria; the cell requested containment.",
-  context_memory: "Later context met memory criteria; the cell stored memory.",
+  no_regex_match: "No accepted regex matched this extracted value; the cell became anergic.",
+  antigen_recognized: "An accepted regex matched this extracted value; the cell is waiting for later evidence from the same IP.",
+  co_stimulation_threshold_met: "Later evidence raised the co-stimulation score above this cell's threshold; it activated and is waiting for a context decision.",
+  co_stimulation_timeout: "Later evidence did not raise co-stimulation above its threshold before the wait expired; the cell became anergic.",
+  context_timeout: "Neither the effector nor memory gate passed before the context wait expired; the cell returned to mature.",
+  context_effector: "Novelty, related PAMP count, and effector score passed the containment gate; the cell requested an effector response.",
+  context_memory: "Familiarity, falling danger, related PAMP count, and memory score passed the memory gate; the cell stored memory.",
   anergy_expired: "The anergy period ended, so the antigen can be evaluated again.",
 };
 
@@ -4848,8 +4848,8 @@ const tCellReasonLabels = {
  */
 function tCellStateDetail(item) {
   const container = document.createElement("div");
-  const stage = item.waiting_for === "co_stimulation" ? "Waiting for supporting evidence"
-    : item.waiting_for === "context" ? "Waiting for later context"
+  const stage = item.waiting_for === "co_stimulation" ? "Waiting for later matching evidence from this IP"
+    : item.waiting_for === "context" ? "Waiting for effector or memory context"
     : item.state === 2 ? "Temporarily anergic"
     : item.state === 4 ? "Effector response requested"
     : item.state === 5 ? "Memory stored" : "Awaiting new evidence";
@@ -4859,8 +4859,8 @@ function tCellStateDetail(item) {
   details.append(text("summary", "Details"));
   if (item.matched_regex) details.append(text("p", [text("strong", "Matched regex: "), text("code", item.matched_regex)]));
   if (item.matched_value) details.append(text("p", `Matched value: ${item.matched_value}`));
-  for (const [label, value] of [["Co-stimulation", item.last_co_stimulation],
-    ["Effector score", item.last_effector_score], ["Memory score", item.last_memory_score]]) {
+  for (const [label, value] of [["Last co-stimulation score", item.last_co_stimulation],
+    ["Last effector score", item.last_effector_score], ["Last memory score", item.last_memory_score]]) {
     if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
   }
   if (item.wait_deadline) details.append(text("p", ["Wait deadline: ", timeValue(item.wait_deadline)]));
@@ -4879,13 +4879,47 @@ function tCellTransitionDetail(item) {
   container.append(text("span", tCellReasonLabels[item.reason] || String(item.reason || "State changed").replaceAll("_", " ")));
   const details = document.createElement("details");
   details.className = "t-cell-detail";
-  details.append(text("summary", "Scores and evidence"));
-  if (item.value !== null && item.value !== undefined) {
-    details.append(text("p", `Co-stimulation: ${numeric(item.value).toFixed(3)}${item.threshold !== null && item.threshold !== undefined ? ` / threshold ${numeric(item.threshold).toFixed(3)}` : ""}`));
+  details.append(text("summary", "Why and saved scores"));
+  if (item.matched_regex) details.append(text("p", [text("strong", "Accepted regex: "), text("code", item.matched_regex)]));
+  if (item.matched_value) details.append(text("p", `Matched value: ${item.matched_value}`));
+  if (item.priming_signal) details.append(text("p", `Cell primed by: ${item.priming_signal} evidence`));
+  if (item.confidence !== null && item.confidence !== undefined) {
+    details.append(text("p", `Current evidence confidence: ${numeric(item.confidence).toFixed(3)}`));
   }
-  for (const [label, value] of [["Effector score", item.effector_score],
-    ["Memory score", item.memory_score], ["Recent related observations", item.recent_related_count]]) {
-    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${value}`));
+  if (item.related_pamp_count !== null && item.related_pamp_count !== undefined) {
+    details.append(text("p", `Recent related PAMP observations: ${item.related_pamp_count}`));
+  }
+  if (item.profile_danger_score !== null && item.profile_danger_score !== undefined) {
+    details.append(text("p", `Recent PAMP + weighted DAMP danger: ${numeric(item.profile_danger_score).toFixed(3)}`));
+  }
+  if (item.value !== null && item.value !== undefined) {
+    details.append(text("p", `Co-stimulation score: ${numeric(item.value).toFixed(3)}${item.threshold !== null && item.threshold !== undefined ? ` / threshold ${numeric(item.threshold).toFixed(3)}` : ""}`));
+  }
+  if (item.novelty_score !== null && item.novelty_score !== undefined) {
+    details.append(text("p", `Regex at this decision: ${numeric(item.novelty_score) > 0 ? "novel" : "familiar"}`));
+  }
+  if (item.recent_related_count !== null && item.recent_related_count !== undefined) {
+    const required = item.reason === "context_effector" ? item.effector_min_related_count
+      : item.reason === "context_memory" ? item.memory_min_related_count : null;
+    details.append(text("p", `Recent related PAMP observations: ${item.recent_related_count}${required !== null && required !== undefined ? ` / required ${required}` : ""}`));
+  }
+  if (item.reason === "context_timeout") {
+    if (item.effector_min_related_count !== null && item.effector_min_related_count !== undefined) {
+      details.append(text("p", `Effector requires at least ${item.effector_min_related_count} related PAMP observations.`));
+    }
+    if (item.memory_min_related_count !== null && item.memory_min_related_count !== undefined) {
+      details.append(text("p", `Memory requires at least ${item.memory_min_related_count} related PAMP observations.`));
+    }
+  }
+  for (const [label, value] of [["Recent danger pressure", item.recent_pressure],
+    ["Previous danger pressure", item.previous_pressure], ["Recent / previous pressure", item.trend_ratio]]) {
+    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
+  }
+  for (const [label, score, threshold] of [["Effector score", item.effector_score, item.effector_threshold],
+    ["Memory score", item.memory_score, item.memory_threshold]]) {
+    if (score !== null && score !== undefined) {
+      details.append(text("p", `${label}: ${numeric(score).toFixed(3)}${threshold !== null && threshold !== undefined ? ` / threshold ${numeric(threshold).toFixed(3)}` : ""}`));
+    }
   }
   if (item.evidence_id) details.append(text("p", `Triggering evidence ID: ${item.evidence_id}`));
   details.append(text("small", `Stored reason: ${item.reason || "unknown"}`));
@@ -4929,7 +4963,16 @@ async function loadTCell() {
     }
     now.append(`${compact(waiting.co_stimulation || 0)} cells are waiting for co-stimulation and ${compact(waiting.context || 0)} for later context. `);
     if (latest) {
-      now.append(`Latest change: ${tCellReasonLabels[latest.reason] || latest.reason} (`, timeValue(latest.created_at), ").");
+      now.append(`Latest change for ${latest.profile_ip || "a cell"}: ${tCellReasonLabels[latest.reason] || latest.reason} (`, timeValue(latest.created_at), ").");
+      if (latest.value !== null && latest.value !== undefined && latest.threshold !== null && latest.threshold !== undefined) {
+        now.append(` Co-stimulation: ${numeric(latest.value).toFixed(3)} / threshold ${numeric(latest.threshold).toFixed(3)}.`);
+      }
+      if (latest.reason === "context_effector" && latest.effector_score != null && latest.effector_threshold != null) {
+        now.append(` Effector score: ${numeric(latest.effector_score).toFixed(3)} / threshold ${numeric(latest.effector_threshold).toFixed(3)}.`);
+      }
+      if (latest.reason === "context_memory" && latest.memory_score != null && latest.memory_threshold != null) {
+        now.append(` Memory score: ${numeric(latest.memory_score).toFixed(3)} / threshold ${numeric(latest.memory_threshold).toFixed(3)}.`);
+      }
     } else {
       now.append("No state changes have been recorded yet.");
     }

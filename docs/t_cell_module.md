@@ -243,6 +243,14 @@ past changes and are not current-cell counts. An effector state records a
 containment request; whether traffic was blocked depends on the run's blocking
 and simulation settings.
 
+The page's **How does a cell decide?** help explains the three distinct gates:
+regex recognition of an extracted antigen, co-stimulation from later evidence,
+and the subsequent effector or memory context decision. Hover over a state name
+for a short definition. Transition details show the accepted regex and saved
+score components, thresholds, recent related PAMP counts, and novelty or
+pressure values when present in the store. An activated cell has passed only
+the co-stimulation gate; it has not yet requested containment.
+
 ## Antigen Extraction
 
 The module reuses the same field semantics already used by RegexGenerator.

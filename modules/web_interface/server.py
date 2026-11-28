@@ -600,7 +600,17 @@ class RunDataReader:
                     "evidence_id"
                     if "evidence_id" in transition_columns
                     else "NULL AS evidence_id"
-                )
+                ),
+                (
+                    "matched_regex"
+                    if "matched_regex" in transition_columns
+                    else "NULL AS matched_regex"
+                ),
+                (
+                    "matched_value"
+                    if "matched_value" in transition_columns
+                    else "NULL AS matched_value"
+                ),
             ]
             if "scores_json" in transition_columns:
                 transition_details.extend(
@@ -612,6 +622,18 @@ class RunDataReader:
                         "effector_score",
                         "memory_score",
                         "recent_related_count",
+                        "priming_signal",
+                        "confidence",
+                        "related_pamp_count",
+                        "profile_danger_score",
+                        "effector_threshold",
+                        "effector_min_related_count",
+                        "memory_threshold",
+                        "memory_min_related_count",
+                        "novelty_score",
+                        "recent_pressure",
+                        "previous_pressure",
+                        "trend_ratio",
                     )
                 )
             else:
@@ -623,6 +645,18 @@ class RunDataReader:
                         "effector_score",
                         "memory_score",
                         "recent_related_count",
+                        "priming_signal",
+                        "confidence",
+                        "related_pamp_count",
+                        "profile_danger_score",
+                        "effector_threshold",
+                        "effector_min_related_count",
+                        "memory_threshold",
+                        "memory_min_related_count",
+                        "novelty_score",
+                        "recent_pressure",
+                        "previous_pressure",
+                        "trend_ratio",
                     )
                 )
             result["transitions"] = [
