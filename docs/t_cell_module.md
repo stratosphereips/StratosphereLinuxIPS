@@ -227,6 +227,22 @@ SQLite DB when the cell first enters memory. It does not emit a new Slips
 evidence. Later matching evidence keeps the cell in `5 - memory`, but it does
 not create repeated `memory_stored` actions for the same cell.
 
+## Live web view
+
+The **T Cell** tab explains the current state counts and the most recent state
+change. It shows how many stored observations were classified as `PAMP` or
+`DAMP`, plus how many cells are waiting for co-stimulation or later context.
+It also summarizes the reasons in the latest 100 state changes.
+Those observation counts reflect the records still retained in the T Cell
+store. The cell table lists up to 100 non-mature cells, prioritizing
+recognized, activated, effector, and memory states. The transition table lists
+the latest 100 state changes. Expand **Details** to inspect the matched regex,
+last scores, wait deadline, saved threshold values, and triggering evidence ID
+when the store has them. State counts describe cells now; transition rows are
+past changes and are not current-cell counts. An effector state records a
+containment request; whether traffic was blocked depends on the run's blocking
+and simulation settings.
+
 ## Antigen Extraction
 
 The module reuses the same field semantics already used by RegexGenerator.

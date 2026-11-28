@@ -67,7 +67,8 @@
       <div class="section-heading"><div><p class="eyebrow">IMMUNE MODULE</p><h2 id="t-cell-title">T Cell</h2></div><button class="secondary refresh-list" data-target="t-cell">Refresh</button></div>
       <p id="t-cell-status" class="muted">Loading cell state…</p>
       <div id="t-cell-summary" class="summary-grid"></div>
-      <article class="surface"><h3>Cell lifecycle</h3><p class="muted">Counts show the cells currently in each state. Recent transitions are listed below.</p>
+      <article class="surface t-cell-guide"><h3>What is happening now</h3><p id="t-cell-now">Loading recent decisions…</p><p class="muted">A cell tracks one responsible IP, antigen type, and antigen value. PAMP and DAMP evidence with an extracted antigen can create a cell; an accepted regex decides whether it is recognized. Later evidence can raise its scores. State counts are current cells, while transitions below are past changes.</p><h4>Reasons in the latest 100 state changes</h4><div id="t-cell-reasons" class="immune-type-list"></div></article>
+      <article class="surface"><h3>Cell lifecycle</h3><p class="muted">Follow the arrows to see possible decisions. A count inside a circle is the number of cells currently in that state, not the number of transitions.</p>
         <svg id="t-cell-cycle" class="t-cell-cycle" viewBox="0 0 920 250" role="img" aria-label="T Cell lifecycle: mature, recognized, activated, effector, memory, and anergic">
           <defs><marker id="t-cell-arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z"/></marker></defs>
           <path class="t-cell-edge" d="M142 78 H207"/>
@@ -83,9 +84,17 @@
           <g class="t-cell-node" transform="translate(805 78)"><circle r="55"/><text y="-4">Memory</text><text id="t-cell-count-5" y="20">0</text></g>
           <g class="t-cell-node anergic" transform="translate(265 190)"><circle r="47"/><text y="-4">Anergic</text><text id="t-cell-count-2" y="20">0</text></g>
         </svg>
+        <div class="t-cell-state-guide">
+          <p><strong>Mature</strong><span>Tracked, with no active response. A new match can start recognition.</span></p>
+          <p><strong>Recognized</strong><span>An accepted regex matched; waiting for enough supporting evidence.</span></p>
+          <p><strong>Anergic</strong><span>Temporarily quiet, often because no accepted regex matched or the wait for support expired.</span></p>
+          <p><strong>Activated</strong><span>Support crossed its threshold; waiting for later context to decide what to do.</span></p>
+          <p><strong>Effector</strong><span>Context met containment criteria. Check configuration to see whether blocking was simulated.</span></p>
+          <p><strong>Memory</strong><span>Context met memory criteria; later matching evidence can reuse this result.</span></p>
+        </div>
       </article>
-      <article class="surface table-surface"><h3>Current active cells</h3><div class="table-wrap"><table id="t-cell-cells"><thead><tr><th data-sort="profile_ip">Host</th><th data-sort="regex_type">Antigen type</th><th data-sort="antigen_value">Antigen</th><th data-sort="state_name">State</th><th data-sort="updated_at">Updated</th></tr></thead><tbody></tbody></table></div></article>
-      <article class="surface table-surface"><h3>Recent transitions</h3><div class="table-wrap"><table id="t-cell-transitions"><thead><tr><th data-sort="created_at">Time</th><th data-sort="profile_ip">Host</th><th data-sort="antigen_value">Antigen</th><th data-sort="to_state">Transition</th><th data-sort="reason">Reason</th></tr></thead><tbody></tbody></table></div></article>
+      <article class="surface table-surface"><h3>Current cells</h3><p class="muted">Up to 100 non-mature cells, with recognized, activated, effector, and memory cells first, then anergic cells. Newest cells appear first within each category. Open “Details” to see the match, scores, and next wait.</p><div class="table-wrap"><table id="t-cell-cells"><thead><tr><th data-sort="profile_ip">Responsible IP</th><th data-sort="regex_type">Antigen type</th><th data-sort="antigen_value">Antigen</th><th data-sort="state_name">State and details</th><th data-sort="updated_at">Updated</th></tr></thead><tbody></tbody></table></div></article>
+      <article class="surface table-surface"><h3>Recent transitions</h3><p class="muted">Latest 100 state changes. The decision explains why a cell moved; open it for saved scores and the triggering evidence ID.</p><div class="table-wrap"><table id="t-cell-transitions"><thead><tr><th data-sort="created_at">Time</th><th data-sort="profile_ip">Responsible IP</th><th data-sort="antigen_value">Antigen</th><th data-sort="to_state">Transition</th><th data-sort="reason">Decision and details</th></tr></thead><tbody></tbody></table></div></article>
     </section>
 
     <section id="overview" class="panel active" aria-labelledby="overview-title">

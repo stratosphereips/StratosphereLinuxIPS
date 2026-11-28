@@ -94,7 +94,7 @@ const state = {
   rangeChoices: new Set(),
   localSorts: {
     "regex-table": { key: "created_at", order: "desc" },
-    "t-cell-cells": { key: "updated_at", order: "desc" },
+    "t-cell-cells": { key: null, order: "desc" },
     "t-cell-transitions": { key: "created_at", order: "desc" },
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
@@ -4820,6 +4820,79 @@ async function loadRegexGenerator() {
   ]);
 }
 
+const tCellReasonNames = {
+  no_regex_match: "No regex match",
+  antigen_recognized: "Recognized",
+  co_stimulation_threshold_met: "Activated",
+  co_stimulation_timeout: "Support timed out",
+  context_timeout: "Context timed out",
+  context_effector: "Effector",
+  context_memory: "Memory",
+  anergy_expired: "Anergy expired",
+};
+
+const tCellReasonLabels = {
+  no_regex_match: "No accepted regex matched; the cell became anergic.",
+  antigen_recognized: "An accepted regex matched this antigen; the cell began recognition.",
+  co_stimulation_threshold_met: "Supporting evidence reached the co-stimulation threshold; the cell activated.",
+  co_stimulation_timeout: "Supporting evidence stayed below threshold until the wait ended; the cell became anergic.",
+  context_timeout: "Later context did not meet effector or memory criteria in time; the cell returned to mature.",
+  context_effector: "Later context met effector criteria; the cell requested containment.",
+  context_memory: "Later context met memory criteria; the cell stored memory.",
+  anergy_expired: "The anergy period ended, so the antigen can be evaluated again.",
+};
+
+/** Explain the current state of one stored T Cell.
+ * @param {Object} item Cell state returned by the backend.
+ * @returns {HTMLElement} State label with expandable decision details.
+ */
+function tCellStateDetail(item) {
+  const container = document.createElement("div");
+  const stage = item.waiting_for === "co_stimulation" ? "Waiting for supporting evidence"
+    : item.waiting_for === "context" ? "Waiting for later context"
+    : item.state === 2 ? "Temporarily anergic"
+    : item.state === 4 ? "Effector response requested"
+    : item.state === 5 ? "Memory stored" : "Awaiting new evidence";
+  container.append(text("strong", item.state_name), text("small", stage, "muted"));
+  const details = document.createElement("details");
+  details.className = "t-cell-detail";
+  details.append(text("summary", "Details"));
+  if (item.matched_regex) details.append(text("p", [text("strong", "Matched regex: "), text("code", item.matched_regex)]));
+  if (item.matched_value) details.append(text("p", `Matched value: ${item.matched_value}`));
+  for (const [label, value] of [["Co-stimulation", item.last_co_stimulation],
+    ["Effector score", item.last_effector_score], ["Memory score", item.last_memory_score]]) {
+    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${numeric(value).toFixed(3)}`));
+  }
+  if (item.wait_deadline) details.append(text("p", `Wait deadline: ${timeValue(item.wait_deadline)}`));
+  if (item.anergic_until) details.append(text("p", `Anergy expiry: ${timeValue(item.anergic_until)}`));
+  if (item.last_evidence_id) details.append(text("p", `Last evidence ID: ${item.last_evidence_id}`));
+  container.append(details);
+  return container;
+}
+
+/** Explain why one T Cell changed state, including saved threshold values.
+ * @param {Object} item Stored transition and score snapshot.
+ * @returns {HTMLElement} Human-readable decision with expandable details.
+ */
+function tCellTransitionDetail(item) {
+  const container = document.createElement("div");
+  container.append(text("span", tCellReasonLabels[item.reason] || String(item.reason || "State changed").replaceAll("_", " ")));
+  const details = document.createElement("details");
+  details.className = "t-cell-detail";
+  details.append(text("summary", "Scores and evidence"));
+  if (item.value !== null && item.value !== undefined) {
+    details.append(text("p", `Co-stimulation: ${numeric(item.value).toFixed(3)}${item.threshold !== null && item.threshold !== undefined ? ` / threshold ${numeric(item.threshold).toFixed(3)}` : ""}`));
+  }
+  for (const [label, value] of [["Effector score", item.effector_score],
+    ["Memory score", item.memory_score], ["Recent related observations", item.recent_related_count]]) {
+    if (value !== null && value !== undefined) details.append(text("p", `${label}: ${value}`));
+  }
+  if (item.evidence_id) details.append(text("p", `Triggering evidence ID: ${item.evidence_id}`));
+  details.append(text("small", `Stored reason: ${item.reason || "unknown"}`));
+  container.append(details);
+  return container;
+}
+
 /** Load current T Cell states and recent lifecycle transitions.
  * @returns {Promise<void>} Completes after rendering the T Cell tab.
  */
@@ -4830,20 +4903,41 @@ async function loadTCell() {
     ? "Read-only view of stored cells and the newest 100 state transitions. A configured persistent store may include previous runs."
     : "No T Cell store is available for this run.";
   const counts = Object.fromEntries((payload.states || []).map((item) => [item.state, item.count]));
+  const waiting = Object.fromEntries((payload.waiting || []).map((item) => [item.waiting_for, item.count]));
+  const signals = Object.fromEntries((payload.signals || []).map((item) => [item.evidence_signal, item.count]));
   [0, 1, 2, 3, 4, 5].forEach((stateNumber) => {
     byId(`t-cell-count-${stateNumber}`).textContent = compact(counts[stateNumber] || 0);
   });
   const total = Object.values(counts).reduce((sum, count) => sum + numeric(count), 0);
   renderImmuneTotals("t-cell-summary", [
     ["Cells tracked", compact(total)],
-    ["Activated / effector", compact(numeric(counts[3]) + numeric(counts[4]))],
-    ["Memory cells", compact(counts[5] || 0)],
+    ["Waiting for support", compact(waiting.co_stimulation || 0)],
+    ["Waiting for context", compact(waiting.context || 0)],
+    ["Anergic", compact(counts[2] || 0)],
+    ["Effector / memory", `${compact(counts[4] || 0)} / ${compact(counts[5] || 0)}`],
+    ["Stored PAMP / DAMP", `${compact(signals.PAMP || 0)} / ${compact(signals.DAMP || 0)}`],
     ["Store size", formatBytes(payload.store_bytes || 0)],
   ]);
+  const latest = payload.transitions?.[0];
+  byId("t-cell-now").textContent = !payload.available ? "No T Cell decisions are stored for this run."
+    : `${payload.signals?.length ? `Stored observations: ${compact(signals.PAMP || 0)} PAMP and ${compact(signals.DAMP || 0)} DAMP. ` : ""}`
+      + `${compact(waiting.co_stimulation || 0)} cells are waiting for co-stimulation and ${compact(waiting.context || 0)} for later context. `
+      + (latest ? `Latest change: ${tCellReasonLabels[latest.reason] || latest.reason} (${timeValue(latest.created_at)}).`
+        : "No state changes have been recorded yet.");
+  const reasonCounts = new Map();
+  (payload.transitions || []).forEach((item) => reasonCounts.set(item.reason, (reasonCounts.get(item.reason) || 0) + 1));
+  const reasons = byId("t-cell-reasons");
+  reasons.replaceChildren();
+  [...reasonCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).forEach(([reason, count]) => {
+    const pill = text("span", `${tCellReasonNames[reason] || String(reason).replaceAll("_", " ")} · ${compact(count)}`, "immune-type-pill");
+    pill.title = tCellReasonLabels[reason] || reason;
+    reasons.append(pill);
+  });
+  if (!reasonCounts.size) reasons.append(text("span", "No state changes stored yet.", "muted"));
   renderTable("t-cell-cells", sortLocalRows("t-cell-cells", payload.cells || []), [
     (item) => item.profile_ip, (item) => item.regex_type,
     (item) => text("code", item.antigen_value, "immune-antigen"),
-    (item) => item.state_name, (item) => timeValue(item.updated_at),
+    (item) => tCellStateDetail(item), (item) => timeValue(item.updated_at),
   ]);
   const stateNames = {0: "mature", 1: "recognized", 2: "anergic",
     3: "activated", 4: "effector", 5: "memory"};
@@ -4851,7 +4945,7 @@ async function loadTCell() {
     (item) => timeValue(item.created_at), (item) => item.profile_ip,
     (item) => text("code", item.antigen_value, "immune-antigen"),
     (item) => `${stateNames[item.from_state] || "start"} → ${stateNames[item.to_state] || item.to_state}`,
-    (item) => item.reason,
+    (item) => tCellTransitionDetail(item),
   ]);
 }
 

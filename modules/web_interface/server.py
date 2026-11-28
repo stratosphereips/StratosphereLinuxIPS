@@ -506,7 +506,7 @@ class RunDataReader:
         """Read bounded T Cell lifecycle state and recent transitions.
 
         Returns:
-            State totals, active cells, transitions, and store size.
+            State totals, non-mature cells, transitions, and store size.
         """
         path = self._immune_store_path("t_cell", "t_cell.sqlite")
         if not path.is_file():
@@ -521,6 +521,8 @@ class RunDataReader:
             "available": path.is_file(),
             "store_bytes": 0,
             "states": [],
+            "waiting": [],
+            "signals": [],
             "cells": [],
             "transitions": [],
         }
@@ -538,21 +540,111 @@ class RunDataReader:
                     "GROUP BY state,state_name ORDER BY state"
                 )
             ]
+            cell_columns = {
+                row[1] for row in db.execute("PRAGMA table_info(cells)")
+            }
+            if "context_json" in cell_columns:
+                result["waiting"] = [
+                    dict(row)
+                    for row in db.execute(
+                        "SELECT state,json_extract(context_json,'$.waiting_for') "
+                        "AS waiting_for,COUNT(*) AS count FROM cells "
+                        "WHERE state IN (1,3) AND json_valid(context_json) "
+                        "GROUP BY state,waiting_for"
+                    )
+                ]
+            optional_cell_columns = (
+                "matched_regex",
+                "matched_value",
+                "last_co_stimulation",
+                "last_effector_score",
+                "last_memory_score",
+                "anergic_until",
+                "last_evidence_id",
+            )
+            cell_details = [
+                name if name in cell_columns else f"NULL AS {name}"
+                for name in optional_cell_columns
+            ]
+            if "context_json" in cell_columns:
+                cell_details.extend(
+                    [
+                        "CASE WHEN json_valid(context_json) THEN "
+                        "json_extract(context_json,'$.waiting_for') END "
+                        "AS waiting_for",
+                        "CASE WHEN json_valid(context_json) THEN "
+                        "json_extract(context_json,'$.wait_deadline') END "
+                        "AS wait_deadline",
+                    ]
+                )
+            else:
+                cell_details.extend(
+                    ["NULL AS waiting_for", "NULL AS wait_deadline"]
+                )
             result["cells"] = [
                 dict(row)
                 for row in db.execute(
                     "SELECT profile_ip,regex_type,antigen_value,state,state_name,"
-                    "last_transition_at,updated_at FROM cells WHERE state>0 "
-                    "ORDER BY updated_at DESC LIMIT 100"
+                    "last_transition_at,updated_at,"
+                    + ",".join(cell_details)
+                    + " FROM cells WHERE state>0 ORDER BY "
+                    "CASE WHEN state IN (1,3,4,5) THEN 0 ELSE 1 END,"
+                    "updated_at DESC LIMIT 100"
                 )
             ]
+            transition_columns = {
+                row[1] for row in db.execute("PRAGMA table_info(transitions)")
+            }
+            transition_details = [
+                (
+                    "evidence_id"
+                    if "evidence_id" in transition_columns
+                    else "NULL AS evidence_id"
+                )
+            ]
+            if "scores_json" in transition_columns:
+                transition_details.extend(
+                    "CASE WHEN json_valid(scores_json) THEN "
+                    f"json_extract(scores_json,'$.{name}') END AS {name}"
+                    for name in (
+                        "value",
+                        "threshold",
+                        "effector_score",
+                        "memory_score",
+                        "recent_related_count",
+                    )
+                )
+            else:
+                transition_details.extend(
+                    f"NULL AS {name}"
+                    for name in (
+                        "value",
+                        "threshold",
+                        "effector_score",
+                        "memory_score",
+                        "recent_related_count",
+                    )
+                )
             result["transitions"] = [
                 dict(row)
                 for row in db.execute(
                     "SELECT id,profile_ip,regex_type,antigen_value,from_state,to_state,"
-                    "reason,created_at FROM transitions ORDER BY id DESC LIMIT 100"
+                    "reason,created_at,"
+                    + ",".join(transition_details)
+                    + " FROM transitions ORDER BY id DESC LIMIT 100"
                 )
             ]
+            if db.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' "
+                "AND name='observations'"
+            ).fetchone():
+                result["signals"] = [
+                    dict(row)
+                    for row in db.execute(
+                        "SELECT evidence_signal,COUNT(*) AS count "
+                        "FROM observations GROUP BY evidence_signal"
+                    )
+                ]
         return result
 
     def explanation_status(self) -> Dict[str, Any]:
